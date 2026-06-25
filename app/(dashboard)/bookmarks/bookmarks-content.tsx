@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ReportButton } from "@/components/report/ReportButton";
+import { MathText } from "@/components/MathText";
 
 interface BookmarkItem {
   question_id: string;
@@ -232,13 +233,13 @@ export function BookmarksContent({
                     </div>
 
                     {/* Question text */}
-                    <p
+                    <div
                       className={`text-sm leading-relaxed ${
                         !isExpanded ? "line-clamp-2" : ""
                       }`}
                     >
-                      {q.question_text}
-                    </p>
+                      <MathText text={q.question_text} />
+                    </div>
 
                     {/* Expanded answer */}
                     {isExpanded && (

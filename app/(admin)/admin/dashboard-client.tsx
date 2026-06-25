@@ -12,6 +12,7 @@ import {
   FileText,
   ArrowRight,
 } from "lucide-react";
+import { MathText } from "@/components/MathText";
 
 interface DashboardStats {
   totalQuestions: number;
@@ -157,7 +158,7 @@ export function AdminDashboardClient({ stats }: { stats: DashboardStats }) {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-sm truncate">
-                    {report.questionText || "Unknown question"}
+                    {report.questionText ? <MathText text={report.questionText} /> : "Unknown question"}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {report.type.replace(/_/g, " ")} &middot;{" "}

@@ -27,6 +27,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
+import { MathText } from "@/components/MathText";
 
 interface DQItem {
   id: string;
@@ -330,7 +331,7 @@ export function DailyClient({
                           {d.date === today && <span className="text-[10px] text-primary ml-1.5 font-medium">Today</span>}
                         </td>
                         <td className="px-4 py-3 max-w-[220px]">
-                          <span className="text-sm truncate block">{d.questionText || "—"}</span>
+                          <span className="text-sm truncate block"><MathText text={d.questionText || "—"} /></span>
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">
                           {d.subject && <span className="px-1.5 py-0.5 rounded bg-muted text-xs">{d.subject}</span>}
@@ -383,7 +384,7 @@ export function DailyClient({
                   <span className="text-xs text-muted-foreground shrink-0 w-16">
                     {new Date(d.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
-                  <span className="text-sm truncate max-w-[240px]">{d.questionText || "—"}</span>
+                  <span className="text-sm truncate max-w-[240px]"><MathText text={d.questionText || "—"} /></span>
                   {d.subject && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">{d.subject}</span>}
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
@@ -444,7 +445,7 @@ export function DailyClient({
               {previewModal.year && <span className="px-2 py-0.5 rounded-full bg-muted">{previewModal.year}</span>}
               {previewModal.difficulty && <span className="px-2 py-0.5 rounded-full bg-muted capitalize">{previewModal.difficulty}</span>}
             </div>
-            <p className="text-sm leading-relaxed">{previewModal.questionText || "No question text"}</p>
+            <p className="text-sm leading-relaxed"><MathText text={previewModal.questionText || "No question text"} /></p>
             <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-3">
               <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {previewModal.userAnswers} answers</span>
               {previewModal.accuracy !== null && (
@@ -491,7 +492,7 @@ export function DailyClient({
                       <button key={q.id} type="button" onClick={() => setSelectedQId(q.id)}
                         className={`w-full text-left px-3 py-2.5 text-sm hover:bg-muted/30 transition-colors ${selectedQId === q.id ? "bg-primary/5 ring-1 ring-primary" : ""}`}
                       >
-                        <span className="line-clamp-1">{q.question_text}</span>
+                        <span className="line-clamp-1"><MathText text={q.question_text} /></span>
                         <span className="text-[10px] text-muted-foreground mt-0.5 block">
                           {q.subjects?.name || "No subject"} {q.year ? `· ${q.year}` : ""}
                         </span>
@@ -511,7 +512,7 @@ export function DailyClient({
               {selectedQId && searchResults.find((q: any) => q.id === selectedQId) && (
                 <div className="bg-muted/50 rounded-lg p-3 text-sm border">
                   <p className="font-medium text-xs text-muted-foreground mb-1">Preview</p>
-                  <p>{(searchResults.find((q: any) => q.id === selectedQId) as any).question_text}</p>
+                  <p><MathText text={(searchResults.find((q: any) => q.id === selectedQId) as any).question_text} /></p>
                 </div>
               )}
             </div>

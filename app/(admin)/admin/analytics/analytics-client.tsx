@@ -8,6 +8,7 @@ import {
   TrendingUp, Users, Target, Zap, Clock, CheckCircle2, BookOpen,
   UserPlus, Activity, Flame, Award, AlertCircle,
 } from "lucide-react";
+import { MathText } from "@/components/MathText";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -226,7 +227,7 @@ export function AnalyticsClient({
                 {hardestQs.map((q, i) => (
                   <div key={q.id} className="px-4 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs truncate flex-1">{q.text || `Question ${i + 1}`}</span>
+                      <span className="text-xs truncate flex-1">{q.text ? <MathText text={q.text} /> : `Question ${i + 1}`}</span>
                       <span className="text-xs font-bold text-red-500 shrink-0">{q.accuracy}%</span>
                     </div>
                     <div className="text-[10px] text-muted-foreground">{q.subject} · {q.attempts} attempts</div>
@@ -244,7 +245,7 @@ export function AnalyticsClient({
                 {easiestQs.map((q, i) => (
                   <div key={q.id} className="px-4 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs truncate flex-1">{q.text || `Question ${i + 1}`}</span>
+                      <span className="text-xs truncate flex-1">{q.text ? <MathText text={q.text} /> : `Question ${i + 1}`}</span>
                       <span className="text-xs font-bold text-green-500 shrink-0">{q.accuracy}%</span>
                     </div>
                     <div className="text-[10px] text-muted-foreground">{q.subject} · {q.attempts} attempts</div>
@@ -262,7 +263,7 @@ export function AnalyticsClient({
                 {mostSkipped.map((q, i) => (
                   <div key={i} className="px-4 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs truncate flex-1">{q.text || `Question ${i + 1}`}</span>
+                      <span className="text-xs truncate flex-1">{q.text ? <MathText text={q.text} /> : `Question ${i + 1}`}</span>
                       <span className="text-xs font-bold text-orange-500 shrink-0">{q.count} skips</span>
                     </div>
                     <div className="text-[10px] text-muted-foreground">{q.subject}</div>

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { ReportButton } from "@/components/report/ReportButton";
 import Image from "next/image";
+import { MathText } from "@/components/MathText";
 
 interface Question {
   id: string;
@@ -417,9 +418,7 @@ export function ExamClient({
                 </div>
 
                 {/* Question text */}
-                <p className="text-base lg:text-lg leading-relaxed font-medium">
-                  {currentQuestion.question_text}
-                </p>
+                <MathText text={currentQuestion.question_text} className="text-base lg:text-lg leading-relaxed font-medium" as="p" />
 
                 {/* Image */}
                 {currentQuestion.image_url && (

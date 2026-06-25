@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MathText } from "@/components/MathText";
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Pencil, GripVertical,
   Search, Link2, Unlink, Download, Loader2, Check, X, AlertTriangle,
@@ -410,7 +411,7 @@ function QuestionLinksTab({ subjects, topics, unlinkedCount, routerRefresh }: { 
               </div>
               {unlinkedQuestions.map((q) => (
                 <div key={q.id} className="px-4 py-2.5 border-b last:border-0 hover:bg-muted/20 flex items-center gap-2">
-                  <span className="flex-1 text-xs line-clamp-1 min-w-0">{q.question_text}</span>
+                  <MathText text={q.question_text} className="flex-1 text-xs line-clamp-1 min-w-0" />
                   <span className="text-[10px] text-muted-foreground shrink-0">{q.subjects?.name}</span>
                   <select onChange={(e) => handleLink(q.id, e.target.value)} value=""
                     className="h-7 w-28 rounded border border-input bg-background text-[10px] shrink-0">
@@ -425,7 +426,7 @@ function QuestionLinksTab({ subjects, topics, unlinkedCount, routerRefresh }: { 
           )}
           {questions.map((q) => (
             <div key={q.id} className="px-4 py-2.5 border-b last:border-0 hover:bg-muted/20 flex items-center gap-2">
-              <span className="flex-1 text-xs line-clamp-1 min-w-0">{q.question_text}</span>
+              <MathText text={q.question_text} className="flex-1 text-xs line-clamp-1 min-w-0" />
               <span className="text-[10px] text-muted-foreground shrink-0">{q.subjects?.name}</span>
               <select value={q.topic_id || ""} onChange={(e) => handleLink(q.id, e.target.value)}
                 className="h-7 w-28 rounded border border-input bg-background text-[10px] shrink-0">

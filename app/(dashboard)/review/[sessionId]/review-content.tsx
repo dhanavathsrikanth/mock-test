@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Bookmark, ArrowLeft, Check } from "lucide-react";
 import Link from "next/link";
 import { ReportButton } from "@/components/report/ReportButton";
+import { MathText } from "@/components/MathText";
 
 interface AnswerData {
   question_id: string;
@@ -151,9 +152,7 @@ export function ReviewContent({
             </div>
 
             <div className="flex items-start justify-between gap-3">
-              <p className="text-base lg:text-lg leading-relaxed">
-                {currentQ.question_text}
-              </p>
+              <MathText text={currentQ.question_text} className="text-base lg:text-lg leading-relaxed" />
 
               <div className="space-y-2.5">
                 {[1, 2, 3, 4].map((idx) => (

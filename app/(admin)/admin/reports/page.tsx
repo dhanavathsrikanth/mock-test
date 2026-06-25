@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
+import { MathText } from "@/components/MathText";
 import { ReportButton } from "@/components/report/ReportButton";
 import {
   Search,
@@ -559,7 +560,7 @@ function ReportDetailPanel({
             </h3>
             <div className="space-y-3">
               <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-                <p className="text-sm leading-relaxed">{report.questions?.question_text}</p>
+                <p className="text-sm leading-relaxed"><MathText text={report.questions?.question_text || ""} /></p>
                 {questionData && (
                   <div className="space-y-1 text-xs">
                     {[1, 2, 3, 4].map((n) => {

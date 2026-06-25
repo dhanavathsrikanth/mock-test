@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { MathText } from "@/components/MathText";
 
 interface Question {
   id: string;
@@ -387,7 +388,7 @@ export default function AdminQuestionsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 max-w-[280px]">
-                      <span className="line-clamp-1">{q.question_text}</span>
+                      <MathText text={q.question_text} className="line-clamp-1" />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{getSubject(q)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{q.year || "—"}</td>
@@ -484,7 +485,7 @@ export default function AdminQuestionsPage() {
                 </div>
               )}
 
-              <p className="text-sm leading-relaxed">{selectedQ.question_text}</p>
+              <MathText text={selectedQ.question_text} className="text-sm leading-relaxed" as="p" />
 
               <div className="space-y-1.5">
                 {[1, 2, 3, 4].map((n) => {

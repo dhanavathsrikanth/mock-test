@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
+import { MathText } from "@/components/MathText";
 import Link from "next/link";
 
 export default async function ReportDetailPage({
@@ -71,7 +72,7 @@ export default async function ReportDetailPage({
           <section className="border rounded-xl p-5 space-y-4">
             <h2 className="font-semibold text-sm">Question</h2>
             <p className="text-sm leading-relaxed">
-              {report.questions.question_text}
+              <MathText text={report.questions.question_text} />
             </p>
             <div className="space-y-1.5 text-sm">
               {[1, 2, 3, 4].map((n) => {
