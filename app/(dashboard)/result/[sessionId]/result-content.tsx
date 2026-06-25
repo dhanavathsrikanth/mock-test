@@ -115,7 +115,7 @@ export function ResultContent({
   sessionId,
 }: ResultContentProps) {
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-4">
       <div className="text-center">
         <h1 className="text-2xl font-bold tracking-tight">Your Results</h1>
       </div>

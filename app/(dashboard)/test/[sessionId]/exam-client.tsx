@@ -255,7 +255,7 @@ export function ExamClient({
         {/* Question display */}
         <div className="flex-1">
           {currentQuestion && (
-            <div className="space-y-6 max-w-3xl">
+            <div className="space-y-4 max-w-3xl">
               <p className="text-base lg:text-lg leading-relaxed">
                 {currentQuestion.question_text}
               </p>

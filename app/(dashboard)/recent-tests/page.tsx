@@ -52,7 +52,7 @@ export default async function RecentTestsPage() {
   });
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-3">
       <div className="flex items-center gap-2">
         <ClipboardList className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">Recent Tests</h1>

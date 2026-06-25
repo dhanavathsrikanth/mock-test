@@ -135,7 +135,7 @@ export function ProfileContent({ profile: serverProfile, exams }: ProfileContent
 
   if (!profile) {
     return (
-      <div className="max-w-2xl mx-auto space-y-8">
+      <div className="max-w-2xl mx-auto space-y-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground mt-1">Loading profile...</p>
@@ -145,7 +145,7 @@ export function ProfileContent({ profile: serverProfile, exams }: ProfileContent
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>

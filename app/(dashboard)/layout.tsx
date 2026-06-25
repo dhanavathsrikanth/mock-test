@@ -39,7 +39,7 @@ export default async function DashboardLayout({
       <Sidebar userName={userName} userRole={userRole} />
       <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
         <XPBar />
-        <div className="max-w-7xl mx-auto px-4 py-6 flex-1">{children}</div>
+        <div className="px-3 py-2 flex-1">{children}</div>
       </main>
       <XPToast />
       <LevelUpModal />

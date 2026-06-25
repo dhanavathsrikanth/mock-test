@@ -75,7 +75,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
 
   return (
     <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:bg-card h-screen sticky top-0">
-      <div className="p-5 border-b">
+      <div className="p-3 border-b">
         <Link href="/admin" className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
             A
@@ -84,7 +84,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
         </Link>
       </div>
 
-      <div className="px-4 py-3 border-b bg-muted/20">
+      <div className="px-3 py-2 border-b bg-muted/20">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold">
             {userName.charAt(0).toUpperCase()}
@@ -96,7 +96,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.href);
@@ -136,7 +136,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
             </div>
           );
         })}
-        <div className="pt-3 pb-1">
+        <div className="pt-2 pb-0.5">
           <p className="px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Tools</p>
         </div>
         {SECONDARY_ITEMS.map((item) => {
@@ -154,7 +154,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
         })}
       </nav>
 
-      <div className="p-3 border-t space-y-1.5">
+      <div className="p-2 border-t space-y-1">
         <Button
           variant="ghost"
           size="sm"

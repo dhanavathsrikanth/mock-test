@@ -160,7 +160,7 @@ export function AnalyticsContent({
   if (totalTests === 0) return <EmptyState />;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
         <p className="text-muted-foreground mt-1">
@@ -586,7 +586,7 @@ export function AnalyticsContent({
       </Card>
 
       {/* C. Consistency Score + Cumulative Progress */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

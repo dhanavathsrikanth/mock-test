@@ -159,11 +159,11 @@ export default async function DashboardPage() {
     .sort((a, b) => b.accuracy - a.accuracy);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4">
       {/* Exam Countdown - prominent first element */}
       <ExamCountdown />
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2">
           <h1 className="text-2xl font-bold tracking-tight">
             Welcome back, {userName}!
@@ -175,13 +175,13 @@ export default async function DashboardPage() {
         <div className="lg:col-span-1">
           <DailyQuestionWidget />
         </div>
-        <div className="lg:col-span-1 flex flex-col gap-3">
+        <div className="lg:col-span-1 flex flex-col gap-2">
           <StreakCard />
           <RevisionWidget />
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">
@@ -287,8 +287,8 @@ export default async function DashboardPage() {
       </Card>
 
       <div>
-        <h2 className="text-xl font-semibold mb-4">Quick Start</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <h2 className="text-xl font-semibold mb-3">Quick Start</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Link
             href="/test/select"
             className="group relative overflow-hidden rounded-xl border bg-card p-6 hover:shadow-md transition-shadow"

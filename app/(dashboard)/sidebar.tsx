@@ -71,7 +71,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
     <>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:border-r lg:bg-card h-screen sticky top-0">
-        <div className="p-5 border-b">
+        <div className="p-3 border-b">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 font-bold text-lg"
@@ -81,7 +81,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
           </Link>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-2 space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -89,7 +89,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   active
                     ? "bg-primary text-primary-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
@@ -103,10 +103,10 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
 
           {userRole === "admin" && (
             <>
-              <div className="pt-3 pb-1">
+              <div className="pt-2 pb-0.5">
                 <div className="h-px bg-border" />
               </div>
-              <div className="px-3 pb-1 pt-1">
+              <div className="px-3 pb-0.5 pt-0.5">
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Admin</p>
               </div>
               <Link
@@ -120,7 +120,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
           )}
         </nav>
 
-        <div className="p-4 border-t space-y-3">
+        <div className="p-3 border-t space-y-2">
           <div className="flex items-center gap-3 px-1">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold">
               {userName.charAt(0).toUpperCase()}
@@ -222,7 +222,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
                 <Link
                   href="/admin"
                   onClick={() => setDrawerOpen(false)}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
+                className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors text-muted-foreground hover:text-foreground hover:bg-accent"
                 >
                   <Shield className="h-4 w-4" />
                   Admin Panel

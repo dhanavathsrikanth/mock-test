@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import { useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Bookmark, ArrowLeft } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bookmark, ArrowLeft, Check } from "lucide-react";
+import Link from "next/link";
 import { ReportButton } from "@/components/report/ReportButton";
 
 interface AnswerData {
@@ -43,7 +43,7 @@ export function ReviewContent({
   userId, 
   sessionId, 
 }: ReviewContentProps) {
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<string>("all");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [bookmarks, setBookmarks] = useState(bookmarkedIds);
   const [expandedExplanations, setExpandedExplanations] = useState<Set<string>>(new Set());
@@ -67,6 +67,7 @@ export function ReviewContent({
 
   const current = filtered[currentIndex];
   const currentQ = current?.questions;
+  const isBookmarked = current ? bookmarks.has(current.question_id) : false;
 
   const toggleBookmark = async (questionId: string) => {
     const next = new Set(bookmarks);
@@ -91,11 +92,8 @@ export function ReviewContent({
     setExpandedExplanations(next);
   };
 
-  const current = filtered[currentIndex];
-  const currentQ = current?.questions;
-
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="max-w-3xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <Button variant="ghost" size="sm" asChild>
@@ -123,7 +121,7 @@ export function ReviewContent({
                 <span className="ml-1.5 text-xs opacity-70">({bookmarks.size})</span>
               )}
             </button>
-          </div>
+          ))}
         </div>
 
         {filtered.length === 0 ? (
@@ -131,7 +129,7 @@ export function ReviewContent({
             No questions match this filter.
           </p>
         ) : current && currentQ ? (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 Q {currentIndex + 1} of {filtered.length}
@@ -155,16 +153,16 @@ export function ReviewContent({
             <div className="flex items-start justify-between gap-3">
               <p className="text-base lg:text-lg leading-relaxed">
                 {currentQ.question_text}
-              </div>
+              </p>
 
               <div className="space-y-2.5">
                 {[1, 2, 3, 4].map((idx) => (
                   <div 
                     key={idx} 
                     className={`border rounded-lg px-4 py-3 text-sm ${
-                      answers[currentIndex] === idx 
+                      current.selected_option === idx && currentQ.correct_option === idx
                         ? "border-green-500 bg-green-50 dark:bg-green-950/20" 
-                        : answers[currentQuestion.id] === idx 
+                        : current.selected_option === idx
                           ? "border-red-500 bg-red-50 dark:bg-red-950/20" 
                           : "border-border"
                       }`}
@@ -173,7 +171,7 @@ export function ReviewContent({
                         <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border text-xs font-medium mr-3">
                           {String.fromCharCode(64 + idx)}
                         </span>
-                        {currentQuestion[`option_${idx}`]}
+                        {currentQ[`option_${idx}` as keyof typeof currentQ]}
                         {current.selected_option === idx && currentQ.correct_option === idx 
                           ? <Check className="h-4 w-4 text-green-600 inline ml-2" />
                           : current.selected_option === idx 
@@ -182,8 +180,7 @@ export function ReviewContent({
                         }
                       </div>
                     </div>
-                  );
-                }) 
+                ))} 
               </div>
 
               {currentQ.explanation && (
@@ -204,7 +201,7 @@ export function ReviewContent({
                     </div>
                   )}
                 </div>
-              </div>
+              )}
 
               <div className="flex items-center justify-between pt-2">
                 <Button 

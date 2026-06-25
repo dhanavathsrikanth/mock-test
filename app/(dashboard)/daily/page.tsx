@@ -64,7 +64,8 @@ export default function DailyQuestionPage() {
         }
       }
       if (histRes.ok) {
-        setHistory(json.history || []);
+        const histJson = await histRes.json();
+        setHistory(histJson.history || []);
       }
     }
     load();
@@ -109,11 +110,11 @@ export default function DailyQuestionPage() {
             });
           }
         }
-      } catch (e) {
-        alert("Export failed");
       }
-      setSubmitting(false);
+    } catch (e) {
+      alert("Export failed");
     }
+    setSubmitting(false);
   }, [data, selected, submitting]);
 
   const handleBookmark = async () => {
@@ -142,7 +143,7 @@ export default function DailyQuestionPage() {
       if (!data?.question?.id) return;
       const qid = data.question.id;
       const supabase = createClient();
-      const { user } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
       const { data: bm } = await supabase
@@ -153,7 +154,8 @@ export default function DailyQuestionPage() {
         .single();
       
       setBookmarked(!!bm);
-    }, [data?.question?.id]);
+    };
+    check();
   }, [data?.question?.id]);
 
   if (!data) {
@@ -165,9 +167,11 @@ export default function DailyQuestionPage() {
           <div className="h-20 bg-muted rounded" />
         </div>
       </div>
-    )}
+    );
+  }
 
-    <div className="max-w-3xl mx-auto space-y-8">
+  return (
+    <div className="max-w-3xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-center gap-2">
         <h1 className="text-2xl font-bold tracking-tight flex items-center">
@@ -214,7 +218,6 @@ export default function DailyQuestionPage() {
                           ? "border-red-500 bg-red-50 dark:bg-red-950/30 ring-1 ring-red-500" 
                           : "border-border opacity-60") 
                       : "border-border opacity-60";
-                  }
                   
                   return (
                     <button
@@ -228,8 +231,8 @@ export default function DailyQuestionPage() {
                       </span>
                       {opt}
                     </button>
-                  </div>
-                })
+                  );
+                })}
               </div>
               
               <div className="space-y-3">
@@ -258,8 +261,8 @@ export default function DailyQuestionPage() {
                 Come back tomorrow for a new question!
               </p>
             </div>
-          </Card>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
