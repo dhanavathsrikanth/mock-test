@@ -286,7 +286,7 @@ export function BookmarksContent({
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-col gap-1.5 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 mt-0.5">
                     <ReportButton
                       questionId={q.id}
                       questionText={q.question_text}

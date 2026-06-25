@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useExamStore } from "./exam-store";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { 
-  Bookmark, 
-  ChevronLeft, 
-  ChevronRight, 
-  Clock, 
-  Send, 
-  PanelRightOpen, 
-  PanelRightClose, 
+import {
+  Bookmark,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Send,
+  PanelRightOpen,
+  PanelRightClose,
+  AlertTriangle,
 } from "lucide-react";
 import { ReportButton } from "@/components/report/ReportButton";
 import Image from "next/image";
@@ -25,7 +25,7 @@ interface Question {
   option_3: string;
   option_4: string;
   correct_option: number;
-  image_url?: string; // Added for image support
+  image_url?: string;
 }
 
 interface SessionData {
@@ -42,14 +42,12 @@ interface ExamClientProps {
   questions: Question[];
   initialAnswers: Record<string, number>;
   initialBookmarks: Set<string>;
-  }
+}
 
 async function triggerStreakUpdate() {
   try {
     await fetch("/api/streak", { method: "POST" });
-  } catch {
-    // Silently fail - streak update should not block navigation
-  }
+  } catch {}
 }
 
 async function awardTestXP(sessionId: string) {
@@ -73,9 +71,7 @@ async function awardTestXP(sessionId: string) {
         }
       }
     }
-  } catch {
-    // Silently fail
-  }
+  } catch {}
 }
 
 async function addWrongToSRS(sessionId: string) {
@@ -85,23 +81,32 @@ async function addWrongToSRS(sessionId: string) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "process-session", sessionId }),
     });
-  } catch {
-    // Silently fail
-  }
+  } catch {}
 }
 
-export function ExamClient({ 
-  userId, 
-  session, 
-  questions, 
-  initialAnswers, 
-  initialBookmarks, 
+function formatTime(seconds: number) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) {
+    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+export function ExamClient({
+  userId,
+  session,
+  questions,
+  initialAnswers,
+  initialBookmarks,
 }: ExamClientProps) {
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
-  const [saveTimer, setSaveTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">(
+    "saved"
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswer] = useState<Record<string, number | null>>({});
   const [bookmarks, setBookmarks] = useState(new Set<string>());
@@ -109,15 +114,13 @@ export function ExamClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const currentIndexRef = useRef(0);
 
-  const getSupabase = useCallback(() => createClient(), []);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    const initialAnswersMap = Object.fromEntries(
-      Object.entries(initialAnswers).map(([k, v]) => [k, v])
-    );
     useExamStore.setState({
-      answers: Object.fromEntries(Object.entries(initialAnswers).map(([k, v]) => [k, v])),
+      answers: Object.fromEntries(
+        Object.entries(initialAnswers).map(([k, v]) => [k, v])
+      ),
       bookmarks: new Set(initialBookmarks),
     });
   }, []);
@@ -125,29 +128,44 @@ export function ExamClient({
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
 
-  const saveAnswer = useCallback(async (questionId: string, option: number | null) => {
-    setSaveStatus("saving");
-    const question = questions.find((q) => q.id === questionId);
-    const isCorrect = option != null && question 
-      ? option === question.correct_option 
-        : null;
-    
-    const { error } = await createClient().from("test_answers").upsert({
-      session_id: session.id,
-      question_id: questionId,
-      selected_option: option,
-      is_correct: isCorrect,
-    }, { onConflict: "session_id, question_id" });
+  const saveAnswer = useCallback(
+    async (questionId: string, option: number | null) => {
+      setSaveStatus("saving");
+      const question = questions.find((q) => q.id === questionId);
+      const isCorrect =
+        option != null && question
+          ? option === question.correct_option
+            ? true
+            : false
+          : null;
 
-    setSaveStatus(error ? "error" : "saved");
-    if (!error) {
-      saveTimerRef.current = setTimeout(() => setSaveStatus("saved"), 2000);
-    }
-  }, [session.id, questions]);
+      const { error } = await createClient()
+        .from("test_answers")
+        .upsert(
+          {
+            session_id: session.id,
+            question_id: questionId,
+            selected_option: option,
+            is_correct: isCorrect,
+          },
+          { onConflict: "session_id, question_id" }
+        );
+
+      setSaveStatus(error ? "error" : "saved");
+      if (!error) {
+        saveTimerRef.current = setTimeout(
+          () => setSaveStatus("saved"),
+          2000
+        );
+      }
+    },
+    [session.id, questions]
+  );
 
   const handleOptionClick = (optionIndex: number) => {
     if (!currentQuestion) return;
-    const newValue = answers[currentQuestion.id] === optionIndex ? null : optionIndex;
+    const newValue =
+      answers[currentQuestion.id] === optionIndex ? null : optionIndex;
     setAnswer({ ...answers, [currentQuestion.id]: newValue });
     saveAnswer(currentQuestion.id, newValue);
   };
@@ -158,18 +176,23 @@ export function ExamClient({
     const next = new Set(bookmarks);
     if (next.has(currentQuestion.id)) {
       next.delete(currentQuestion.id);
-      await createClient().from("bookmarks")
+      await createClient()
+        .from("bookmarks")
         .delete()
         .eq("user_id", userId)
         .eq("question_id", currentQuestion.id);
     } else {
       next.add(currentQuestion.id);
-      await createClient().from("bookmarks")
+      await createClient()
+        .from("bookmarks")
         .insert({ user_id: userId, question_id: currentQuestion.id });
       await fetch("/api/srs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "add", questionId: currentQuestion.id }),
+        body: JSON.stringify({
+          action: "add",
+          questionId: currentQuestion.id,
+        }),
       });
     }
     setBookmarks(next);
@@ -186,7 +209,7 @@ export function ExamClient({
         completed_at: new Date().toISOString(),
       })
       .eq("id", session.id);
-    
+
     if (!error) {
       triggerStreakUpdate();
       awardTestXP(session.id);
@@ -201,9 +224,12 @@ export function ExamClient({
   useEffect(() => {
     const startTime = new Date(session.started_at).getTime();
     const end = startTime + session.duration_minutes * 60 * 1000;
-    const remaining = Math.max(0, Math.floor((end - Date.now()) / 1000));
+    const remaining = Math.max(
+      0,
+      Math.floor((end - Date.now()) / 1000)
+    );
     setTimeRemaining(remaining);
-    
+
     let count = remaining;
     const interval = setInterval(() => {
       count--;
@@ -213,142 +239,486 @@ export function ExamClient({
         handleSubmitRef.current();
       }
     }, 1000);
-    
+
     return () => clearInterval(interval);
   }, [session.id, session.started_at, session.duration_minutes]);
 
-  const answeredCount = Object.values(answers).filter(v => v != null).length;
-  const counts = {
-    answered: answeredCount,
-    bookmarked: bookmarks.size,
-    total: totalQuestions,
-  };
+  const answeredCount = Object.values(answers).filter(
+    (v) => v != null
+  ).length;
+  const isCurrentBookmarked = bookmarks.has(currentQuestion?.id || "");
+  const isLowTime = timeRemaining > 0 && timeRemaining <= 300;
+  const isTimeUp = timeRemaining <= 0 && session.duration_minutes > 0;
 
   currentIndexRef.current = currentIndex;
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] flex flex-col bg-background">
-      {/* Sidebar toggle + save status */}
-      <div className="flex items-center justify-between border-b px-4 py-2 lg:hidden">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">Q {currentIndex + 1} of {totalQuestions}</span>
-          {saveStatus === "saving" && (
-            <span className="text-xs text-muted-foreground">Saving...</span>
-          )}
-          {saveStatus === "saved" && (
-            <span className="text-xs text-green-600">Saved</span>
-          )}
-        </div>
-        <button 
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-1.5 rounded-md hover:bg-muted"
-        >
-          {sidebarOpen ? (
-            <PanelRightClose className="h-4 w-4" />
-          ) : (
-            <PanelRightOpen className="h-4 w-4" />
-          )}
-        </button>
-      </div>
+    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+      {/* ===== TOP EXAM BAR ===== */}
+      <header className="shrink-0 border-b bg-card">
+        {/* Desktop top bar */}
+        <div className="hidden lg:flex items-center justify-between px-5 h-14">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Q
+              </span>
+              <span className="text-sm font-bold tabular-nums">
+                {currentIndex + 1}
+                <span className="text-muted-foreground font-normal">
+                  /{totalQuestions}
+                </span>
+              </span>
+            </div>
+            <div className="h-5 w-px bg-border" />
+            <div className="text-xs text-muted-foreground">
+              {session.mode === "custom" ? "Custom Test" : "Practice"}
+            </div>
+          </div>
 
-      <div className="flex flex-1">
-        {/* Question display */}
-        <div className="flex-1">
-          {currentQuestion && (
-            <div className="space-y-4 max-w-3xl">
-              <p className="text-base lg:text-lg leading-relaxed">
-                {currentQuestion.question_text}
-              </p>
-              
-              {/* Image display for question */}
-              {currentQuestion.image_url && (
-                <div className="relative w-full max-h-80 mb-4 overflow-hidden rounded-lg border">
-                  <Image
-                    src={currentQuestion.image_url}
-                    alt="Question image"
-                    width={800}
-                    height={400}
-                    className="object-contain w-full h-auto"
-                    unoptimized
-                  />
+          <div className="flex items-center gap-3">
+            {/* Save status */}
+            <div className="flex items-center gap-1.5">
+              <div
+                className={`h-2 w-2 rounded-full ${
+                  saveStatus === "saving"
+                    ? "bg-yellow-500 animate-pulse"
+                    : saveStatus === "saved"
+                    ? "bg-green-500"
+                    : "bg-red-500"
+                }`}
+              />
+              <span className="text-xs text-muted-foreground">
+                {saveStatus === "saving"
+                  ? "Saving..."
+                  : saveStatus === "saved"
+                  ? "Saved"
+                  : "Error"}
+              </span>
+            </div>
+
+            <div className="h-5 w-px bg-border" />
+
+            {/* Timer */}
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-sm font-semibold tabular-nums ${
+                isTimeUp
+                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                  : isLowTime
+                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 animate-pulse"
+                  : "bg-muted"
+              }`}
+            >
+              <Clock className="h-3.5 w-3.5" />
+              {formatTime(timeRemaining)}
+            </div>
+
+            <div className="h-5 w-px bg-border" />
+
+            {/* Bookmark */}
+            <button
+              type="button"
+              onClick={handleBookmarkToggle}
+              className={`p-2 rounded-lg transition-colors ${
+                isCurrentBookmarked
+                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              }`}
+              title={isCurrentBookmarked ? "Remove bookmark" : "Bookmark this question"}
+            >
+              <Bookmark
+                className={`h-4 w-4 ${isCurrentBookmarked ? "fill-current" : ""}`}
+              />
+            </button>
+
+            {/* Report */}
+            <ReportButton
+              questionId={currentQuestion?.id || ""}
+              questionText={currentQuestion?.question_text}
+              questionNumber={currentIndex + 1}
+              className="p-2 rounded-lg hover:bg-muted transition-colors"
+            />
+
+            <div className="h-5 w-px bg-border" />
+
+            {/* Submit */}
+            <Button
+              onClick={() => setShowConfirm(true)}
+              disabled={isSubmitting}
+              size="sm"
+              className="gap-1.5"
+            >
+              <Send className="h-3.5 w-3.5" />
+              Submit Test
+            </Button>
+          </div>
+        </div>
+
+        {/* Mobile top bar */}
+        <div className="flex lg:hidden items-center justify-between px-4 h-12">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold">
+              Q {currentIndex + 1}/{totalQuestions}
+            </span>
+            <div
+              className={`flex items-center gap-1 px-2 py-1 rounded font-mono text-xs font-semibold tabular-nums ${
+                isLowTime
+                  ? "bg-yellow-500/10 text-yellow-600"
+                  : "bg-muted text-foreground"
+              }`}
+            >
+              <Clock className="h-3 w-3" />
+              {formatTime(timeRemaining)}
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-1.5 rounded-md hover:bg-muted"
+          >
+            {sidebarOpen ? (
+              <PanelRightClose className="h-4 w-4" />
+            ) : (
+              <PanelRightOpen className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1 bg-muted">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{
+              width: `${totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0}%`,
+            }}
+          />
+        </div>
+      </header>
+
+      {/* ===== MAIN CONTENT ===== */}
+      <div className="flex flex-1 min-h-0">
+        {/* Question area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 lg:py-8">
+            {currentQuestion && (
+              <div className="space-y-6">
+                {/* Question number badge */}
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+                    {currentIndex + 1}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    Question {currentIndex + 1} of {totalQuestions}
+                  </span>
+                  {answeredCount > 0 && (
+                    <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                      {answeredCount}/{totalQuestions} answered
+                    </span>
+                  )}
                 </div>
-              )}
-              
-              <div className="space-y-2.5">
-                {[1, 2, 3, 4].map((n) => (
+
+                {/* Question text */}
+                <p className="text-base lg:text-lg leading-relaxed font-medium">
+                  {currentQuestion.question_text}
+                </p>
+
+                {/* Image */}
+                {currentQuestion.image_url && (
+                  <div className="relative w-full max-h-96 overflow-hidden rounded-xl border bg-muted/30">
+                    <Image
+                      src={currentQuestion.image_url}
+                      alt="Question image"
+                      width={800}
+                      height={400}
+                      className="object-contain w-full h-auto"
+                      unoptimized
+                    />
+                  </div>
+                )}
+
+                {/* Options */}
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map((n) => {
+                    const isSelected = answers[currentQuestion.id] === n;
+                    const optionLabel = String.fromCharCode(64 + n);
+                    return (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => handleOptionClick(n)}
+                        className={`w-full text-left rounded-xl border-2 px-5 py-4 transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary/5 shadow-sm"
+                            : "border-border hover:border-muted-foreground/30 hover:bg-accent/50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <span
+                            className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {optionLabel}
+                          </span>
+                          <span className="text-sm leading-relaxed">
+                            {currentQuestion[`option_${n}` as keyof Question]}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ===== QUESTION PALETTE (Desktop) ===== */}
+        <aside className="hidden lg:flex flex-col w-64 border-l bg-card shrink-0">
+          <div className="p-4 border-b">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Question Palette
+            </h3>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="grid grid-cols-5 gap-2">
+              {questions.map((q, idx) => {
+                const isAnswered = answers[q.id] != null;
+                const isBookmarked = bookmarks.has(q.id);
+                const isCurrent = idx === currentIndex;
+
+                return (
                   <button
-                    key={n}
+                    key={q.id}
                     type="button"
-                    onClick={() => handleOptionClick(n)}
-                    className={`w-full text-left rounded-lg border px-4 py-3 text-sm transition-all ${ 
-                      answers[currentQuestion.id] === n 
-                        ? "border-primary bg-primary/10 ring-1 ring-primary" 
-                        : "border-border hover:border-muted-foreground/40 hover:bg-accent/50"
+                    onClick={() => setCurrentIndex(idx)}
+                    className={`relative h-10 rounded-lg text-sm font-semibold transition-all ${
+                      isCurrent
+                        ? "ring-2 ring-primary bg-primary text-primary-foreground shadow-sm"
+                        : isAnswered
+                        ? "bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20"
+                        : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                   >
-                    <span className="inline-flex items-center justify-center w-6 h-6 rounded-full border text-xs font-medium mr-3 shrink-0">
-                      {String.fromCharCode(64 + n)}
-                    </span>
-                    {currentQuestion[`option_${n}` as keyof Question]}
+                    {idx + 1}
+                    {isBookmarked && (
+                      <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-yellow-500 border-2 border-card" />
+                    )}
                   </button>
-                ))}
-              </div>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
+
+          {/* Legend */}
+          <div className="p-4 border-t space-y-2">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-3 w-3 rounded bg-primary" />
+              <span>Current</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-3 w-3 rounded bg-green-500/20 border border-green-500/40" />
+              <span>Answered ({answeredCount})</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="h-3 w-3 rounded bg-muted" />
+              <span>Unanswered ({totalQuestions - answeredCount})</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="relative h-3 w-3">
+                <span className="absolute inset-0 rounded bg-muted" />
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-yellow-500" />
+              </span>
+              <span>Bookmarked ({bookmarks.size})</span>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      {/* Bottom navigation */}
-      <div className="flex items-center justify-between mt-6 pt-4 border-t">
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+      {/* ===== BOTTOM NAVIGATION BAR ===== */}
+      <footer className="shrink-0 border-t bg-card">
+        <div className="flex items-center justify-between px-4 sm:px-6 h-16">
+          <Button
+            variant="outline"
+            size="sm"
             disabled={currentIndex === 0}
             onClick={() => setCurrentIndex(currentIndex - 1)}
+            className="gap-1.5"
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
+
+          {/* Mobile: bookmark + submit */}
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              type="button"
+              onClick={handleBookmarkToggle}
+              className={`p-2 rounded-lg transition-colors ${
+                isCurrentBookmarked
+                  ? "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Bookmark
+                className={`h-4 w-4 ${isCurrentBookmarked ? "fill-current" : ""}`}
+              />
+            </button>
+            <Button
+              onClick={() => setShowConfirm(true)}
+              disabled={isSubmitting}
+              size="sm"
+            >
+              <Send className="h-4 w-4 mr-1.5" />
+              Submit
+            </Button>
+          </div>
+
+          {/* Desktop: page indicator */}
+          <div className="hidden lg:flex items-center gap-1">
+            {questions.slice(
+              Math.max(0, currentIndex - 2),
+              Math.min(totalQuestions, currentIndex + 3)
+            ).map((_, i) => {
+              const idx = Math.max(0, currentIndex - 2) + i;
+              return (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`h-2 rounded-full transition-all ${
+                    idx === currentIndex
+                      ? "w-6 bg-primary"
+                      : answers[questions[idx].id] != null
+                      ? "w-2 bg-green-500"
+                      : "w-2 bg-muted"
+                  }`}
+                />
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
             disabled={currentIndex >= totalQuestions - 1}
             onClick={() => setCurrentIndex(currentIndex + 1)}
+            className="gap-1.5"
           >
-            Next <ChevronRight className="h-4 w-4" />
+            Next
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
-        
-        {/* Bookmark toggle */}
-        <div className="flex items-center gap-1">
-          <Button 
-            onClick={handleBookmarkToggle}
-            className={`inline-flex items-center gap-1 text-sm px-3 py-1.5 rounded-md transition-colors ${
-              bookmarks.has(currentQuestion?.id || '') 
-                ? "text-yellow-600 bg-yellow-50 dark:text-yellow-400 dark:bg-yellow-950" 
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <Bookmark 
-              className={`h-4 w-4 ${bookmarks.has(currentQuestion?.id || '') ? "fill-current" : ""}`}
-            />
-          </Button>
-          {bookmarks.has(currentQuestion?.id || '') ? "Bookmarked" : "Bookmark"}
-        </div>
-      </div>
+      </footer>
 
-      {/* Submit button */}
-      <Button 
-        onClick={() => setShowConfirm(true)} 
-        disabled={isSubmitting}
-        size="lg"
-        className="w-full mt-2"
-      >
-        {isSubmitting ? "Submitting..." : answers[currentQuestion?.id] 
-          ? "Submit Answer" 
-          : "Select an option"}
-      </Button>
+      {/* ===== MOBILE QUESTION PALETTE (overlay) ===== */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <div className="ml-auto relative w-72 bg-background border-l shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-sm font-semibold">Question Palette</h3>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="p-1 rounded-md hover:bg-muted"
+              >
+                ×
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="grid grid-cols-5 gap-2">
+                {questions.map((q, idx) => {
+                  const isAnswered = answers[q.id] != null;
+                  const isBookmarked = bookmarks.has(q.id);
+                  const isCurrent = idx === currentIndex;
+
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => {
+                        setCurrentIndex(idx);
+                        setSidebarOpen(false);
+                      }}
+                      className={`relative h-10 rounded-lg text-sm font-semibold transition-all ${
+                        isCurrent
+                          ? "ring-2 ring-primary bg-primary text-primary-foreground"
+                          : isAnswered
+                          ? "bg-green-500/10 text-green-700 dark:text-green-400"
+                          : "bg-muted text-muted-foreground"
+                      }`}
+                    >
+                      {idx + 1}
+                      {isBookmarked && (
+                        <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-yellow-500 border-2 border-background" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="p-4 border-t">
+              <Button
+                onClick={() => setShowConfirm(true)}
+                disabled={isSubmitting}
+                className="w-full"
+              >
+                <Send className="h-4 w-4 mr-1.5" />
+                {isSubmitting ? "Submitting..." : "Submit Test"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== SUBMIT CONFIRMATION DIALOG ===== */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowConfirm(false)}
+          />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-md mx-4 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Submit Test?</h2>
+                <p className="text-sm text-muted-foreground">
+                  You have answered {answeredCount} of {totalQuestions} questions.
+                </p>
+              </div>
+            </div>
+            {answeredCount < totalQuestions && (
+              <p className="text-sm text-muted-foreground">
+                You still have{" "}
+                <span className="font-medium text-foreground">
+                  {totalQuestions - answeredCount}
+                </span>{" "}
+                unanswered questions.
+              </p>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirm(false)}
+                disabled={isSubmitting}
+              >
+                Continue Test
+              </Button>
+              <Button onClick={handleSubmit} disabled={isSubmitting}>
+                {isSubmitting ? "Submitting..." : "Submit Test"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
