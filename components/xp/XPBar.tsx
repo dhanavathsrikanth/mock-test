@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ interface XPBarData {
 }
 
 export function XPBar() {
+  const pathname = usePathname();
   const [data, setData] = useState<XPBarData | null>(null);
   const [prevXP, setPrevXP] = useState(0);
   const supabase = createClient();
@@ -44,6 +46,7 @@ export function XPBar() {
   }, [data, prevXP]);
 
   if (!data) return null;
+  if (pathname.startsWith("/test/")) return null;
 
   return (
     <div className="w-full bg-background border-b px-3 py-1.5">

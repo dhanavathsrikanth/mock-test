@@ -253,7 +253,7 @@ export function ExamClient({
   currentIndexRef.current = currentIndex;
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
+    <div className="h-[100dvh] lg:h-[calc(100vh-0px)] -mx-3 -mt-2 lg:-mx-0 lg:-mt-0 flex flex-col bg-background overflow-hidden">
       {/* ===== TOP EXAM BAR ===== */}
       <header className="shrink-0 border-b bg-card">
         {/* Desktop top bar */}
@@ -538,7 +538,7 @@ export function ExamClient({
       </div>
 
       {/* ===== BOTTOM NAVIGATION BAR ===== */}
-      <footer className="shrink-0 border-t bg-card">
+      <footer className="shrink-0 border-t bg-card sticky bottom-0 z-10">
         <div className="flex items-center justify-between px-4 sm:px-6 h-16">
           <Button
             variant="outline"
