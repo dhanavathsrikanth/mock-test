@@ -35,9 +35,9 @@ export default async function DashboardLayout({
   const userRole = profile?.role || "user";
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
+    <div className="min-h-screen bg-background flex">
       <Sidebar userName={userName} userRole={userRole} />
-      <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
         <XPBar />
         <div className="px-3 py-2 flex-1">{children}</div>
       </main>
