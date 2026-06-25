@@ -10,13 +10,14 @@ export async function POST(req: Request) {
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { userIds } = await req.json();
+  const { userIds, action } = await req.json();
   if (!Array.isArray(userIds) || userIds.length === 0) {
     return NextResponse.json({ error: "userIds array is required" }, { status: 400 });
   }
 
-  const { error } = await supabase.from("profiles").update({ banned: true }).in("id", userIds);
+  const banned = action !== "unban";
+  const { error } = await supabase.from("profiles").update({ banned }).in("id", userIds);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, action: banned ? "banned" : "unbanned" });
 }

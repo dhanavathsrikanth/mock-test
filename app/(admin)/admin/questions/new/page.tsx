@@ -27,6 +27,7 @@ export default function NewQuestionPage() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploadedImagePath, setUploadedImagePath] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     exam_id: "",
@@ -92,6 +93,7 @@ export default function NewQuestionPage() {
   const clearImage = () => {
     setImageFile(null);
     setImagePreview(null);
+    setUploadedImagePath(null);
     if (form.image_url) setForm((prev) => ({ ...prev, image_url: "" }));
   };
 
@@ -115,8 +117,9 @@ export default function NewQuestionPage() {
         setUploading(false);
         return;
       }
-      const { url } = await res.json();
+      const { url, path } = await res.json();
       imageUrl = url;
+      setUploadedImagePath(path);
       setUploading(false);
     }
 
@@ -142,6 +145,10 @@ export default function NewQuestionPage() {
     setSaving(false);
 
     if (error) {
+      if (uploadedImagePath) {
+        await supabase.storage.from("question-images").remove([uploadedImagePath]);
+        setUploadedImagePath(null);
+      }
       alert(error.message);
       return;
     }
@@ -167,6 +174,7 @@ export default function NewQuestionPage() {
       });
       setImageFile(null);
       setImagePreview(null);
+      setUploadedImagePath(null);
       setSavedId(null);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } else {

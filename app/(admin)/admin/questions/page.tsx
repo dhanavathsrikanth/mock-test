@@ -83,57 +83,83 @@ export default function AdminQuestionsPage() {
   const fetchQuestions = useCallback(async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from("questions")
-        .select("*, subjects!inner(name)", { count: "exact" });
+      const isReportBased = reportsFilter !== "all" || sort === "reports";
 
-      if (search) query = query.ilike("question_text", `%${search}%`);
-      if (subjectFilter) query = query.eq("subject_id", subjectFilter);
-      if (yearFilter) query = query.eq("year", parseInt(yearFilter));
-      if (paperFilter) query = query.eq("paper", paperFilter);
-      if (explanationFilter === "yes") query = query.not("explanation", "is", null);
-      if (explanationFilter === "no") query = query.is("explanation", null);
+      if (isReportBased) {
+        const { data: reportData } = await supabase
+          .from("question_reports")
+          .select("question_id");
+        const rcMap: Record<string, number> = {};
+        (reportData || []).forEach((r) => {
+          rcMap[r.question_id] = (rcMap[r.question_id] || 0) + 1;
+        });
+        setReportCounts(rcMap);
 
-      switch (sort) {
-        case "newest": query = query.order("created_at", { ascending: false }); break;
-        case "oldest": query = query.order("created_at", { ascending: true }); break;
-        case "alpha": query = query.order("question_text", { ascending: true }); break;
-        default:
-          query = query.order("created_at", { ascending: false });
-          break;
-      }
+        let query = supabase
+          .from("questions")
+          .select("*, subjects!inner(name)")
+          .order("created_at", { ascending: false });
 
-      const from = (page - 1) * limit;
-      const to = from + limit - 1;
-      query = query.range(from, to);
+        if (search) query = query.ilike("question_text", `%${search}%`);
+        if (subjectFilter) query = query.eq("subject_id", subjectFilter);
+        if (yearFilter) query = query.eq("year", parseInt(yearFilter));
+        if (paperFilter) query = query.eq("paper", paperFilter);
+        if (explanationFilter === "yes") query = query.not("explanation", "is", null);
+        if (explanationFilter === "no") query = query.is("explanation", null);
 
-      const { data, count } = await query;
-      let result = data || [];
+        const { data } = await query.limit(500);
+        let result = (data || []) as Question[];
 
-      const { data: reportData } = await supabase
-        .from("question_reports")
-        .select("question_id");
-      const rcMap: Record<string, number> = {};
-      (reportData || []).forEach((r) => {
-        rcMap[r.question_id] = (rcMap[r.question_id] || 0) + 1;
-      });
-      setReportCounts(rcMap);
-
-      if (reportsFilter !== "all" || sort === "reports") {
         const reportedIds = Object.keys(rcMap);
         if (reportsFilter === "yes") {
           result = result.filter((q) => reportedIds.includes(q.id));
         } else if (reportsFilter === "no") {
           result = result.filter((q) => !reportedIds.includes(q.id));
         }
+
         if (sort === "reports") {
           result = [...result].sort((a, b) => (rcMap[b.id] || 0) - (rcMap[a.id] || 0));
         }
-        setQuestions(result);
+
+        const from = (page - 1) * limit;
+        const paged = result.slice(from, from + limit);
+        setQuestions(paged);
         setTotal(result.length);
       } else {
-        setQuestions(result);
+        let query = supabase
+          .from("questions")
+          .select("*, subjects!inner(name)", { count: "exact" });
+
+        if (search) query = query.ilike("question_text", `%${search}%`);
+        if (subjectFilter) query = query.eq("subject_id", subjectFilter);
+        if (yearFilter) query = query.eq("year", parseInt(yearFilter));
+        if (paperFilter) query = query.eq("paper", paperFilter);
+        if (explanationFilter === "yes") query = query.not("explanation", "is", null);
+        if (explanationFilter === "no") query = query.is("explanation", null);
+
+        switch (sort) {
+          case "newest": query = query.order("created_at", { ascending: false }); break;
+          case "oldest": query = query.order("created_at", { ascending: true }); break;
+          case "alpha": query = query.order("question_text", { ascending: true }); break;
+          default: query = query.order("created_at", { ascending: false }); break;
+        }
+
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+        query = query.range(from, to);
+
+        const { data, count } = await query;
+        setQuestions((data || []) as Question[]);
         setTotal(count || 0);
+
+        const { data: reportData } = await supabase
+          .from("question_reports")
+          .select("question_id");
+        const rcMap: Record<string, number> = {};
+        (reportData || []).forEach((r) => {
+          rcMap[r.question_id] = (rcMap[r.question_id] || 0) + 1;
+        });
+        setReportCounts(rcMap);
       }
     } finally {
       setLoading(false);

@@ -64,6 +64,7 @@ export default async function UserDetailPage(props: { params: Promise<{ userId: 
         avatarUrl: profile.avatar_url,
         role: profile.role || "user",
         xp: profile.xp || 0,
+        banned: profile.banned || false,
         createdAt: profile.created_at,
         level,
         levelName,

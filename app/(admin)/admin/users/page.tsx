@@ -12,7 +12,7 @@ export default async function AdminUsersPage() {
     supabase.from("test_sessions").select("user_id", { count: "exact", head: true }).gte("started_at", today),
     supabase.from("profiles").select("id", { count: "exact", head: true }).gte("created_at", weekAgo),
     supabase.from("streaks").select("current_streak"),
-    supabase.from("test_sessions").select("user_id, count:user_id", { count: "exact", head: true }),
+    supabase.from("test_sessions").select("user_id", { count: "exact", head: true }),
   ]);
 
   const profiles = profilesRes.data || [];

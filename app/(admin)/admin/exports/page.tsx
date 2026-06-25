@@ -55,10 +55,20 @@ export default function ExportsPage() {
   const [pDateTo, setPDateTo] = useState("");
 
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [years, setYears] = useState<number[]>([]);
+  const [papers, setPapers] = useState<string[]>([]);
 
   useEffect(() => {
     supabase.from("data_exports").select("*").order("created_at", { ascending: false }).limit(50).then(({ data }) => setExports(data || []));
     supabase.from("subjects").select("id, name").order("name").then(({ data }) => setSubjects(data || []));
+    supabase.from("questions").select("year").not("year", "is", null).then(({ data }) => {
+      const unique = [...new Set((data || []).map((q: any) => q.year))].sort((a, b) => b - a);
+      setYears(unique);
+    });
+    supabase.from("questions").select("paper").not("paper", "is", null).then(({ data }) => {
+      const unique = [...new Set((data || []).map((q: any) => q.paper))].sort();
+      setPapers(unique);
+    });
   }, []);
 
   const logExport = useCallback(async (type: string, format: string, count: number, filters: any) => {
@@ -281,8 +291,8 @@ export default function ExportsPage() {
         <SectionCard icon={BookOpen} title="Export Questions" desc="Download question bank with subject, options, answer, and explanation">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <FilterSelect label="Subject" value={qSubject} onChange={setQSubject} options={subjects.map((s) => ({ value: s.id, label: s.name }))} placeholder="All Subjects" />
-            <FilterSelect label="Year" value={qYear} onChange={setQYear} options={[]} placeholder="All Years" />
-            <FilterSelect label="Paper" value={qPaper} onChange={setQPaper} options={[]} placeholder="All Papers" />
+            <FilterSelect label="Year" value={qYear} onChange={setQYear} options={years.map((y) => ({ value: String(y), label: String(y) }))} placeholder="All Years" />
+            <FilterSelect label="Paper" value={qPaper} onChange={setQPaper} options={papers.map((p) => ({ value: p, label: p }))} placeholder="All Papers" />
             <FilterSelect label="Difficulty" value={qDifficulty} onChange={setQDifficulty}
               options={[{ value: "easy", label: "Easy" }, { value: "medium", label: "Medium" }, { value: "hard", label: "Hard" }]}
               placeholder="All Difficulties" />

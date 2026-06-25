@@ -11,10 +11,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await request.json();
+  const ALLOWED = ["name", "slug", "description", "icon_emoji", "condition_type", "condition_value", "xp_reward", "is_active"];
+  const filtered: Record<string, any> = {};
+  ALLOWED.forEach((k) => { if (body[k] !== undefined) filtered[k] = body[k]; });
+
+  if (Object.keys(filtered).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
 
   const { data, error } = await supabase
     .from("badge_definitions")
-    .update(body)
+    .update(filtered)
     .eq("id", id)
     .select()
     .single();

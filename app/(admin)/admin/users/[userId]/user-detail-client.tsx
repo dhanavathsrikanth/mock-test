@@ -40,6 +40,7 @@ interface UserDetail {
   avatarUrl: string | null;
   role: string;
   xp: number;
+  banned: boolean;
   createdAt: string;
   level: number;
   levelName: string;
@@ -124,7 +125,7 @@ export function UserDetailClient({
           break;
         }
         case "ban": {
-          await supabase.from("profiles").update({ banned: true }).eq("id", user.id);
+          await supabase.from("profiles").update({ banned: !user.banned }).eq("id", user.id);
           break;
         }
         case "delete": {
@@ -410,13 +411,13 @@ export function UserDetailClient({
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Ban User</p>
-              <p className="text-xs text-muted-foreground">Prevent this user from accessing the app</p>
+              <p className="text-sm font-medium">{user.banned ? "Unban User" : "Ban User"}</p>
+              <p className="text-xs text-muted-foreground">{user.banned ? "Restore this user's access" : "Prevent this user from accessing the app"}</p>
             </div>
-            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"
+            <Button variant="outline" size="sm" className={user.banned ? "text-green-600 border-green-300 hover:bg-green-50 gap-1.5" : "text-destructive border-destructive/30 hover:bg-destructive/10 gap-1.5"}
               onClick={() => handleAction("ban")} disabled={!!actionLoading}>
-              {actionLoading === "ban" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Ban className="h-3.5 w-3.5" />}
-              Ban
+              {actionLoading === "ban" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : user.banned ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Ban className="h-3.5 w-3.5" />}
+              {user.banned ? "Unban" : "Ban"}
             </Button>
           </div>
           {user.role !== "admin" && (

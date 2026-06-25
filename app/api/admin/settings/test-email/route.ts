@@ -23,7 +23,7 @@ export async function POST(req: Request) {
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
     await resend.emails.send({
-      from: `${sender} <noreply@tgpscprep.com>`,
+      from: `${sender} <${fromEmail || "noreply"}@tgpscprep.com>`,
       to: profile.email,
       subject: "Test Email from TGPSC Prep Settings",
       text: `Hi ${profile.full_name || "Admin"},\n\nThis is a test email from your TGPSC Prep admin settings.\n\nIf you received this, your email configuration is working correctly.\n\nFrom: ${sender}\nFrom Email: ${fromEmail || "not set"}\n\nBest,\nThe TGPSC Prep Team`,

@@ -6,13 +6,13 @@ import { Plus, Pencil, ExternalLink, BookOpen, HelpCircle } from "lucide-react";
 export default async function AdminExamsPage() {
   const supabase = await createClient();
   const { data: exams } = await supabase.from("exams").select("id, name, full_name, category, exam_type, is_active, created_at").order("name");
-  const { data: subjectCounts } = await supabase.from("subjects").select("exam_id, count:exam_id", { count: "exact", head: true });
-  const { data: questionCounts } = await supabase.from("questions").select("exam_id, count:exam_id", { count: "exact", head: true });
+  const { data: subjectsData } = await supabase.from("subjects").select("exam_id");
+  const { data: questionsData } = await supabase.from("questions").select("exam_id");
 
   const subCounts: Record<string, number> = {};
-  (subjectCounts || []).forEach((s: any) => { subCounts[s.exam_id] = (subCounts[s.exam_id] || 0) + 1; });
+  (subjectsData || []).forEach((s: any) => { subCounts[s.exam_id] = (subCounts[s.exam_id] || 0) + 1; });
   const qCounts: Record<string, number> = {};
-  (questionCounts || []).forEach((q: any) => { qCounts[q.exam_id] = (qCounts[q.exam_id] || 0) + 1; });
+  (questionsData || []).forEach((q: any) => { qCounts[q.exam_id] = (qCounts[q.exam_id] || 0) + 1; });
 
   return (
     <div className="space-y-6">
