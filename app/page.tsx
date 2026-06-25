@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { MaintenanceBanner } from "@/components/MaintenanceBanner";
 import {
   GraduationCap,
   ClipboardCheck,
@@ -9,9 +11,18 @@ import {
   ChevronRight,
 } from "lucide-react";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient();
+  const { data: general } = await supabase
+    .from("app_config")
+    .select("value")
+    .eq("key", "general")
+    .maybeSingle();
+  const maintenanceMode = ((general?.value as any)?.maintenanceMode) === true;
+
   return (
     <main className="min-h-screen bg-background">
+      <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={false} />
       {/* Nav */}
       <header className="border-b">
         <div className="max-w-6xl mx-auto flex h-16 items-center justify-between px-4">
