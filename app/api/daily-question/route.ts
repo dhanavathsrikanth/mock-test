@@ -1,0 +1,193 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { updateStreak } from "@/lib/streak";
+import { XP_REWARDS, awardXP } from "@/lib/xp";
+
+export async function GET(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(req.url);
+  const isHistory = url.searchParams.get("history") === "true";
+
+  const today = new Date().toISOString().split("T")[0];
+
+  // Fetch history
+  if (isHistory) {
+    const { data: allDaily } = await supabase
+      .from("daily_questions")
+      .select(`
+        id,
+        assigned_date,
+        question_id,
+        questions ( subject_id, subjects ( name ) )
+      `)
+      .order("assigned_date", { ascending: false });
+
+    const { data: answers } = await supabase
+      .from("daily_question_answers")
+      .select("daily_question_id, selected_option, is_correct")
+      .eq("user_id", user.id);
+
+    const answerMap = new Map(
+      (answers || []).map((a) => [a.daily_question_id, a])
+    );
+
+    const history = (allDaily || []).map((d) => {
+      const q = d as any;
+      const ans = answerMap.get(d.id);
+      return {
+        id: d.id,
+        assignedDate: d.assigned_date,
+        question: { subject: q.questions?.subjects?.name || null },
+        userAnswer: ans
+          ? {
+              selectedOption: ans.selected_option,
+              isCorrect: ans.is_correct,
+            }
+          : null,
+      };
+    });
+
+    return NextResponse.json({ history });
+  }
+
+  // Fetch today's question
+  const { data: daily } = await supabase
+    .from("daily_questions")
+    .select(`
+      id,
+      assigned_date,
+      question_id,
+      questions (
+        id,
+        question_text,
+        option_1,
+        option_2,
+        option_3,
+        option_4,
+        correct_option,
+        explanation,
+        year,
+        subject_id,
+        subjects ( name )
+      )
+    `)
+    .eq("assigned_date", today)
+    .maybeSingle();
+
+  if (!daily) {
+    return NextResponse.json({ question: null, message: "No question assigned for today yet" });
+  }
+
+  const { data: answer } = await supabase
+    .from("daily_question_answers")
+    .select("*")
+    .eq("daily_question_id", daily.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const question = (daily as any).questions;
+
+  return NextResponse.json({
+    id: daily.id,
+    assignedDate: daily.assigned_date,
+    question: {
+      id: question.id,
+      text: question.question_text,
+      options: [question.option_1, question.option_2, question.option_3, question.option_4],
+      correctOption: answer ? question.correct_option : null,
+      explanation: answer ? question.explanation : null,
+      year: question.year,
+      subject: question.subjects?.name || null,
+    },
+    userAnswer: answer
+      ? {
+          selectedOption: answer.selected_option,
+          isCorrect: answer.is_correct,
+        }
+      : null,
+  });
+}
+
+export async function POST(req: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const body = await req.json();
+  const { dailyQuestionId, selectedOption } = body;
+
+  if (!dailyQuestionId || !selectedOption) {
+    return NextResponse.json({ error: "dailyQuestionId and selectedOption required" }, { status: 400 });
+  }
+
+  if (selectedOption < 1 || selectedOption > 4) {
+    return NextResponse.json({ error: "Invalid option" }, { status: 400 });
+  }
+
+  const { data: daily } = await supabase
+    .from("daily_questions")
+    .select("id, question_id, questions(correct_option, explanation)")
+    .eq("id", dailyQuestionId)
+    .single();
+
+  if (!daily) {
+    return NextResponse.json({ error: "Daily question not found" }, { status: 404 });
+  }
+
+  const { data: existing } = await supabase
+    .from("daily_question_answers")
+    .select("id")
+    .eq("daily_question_id", dailyQuestionId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing) {
+    return NextResponse.json({ error: "Already answered" }, { status: 409 });
+  }
+
+  const q = daily as any;
+  const correctOption = q.questions.correct_option;
+  const isCorrect = selectedOption === correctOption;
+
+  const { error: insertError } = await supabase
+    .from("daily_question_answers")
+    .insert({
+      daily_question_id: dailyQuestionId,
+      user_id: user.id,
+      selected_option: selectedOption,
+      is_correct: isCorrect,
+    });
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  const xpAmount = isCorrect
+    ? XP_REWARDS.DAILY_QUESTION_CORRECT
+    : XP_REWARDS.DAILY_QUESTION_ATTEMPTED;
+
+  const xpResult = await awardXP(
+    user.id,
+    xpAmount,
+    isCorrect ? "Daily question correct" : "Daily question attempted"
+  );
+
+  await updateStreak(user.id);
+
+  return NextResponse.json({
+    isCorrect,
+    correctOption,
+    explanation: q.questions.explanation,
+    xpAwarded: xpResult.xpAwarded,
+    leveledUp: xpResult.leveledUp,
+    newLevelName: xpResult.newLevelName,
+    newLevelNumber: xpResult.newLevelNumber,
+  });
+}
