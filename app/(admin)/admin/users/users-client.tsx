@@ -19,6 +19,7 @@ import {
   Bell,
   CheckSquare,
   Square,
+  Loader2,
 } from "lucide-react";
 
 interface UserRow {
@@ -43,6 +44,12 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
   const [roleFilter, setRoleFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifTitle, setNotifTitle] = useState("");
+  const [notifBody, setNotifBody] = useState("");
+  const [sending, setSending] = useState(false);
+  const [banning, setBanning] = useState(false);
+  const [banConfirm, setBanConfirm] = useState(false);
   const limit = 25;
 
   const filtered = useMemo(() => {
@@ -73,6 +80,72 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
     if (next.has(id)) next.delete(id);
     else next.add(id);
     setSelected(next);
+  };
+
+  const handleNotify = async () => {
+    if (!notifTitle.trim()) return;
+    setSending(true);
+    try {
+      const res = await fetch("/api/admin/users/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: Array.from(selected), title: notifTitle, body: notifBody }),
+      });
+      if (res.ok) {
+        setNotifOpen(false);
+        setNotifTitle("");
+        setNotifBody("");
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to send notifications");
+      }
+    } catch {
+      alert("Failed to send notifications");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleBan = async () => {
+    setBanning(true);
+    try {
+      const res = await fetch("/api/admin/users/ban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userIds: Array.from(selected) }),
+      });
+      if (res.ok) {
+        setBanConfirm(false);
+        setSelected(new Set());
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to ban users");
+      }
+    } catch {
+      alert("Failed to ban users");
+    } finally {
+      setBanning(false);
+    }
+  };
+
+  const handleExport = () => {
+    const header = "Name,Email,Role,XP,Joined";
+    const rows = users
+      .filter((u) => selected.has(u.id))
+      .map((u) => {
+        const name = `"${u.fullName.replace(/"/g, '""')}"`;
+        const email = `"${u.email.replace(/"/g, '""')}"`;
+        return `${name},${email},${u.role},${u.xp},${new Date(u.createdAt).toLocaleDateString()}`;
+      });
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `users-export-${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setSelected(new Set());
   };
 
   return (
@@ -139,13 +212,13 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
         {selected.size > 0 && (
           <div className="flex items-center gap-1.5 ml-auto">
             <span className="text-xs text-muted-foreground mr-1">{selected.size} selected</span>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => setNotifOpen(true)}>
               <Bell className="h-3.5 w-3.5" /> Notify
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1">
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={handleExport}>
               <Download className="h-3.5 w-3.5" /> Export
             </Button>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10">
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/10" onClick={() => setBanConfirm(true)}>
               <Ban className="h-3.5 w-3.5" /> Ban
             </Button>
           </div>
@@ -236,6 +309,56 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
           <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
             Next <ChevronRight className="h-4 w-4" />
           </Button>
+        </div>
+      )}
+
+      {/* Notification Modal */}
+      {notifOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setNotifOpen(false)} />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-md mx-4 p-6 space-y-4">
+            <h2 className="font-semibold">Notify {selected.size} User{selected.size !== 1 ? "s" : ""}</h2>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Title</label>
+              <Input value={notifTitle} onChange={(e) => setNotifTitle(e.target.value)} placeholder="Notification title" />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Body</label>
+              <textarea
+                value={notifBody}
+                onChange={(e) => setNotifBody(e.target.value)}
+                placeholder="Notification body (optional)"
+                className="w-full min-h-[60px] rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setNotifOpen(false)}>Cancel</Button>
+              <Button onClick={handleNotify} disabled={!notifTitle.trim() || sending}>
+                {sending && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                Send
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ban Confirmation */}
+      {banConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setBanConfirm(false)} />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-sm mx-4 p-6 space-y-4">
+            <h2 className="font-semibold text-destructive">Ban {selected.size} User{selected.size !== 1 ? "s" : ""}?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will prevent {selected.size === 1 ? "this user" : "these users"} from accessing the app.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setBanConfirm(false)} disabled={banning}>Cancel</Button>
+              <Button variant="destructive" onClick={handleBan} disabled={banning}>
+                {banning && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                Ban
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

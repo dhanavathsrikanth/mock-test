@@ -92,18 +92,20 @@ export function SettingsClient({
   const [grantRole, setGrantRole] = useState("admin");
   const [granting, setGranting] = useState(false);
 
-  const [notifEnabled, setNotifEnabled] = useState(true);
-  const [emailFromName, setEmailFromName] = useState("TGPSC Prep");
-  const [emailFromAddr, setEmailFromAddr] = useState("");
+  const [notifConfig, setNotifConfig] = useState(initialConfig.notifications || { pushEnabled: true, emailFromName: "TGPSC Prep", emailFromAddr: "" });
   const [cronStatus, setCronStatus] = useState<any[]>([]);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [clearBeforeDate, setClearBeforeDate] = useState("");
+  const [reportAgeDays, setReportAgeDays] = useState(30);
+  const [countdownSearch, setCountdownSearch] = useState("");
+
   const supabase = createClient();
 
   useEffect(() => {
-    fetch("/api/admin/reports?limit=1")
+    fetch("/api/admin/cron-jobs")
       .then((r) => r.json())
-      .then((d) => setEmailFromAddr(d.fromEmail || ""))
+      .then(setCronStatus)
       .catch(() => {});
   }, []);
 
@@ -174,7 +176,9 @@ export function SettingsClient({
     const user = users[0];
     const { error } = await supabase.from("admin_profiles").insert({ user_id: user.id, role: grantRole });
     if (error) { alert(error.message); setGranting(false); return; }
-    await supabase.from("profiles").update({ role: grantRole }).eq("id", user.id);
+    if (grantRole === "admin") {
+      await supabase.from("profiles").update({ role: "admin" }).eq("id", user.id);
+    }
     setAdminProfiles([...adminProfiles, {
       id: crypto.randomUUID(),
       userId: user.id,
@@ -200,9 +204,14 @@ export function SettingsClient({
     try {
       switch (action) {
         case "clear-sessions": {
-          let q = supabase.from("test_sessions").delete();
-          if (extra?.before) q = q.lt("created_at", extra.before);
-          await q;
+          const sessionQuery = supabase.from("test_sessions").select("id");
+          const filteredQuery = extra?.before ? sessionQuery.lt("created_at", extra.before) : sessionQuery;
+          const { data: sessions } = await filteredQuery;
+          const ids = (sessions || []).map((s: any) => s.id);
+          if (ids.length > 0) {
+            await supabase.from("test_answers").delete().in("session_id", ids);
+            await supabase.from("test_sessions").delete().in("id", ids);
+          }
           break;
         }
         case "reset-leaderboard": {
@@ -238,10 +247,13 @@ export function SettingsClient({
   const handleTriggerCron = async (job: string) => {
     setActionLoading("cron-" + job);
     try {
-      const res = await fetch(`/api/cron/${job}`, { method: "POST" });
+      const res = await fetch(`/api/admin/cron-jobs/${job}/run`, { method: "POST" });
       if (res.ok) showSave(`${job} triggered!`);
       else { const err = await res.json(); alert(err.error || "Failed"); }
-    } finally { setActionLoading(null); }
+    } finally {
+      setActionLoading(null);
+      fetch("/api/admin/cron-jobs").then((r) => r.json()).then(setCronStatus).catch(() => {});
+    }
   };
 
   const cronJobs = [
@@ -287,22 +299,34 @@ export function SettingsClient({
               {general.maintenanceMode ? <ToggleRight className="h-6 w-6 text-destructive" /> : <ToggleLeft className="h-6 w-6 text-muted-foreground" />}
             </button>
           </div>
-          <div className="flex items-center justify-between">
-            <div><p className="text-sm font-medium">App Version</p><p className="text-xs text-muted-foreground">{general.appVersion || "1.0.0"}</p></div>
-            <Button variant="outline" size="sm" onClick={handleSaveGeneral} disabled={saving}>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium">App Version</label>
+            <Input value={general.appVersion || ""} onChange={(e) => setGeneral({ ...general, appVersion: e.target.value })} placeholder="1.0.0" className="h-9 max-w-[200px]" />
+          </div>
+          <div className="flex justify-end border-t pt-4">
+            <Button onClick={handleSaveGeneral} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
-              Save
+              Save General Settings
             </Button>
           </div>
         </div>
       );
 
-      case "exam-dates": return (
+      case "exam-dates": {
+        const filteredCountdowns = countdownSearch
+          ? countdowns.filter((c) => c.label.toLowerCase().includes(countdownSearch.toLowerCase()))
+          : countdowns;
+        return (
         <div className="space-y-5">
           <div className="border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
-              <h3 className="text-sm font-medium">Exam Countdowns</h3>
-              <span className="text-xs text-muted-foreground">{countdowns.length} entries</span>
+            <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-medium shrink-0">Exam Countdowns</h3>
+              <Input
+                placeholder="Search countdowns..." value={countdownSearch}
+                onChange={(e) => setCountdownSearch(e.target.value)}
+                className="h-8 text-xs max-w-[200px]"
+              />
+              <span className="text-xs text-muted-foreground shrink-0">{filteredCountdowns.length} entries</span>
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -315,7 +339,7 @@ export function SettingsClient({
                 </tr>
               </thead>
               <tbody>
-                {countdowns.map((c) => (
+                {filteredCountdowns.map((c) => (
                   <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20">
                     {editingCountdown === c.id ? (
                       <>
@@ -351,11 +375,10 @@ export function SettingsClient({
                         <td className="px-4 py-3 text-right">
                           <div className="flex justify-end gap-1">
                             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditingCountdown(c.id)}>Edit</Button>
-                            {c.isActive && !(new Date(c.examDate) > new Date()) && (
-                              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleUpdateCountdown(c.id, { is_active: false })}>
-                                Mark Completed
-                              </Button>
-                            )}
+                            <Button variant="ghost" size="sm" className="h-7 text-xs"
+                              onClick={() => handleUpdateCountdown(c.id, { is_active: !c.isActive })}>
+                              {c.isActive ? "Deactivate" : "Activate"}
+                            </Button>
                             <button onClick={() => handleDeleteCountdown(c.id)} className="p-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/20">
                               <Trash2 className="h-3.5 w-3.5 text-destructive" />
                             </button>
@@ -384,30 +407,38 @@ export function SettingsClient({
             </div>
           </div>
         </div>
-      );
+      );}
 
       case "notifications": return (
         <div className="space-y-5">
           <div className="flex items-center justify-between">
             <div><p className="text-sm font-medium">Push Notifications</p><p className="text-xs text-muted-foreground">Globally enable/disable all push notifications</p></div>
-            <button onClick={() => setNotifEnabled(!notifEnabled)}>
-              {notifEnabled ? <ToggleRight className="h-6 w-6 text-primary" /> : <ToggleLeft className="h-6 w-6 text-muted-foreground" />}
+            <button onClick={() => setNotifConfig({ ...notifConfig, pushEnabled: !notifConfig.pushEnabled })}>
+              {notifConfig.pushEnabled ? <ToggleRight className="h-6 w-6 text-primary" /> : <ToggleLeft className="h-6 w-6 text-muted-foreground" />}
             </button>
           </div>
           <div className="border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b bg-muted/30">
+            <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
               <h3 className="text-sm font-medium">Cron Jobs</h3>
+              <span className="text-xs text-muted-foreground">{cronStatus.length} jobs</span>
             </div>
             <div className="divide-y">
-              {cronJobs.map((job) => (
-                <div key={job.id} className="px-4 py-3 flex items-center justify-between">
-                  <div>
+              {(cronStatus.length > 0 ? cronStatus : cronJobs).map((job: any) => (
+                <div key={job.id || job.name} className="px-4 py-3 flex items-center justify-between">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium">{job.label}</p>
-                    <p className="text-xs text-muted-foreground">{job.desc}</p>
+                    <p className="text-xs text-muted-foreground">{job.description}</p>
+                    {job.last_run && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Last run: {new Date(job.last_run).toLocaleString()} &middot;
+                        Status: <span className={job.last_status === "success" ? "text-green-600" : job.last_status === "failed" ? "text-destructive" : ""}>{job.last_status}</span>
+                        {job.next_run && <> &middot; Next: {new Date(job.next_run).toLocaleString()}</>}
+                      </p>
+                    )}
                   </div>
-                  <Button variant="outline" size="sm" className="text-xs gap-1"
-                    onClick={() => handleTriggerCron(job.id)} disabled={actionLoading === "cron-" + job.id}>
-                    {actionLoading === "cron-" + job.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                  <Button variant="outline" size="sm" className="text-xs gap-1 shrink-0 ml-3"
+                    onClick={() => handleTriggerCron(job.id || job.name)} disabled={actionLoading === "cron-" + (job.id || job.name)}>
+                    {actionLoading === "cron-" + (job.id || job.name) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                     Run Now
                   </Button>
                 </div>
@@ -415,24 +446,30 @@ export function SettingsClient({
             </div>
           </div>
           <div className="border rounded-xl p-5 space-y-4">
-            <h3 className="text-sm font-medium">Email Sender</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium">Email Sender</h3>
+              <Button variant="outline" size="sm" onClick={async () => { await saveConfig("notifications", notifConfig); }} disabled={saving}>
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
+                Save
+              </Button>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">From Name</label>
-                <Input value={emailFromName} onChange={(e) => setEmailFromName(e.target.value)} className="h-9" />
+                <Input value={notifConfig.emailFromName || ""} onChange={(e) => setNotifConfig({ ...notifConfig, emailFromName: e.target.value })} className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">From Email</label>
-                <Input type="email" value={emailFromAddr} onChange={(e) => setEmailFromAddr(e.target.value)} placeholder="noreply@yourdomain.com" className="h-9" />
+                <Input type="email" value={notifConfig.emailFromAddr || ""} onChange={(e) => setNotifConfig({ ...notifConfig, emailFromAddr: e.target.value })} placeholder="noreply@yourdomain.com" className="h-9" />
               </div>
             </div>
             <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-1">
               <p className="font-medium text-xs text-muted-foreground">Email Template Preview</p>
-              <p className="border-b pb-1">Subject: Daily Question — June 24, 2026</p>
+              <p className="border-b pb-1">Subject: Daily Question — {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
               <p>Hi {`{{user_name}}`},</p>
               <p className="text-muted-foreground">Your daily question for today is ready. Click below to answer.</p>
               <p className="text-primary text-xs">[View Daily Question]</p>
-              <p className="text-xs text-muted-foreground pt-1">— {emailFromName || "TGPSC Prep"} Team</p>
+              <p className="text-xs text-muted-foreground pt-1">— {notifConfig.emailFromName || "TGPSC Prep"} Team</p>
             </div>
           </div>
         </div>
@@ -531,16 +568,19 @@ export function SettingsClient({
         </div>
       );
 
-      case "content": return (
+      case "content": {
+        const CONTENT_DEFAULTS = { questionsPerTest: 150, timePerQuestion: 60, negativeMarking: false, negativeMarkValue: 0.33, maxBookmarks: null, dailyQuestionTime: "07:00", srsMinEase: 1.3, srsMaxEase: 2.5, srsInitialInterval: 1 };
+        const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+        return (
         <div className="space-y-5">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Questions per Test</label>
-              <Input type="number" value={contentRules.questionsPerTest ?? 150} onChange={(e) => setContentRules({ ...contentRules, questionsPerTest: parseInt(e.target.value) || 150 })} className="h-9" />
+              <Input type="number" min={1} max={500} value={contentRules.questionsPerTest ?? 150} onChange={(e) => setContentRules({ ...contentRules, questionsPerTest: clamp(parseInt(e.target.value) || 150, 1, 500) })} className="h-9" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Time per Question (seconds)</label>
-              <Input type="number" value={contentRules.timePerQuestion ?? 60} onChange={(e) => setContentRules({ ...contentRules, timePerQuestion: parseInt(e.target.value) || 60 })} className="h-9" />
+              <Input type="number" min={10} max={600} value={contentRules.timePerQuestion ?? 60} onChange={(e) => setContentRules({ ...contentRules, timePerQuestion: clamp(parseInt(e.target.value) || 60, 10, 600) })} className="h-9" />
             </div>
             <div className="flex items-center justify-between">
               <div><p className="text-sm font-medium">Negative Marking</p><p className="text-xs text-muted-foreground">Deduct points for wrong answers</p></div>
@@ -550,11 +590,11 @@ export function SettingsClient({
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Negative Mark Value</label>
-              <Input type="number" step="0.01" value={contentRules.negativeMarkValue ?? 0.33} onChange={(e) => setContentRules({ ...contentRules, negativeMarkValue: parseFloat(e.target.value) || 0.33 })} className="h-9" />
+              <Input type="number" min={0} max={1} step="0.01" value={contentRules.negativeMarkValue ?? 0.33} onChange={(e) => setContentRules({ ...contentRules, negativeMarkValue: clamp(parseFloat(e.target.value) || 0.33, 0, 1) })} className="h-9" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Max Bookmarks per User</label>
-              <Input type="number" value={contentRules.maxBookmarks ?? ""} placeholder="Unlimited" onChange={(e) => setContentRules({ ...contentRules, maxBookmarks: e.target.value ? parseInt(e.target.value) : null })} className="h-9" />
+              <Input type="number" min={0} value={contentRules.maxBookmarks ?? ""} placeholder="Unlimited" onChange={(e) => setContentRules({ ...contentRules, maxBookmarks: e.target.value ? parseInt(e.target.value) : null })} className="h-9" />
             </div>
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Daily Question Time (IST)</label>
@@ -566,50 +606,96 @@ export function SettingsClient({
             <div className="grid sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Min Ease Factor</label>
-                <Input type="number" step="0.1" value={contentRules.srsMinEase ?? 1.3} onChange={(e) => setContentRules({ ...contentRules, srsMinEase: parseFloat(e.target.value) || 1.3 })} className="h-9" />
+                <Input type="number" min={1.0} max={3.0} step="0.1" value={contentRules.srsMinEase ?? 1.3} onChange={(e) => setContentRules({ ...contentRules, srsMinEase: clamp(parseFloat(e.target.value) || 1.3, 1.0, 3.0) })} className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Max Ease Factor</label>
-                <Input type="number" step="0.1" value={contentRules.srsMaxEase ?? 2.5} onChange={(e) => setContentRules({ ...contentRules, srsMaxEase: parseFloat(e.target.value) || 2.5 })} className="h-9" />
+                <Input type="number" min={1.0} max={5.0} step="0.1" value={contentRules.srsMaxEase ?? 2.5} onChange={(e) => setContentRules({ ...contentRules, srsMaxEase: clamp(parseFloat(e.target.value) || 2.5, 1.0, 5.0) })} className="h-9" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Initial Interval (days)</label>
-                <Input type="number" value={contentRules.srsInitialInterval ?? 1} onChange={(e) => setContentRules({ ...contentRules, srsInitialInterval: parseInt(e.target.value) || 1 })} className="h-9" />
+                <Input type="number" min={1} max={90} value={contentRules.srsInitialInterval ?? 1} onChange={(e) => setContentRules({ ...contentRules, srsInitialInterval: clamp(parseInt(e.target.value) || 1, 1, 90) })} className="h-9" />
               </div>
             </div>
           </div>
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => { setContentRules(CONTENT_DEFAULTS); }}>
+              <RefreshCw className="h-4 w-4 mr-1.5" /> Reset to Defaults
+            </Button>
             <Button onClick={handleSaveContent} disabled={saving}>
               {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
               Save Content Rules
             </Button>
           </div>
         </div>
-      );
+      );}
 
       case "danger": return (
         <div className="space-y-4">
-          {[
-            { action: "clear-sessions", label: "Clear All Test Sessions", desc: "Delete all test sessions and answers. Optionally filter by date.", icon: Trash2, color: "text-destructive", extra: true },
-            { action: "reset-leaderboard", label: "Reset Leaderboard Data", desc: "Delete all XP transactions and level data. User profiles preserved.", icon: RefreshCw, color: "text-destructive" },
-            { action: "export-csv", label: "Export Questions as CSV", desc: "Download all questions in CSV format for backup.", icon: Download, color: "text-blue-600" },
-            { action: "delete-old-reports", label: "Delete Old Pending Reports", desc: "Remove pending reports older than 30 days.", icon: AlertTriangle, color: "text-orange-600", extra: true },
-          ].map((item) => (
-            <div key={item.action} className="border rounded-xl p-5 flex items-center justify-between">
-              <div className="flex items-start gap-3">
-                <item.icon className={`h-5 w-5 mt-0.5 ${item.color}`} />
-                <div>
-                  <p className="text-sm font-medium">{item.label}</p>
-                  <p className="text-xs text-muted-foreground">{item.desc}</p>
-                </div>
+          <div className="border rounded-xl p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-2"><Trash2 className="h-4 w-4 text-destructive" /> Clear All Test Sessions</p>
+                <p className="text-xs text-muted-foreground">Delete all test sessions and answers. Optionally filter by date.</p>
               </div>
-              <Button variant="outline" size="sm" className={`${item.color} border-current/30 hover:bg-current/10 shrink-0 ml-3`}
-                onClick={() => handleDangerAction(item.action)} disabled={!!actionLoading}>
-                {actionLoading === item.action ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
-                Run
-              </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <Input type="date" value={clearBeforeDate} onChange={(e) => setClearBeforeDate(e.target.value)} className="h-8 text-xs w-[140px]" title="Only clear sessions before this date" />
+                <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
+                  onClick={() => handleDangerAction("clear-sessions", clearBeforeDate ? { before: new Date(clearBeforeDate).toISOString() } : undefined)} disabled={!!actionLoading}>
+                  {actionLoading === "clear-sessions" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Clear{clearBeforeDate ? " Old" : " All"}
+                </Button>
+              </div>
             </div>
-          ))}
+          </div>
+          <div className="border rounded-xl p-5 flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <RefreshCw className="h-5 w-5 mt-0.5 text-destructive" />
+              <div>
+                <p className="text-sm font-medium">Reset Leaderboard Data</p>
+                <p className="text-xs text-muted-foreground">Delete all XP transactions and level data. User profiles preserved.</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0 ml-3"
+              onClick={() => handleDangerAction("reset-leaderboard")} disabled={!!actionLoading}>
+              {actionLoading === "reset-leaderboard" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+              Reset
+            </Button>
+          </div>
+          <div className="border rounded-xl p-5 flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <Download className="h-5 w-5 mt-0.5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium">Export Questions as CSV</p>
+                <p className="text-xs text-muted-foreground">Download all questions in CSV format for backup.</p>
+              </div>
+            </div>
+            <Button variant="outline" size="sm" className="text-blue-600 border-blue-600/30 hover:bg-blue-50 shrink-0 ml-3"
+              onClick={() => handleDangerAction("export-csv")} disabled={!!actionLoading}>
+              {actionLoading === "export-csv" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+              Export
+            </Button>
+          </div>
+          <div className="border rounded-xl p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-orange-600" /> Delete Old Pending Reports</p>
+                <p className="text-xs text-muted-foreground">Remove pending reports older than a specified number of days.</p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-muted-foreground">Older than</span>
+                  <Input type="number" min={1} max={365} value={reportAgeDays} onChange={(e) => setReportAgeDays(parseInt(e.target.value) || 30)} className="h-8 text-xs w-[60px]" />
+                  <span className="text-xs text-muted-foreground">days</span>
+                </div>
+                <Button variant="outline" size="sm" className="text-orange-600 border-orange-600/30 hover:bg-orange-50 shrink-0"
+                  onClick={() => handleDangerAction("delete-old-reports", { days: reportAgeDays })} disabled={!!actionLoading}>
+                  {actionLoading === "delete-old-reports" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       );
     }

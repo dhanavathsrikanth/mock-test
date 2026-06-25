@@ -124,7 +124,7 @@ export function UserDetailClient({
           break;
         }
         case "ban": {
-          await supabase.from("profiles").update({ role: "banned" as any }).eq("id", user.id);
+          await supabase.from("profiles").update({ banned: true }).eq("id", user.id);
           break;
         }
         case "delete": {

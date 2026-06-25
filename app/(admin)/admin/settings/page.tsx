@@ -4,13 +4,17 @@ import { SettingsClient } from "./settings-client";
 export default async function AdminSettingsPage() {
   const supabase = await createClient();
 
-  const [configRes, examsRes, countdownRes, adminProfilesRes, profilesRes] = await Promise.all([
+  const [configRes, examsRes, countdownRes, adminProfilesRes] = await Promise.all([
     supabase.from("app_config").select("*"),
     supabase.from("exams").select("*").eq("is_active", true),
     supabase.from("exam_countdown").select("*").order("exam_date", { ascending: true }),
     supabase.from("admin_profiles").select("id, user_id, role, created_at"),
-    supabase.from("profiles").select("id, full_name, email, role").in("role", ["admin"]),
   ]);
+
+  const adminUserIds = (adminProfilesRes.data || []).map((ap) => ap.user_id);
+  const profilesRes = adminUserIds.length > 0
+    ? await supabase.from("profiles").select("id, full_name, email, role").in("id", adminUserIds)
+    : { data: [] };
 
   const config: Record<string, any> = {};
   (configRes.data || []).forEach((c) => {
