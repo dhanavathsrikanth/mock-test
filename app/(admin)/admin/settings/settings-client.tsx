@@ -99,6 +99,10 @@ export function SettingsClient({
   const [clearBeforeDate, setClearBeforeDate] = useState("");
   const [reportAgeDays, setReportAgeDays] = useState(30);
   const [countdownSearch, setCountdownSearch] = useState("");
+  const [countdownAdding, setCountdownAdding] = useState(false);
+  const [grantConfirmUser, setGrantConfirmUser] = useState<any>(null);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [dangerPreview, setDangerPreview] = useState<{ action: string; count: number; label: string } | null>(null);
 
   const supabase = createClient();
 
@@ -131,24 +135,27 @@ export function SettingsClient({
 
   const handleAddCountdown = async () => {
     if (!countdownForm.label || !countdownForm.examDate) return;
-    const { data, error } = await supabase.from("exam_countdown").insert({
-      exam_id: countdownForm.examId || exams[0]?.id,
-      label: countdownForm.label,
-      exam_date: countdownForm.examDate,
-      is_official: countdownForm.isOfficial,
-      is_active: true,
-    }).select().single();
-    if (error) { alert(error.message); return; }
-    setCountdowns([...countdowns, {
-      id: data.id,
-      examId: data.exam_id,
-      label: data.label,
-      examDate: data.exam_date,
-      isOfficial: data.is_official,
-      isActive: data.is_active,
-      createdAt: data.created_at,
-    }]);
-    setCountdownForm({ label: "", examDate: "", isOfficial: false, examId: exams[0]?.id || "" });
+    setCountdownAdding(true);
+    try {
+      const { data, error } = await supabase.from("exam_countdown").insert({
+        exam_id: countdownForm.examId || exams[0]?.id,
+        label: countdownForm.label,
+        exam_date: countdownForm.examDate,
+        is_official: countdownForm.isOfficial,
+        is_active: true,
+      }).select().single();
+      if (error) { alert(error.message); return; }
+      setCountdowns([...countdowns, {
+        id: data.id,
+        examId: data.exam_id,
+        label: data.label,
+        examDate: data.exam_date,
+        isOfficial: data.is_official,
+        isActive: data.is_active,
+        createdAt: data.created_at,
+      }]);
+      setCountdownForm({ label: "", examDate: "", isOfficial: false, examId: exams[0]?.id || "" });
+    } finally { setCountdownAdding(false); }
   };
 
   const handleUpdateCountdown = async (id: string, updates: any) => {
@@ -164,43 +171,84 @@ export function SettingsClient({
     setCountdowns(countdowns.filter((c) => c.id !== id));
   };
 
-  const handleGrantAdmin = async () => {
+  const handleLookupUser = async () => {
     if (!grantEmail.trim()) return;
     setGranting(true);
-    const { data: users } = await supabase.from("profiles").select("id, full_name, email").ilike("email", grantEmail.trim());
-    if (!users || users.length === 0) {
-      alert("User not found with that email");
-      setGranting(false);
-      return;
-    }
-    const user = users[0];
-    const { error } = await supabase.from("admin_profiles").insert({ user_id: user.id, role: grantRole });
+    const { data: users } = await supabase.from("profiles").select("id, full_name, email, xp, created_at").ilike("email", grantEmail.trim());
+    setGranting(false);
+    if (!users || users.length === 0) { alert("User not found with that email"); return; }
+    setGrantConfirmUser(users[0]);
+  };
+
+  const handleConfirmGrant = async () => {
+    if (!grantConfirmUser) return;
+    setGranting(true);
+    const { error } = await supabase.from("admin_profiles").insert({ user_id: grantConfirmUser.id, role: grantRole });
     if (error) { alert(error.message); setGranting(false); return; }
     if (grantRole === "admin") {
-      await supabase.from("profiles").update({ role: "admin" }).eq("id", user.id);
+      await supabase.from("profiles").update({ role: "admin" }).eq("id", grantConfirmUser.id);
     }
     setAdminProfiles([...adminProfiles, {
       id: crypto.randomUUID(),
-      userId: user.id,
-      email: user.email,
-      name: user.full_name || "User",
+      userId: grantConfirmUser.id,
+      email: grantConfirmUser.email,
+      name: grantConfirmUser.full_name || "User",
       role: grantRole,
       createdAt: new Date().toISOString(),
     }]);
     setGrantEmail("");
+    setGrantConfirmUser(null);
     setGranting(false);
+    showSave(`${grantRole} access granted to ${grantConfirmUser.email}`);
   };
 
   const handleRevokeAdmin = async (ap: AdminProfile) => {
-    if (!confirm(`Revoke admin access from ${ap.email}?`)) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const isSelf = user && ap.userId === user.id;
+    if (isSelf && !confirm("⚠️ You are revoking YOUR OWN admin access! You will lose access to this page. Continue?")) return;
+    if (!isSelf && !confirm(`Revoke admin access from ${ap.email}?`)) return;
     await supabase.from("admin_profiles").delete().eq("user_id", ap.userId);
     await supabase.from("profiles").update({ role: "user" }).eq("id", ap.userId);
     setAdminProfiles(adminProfiles.filter((a) => a.id !== ap.id));
+    if (isSelf) { showSave("Access revoked. Redirecting..."); setTimeout(() => window.location.href = "/dashboard", 1500); }
+    else showSave(`Revoked ${ap.email}`);
+  };
+
+  const previewDangerAction = async (action: string, extra?: any) => {
+    try {
+      let count = 0;
+      let label = "";
+      switch (action) {
+        case "clear-sessions": {
+          let q = supabase.from("test_sessions").select("id", { count: "exact", head: true });
+          if (extra?.before) q = q.lt("created_at", extra.before);
+          const { count: c } = await q;
+          count = c || 0;
+          label = `Delete ${count} test session${count !== 1 ? "s" : ""}${extra?.before ? " before " + new Date(extra.before).toLocaleDateString() : ""}?`;
+          break;
+        }
+        case "delete-old-reports": {
+          const daysAgo = extra?.days || 30;
+          const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
+          const { count: c } = await supabase.from("question_reports").select("id", { count: "exact", head: true }).eq("status", "pending").lt("created_at", date);
+          count = c || 0;
+          label = `Delete ${count} old pending report${count !== 1 ? "s" : ""} (older than ${daysAgo} days)?`;
+          break;
+        }
+        case "reset-leaderboard": {
+          const { count: xpCount } = await supabase.from("xp_transactions").select("id", { count: "exact", head: true });
+          count = xpCount || 0;
+          label = `Delete ${count} XP transaction${count !== 1 ? "s" : ""} and all level data?`;
+          break;
+        }
+      }
+      setDangerPreview({ action, count, label });
+    } catch { handleDangerAction(action, extra); }
   };
 
   const handleDangerAction = async (action: string, extra?: any) => {
-    if (!confirm(`Are you sure? This cannot be undone.`)) return;
     setActionLoading(action);
+    setDangerPreview(null);
     try {
       switch (action) {
         case "clear-sessions": {
@@ -208,21 +256,26 @@ export function SettingsClient({
           const filteredQuery = extra?.before ? sessionQuery.lt("created_at", extra.before) : sessionQuery;
           const { data: sessions } = await filteredQuery;
           const ids = (sessions || []).map((s: any) => s.id);
+          let deletedSessions = 0;
           if (ids.length > 0) {
             await supabase.from("test_answers").delete().in("session_id", ids);
-            await supabase.from("test_sessions").delete().in("id", ids);
+            const { count } = await supabase.from("test_sessions").delete().in("id", ids);
+            deletedSessions = count || ids.length;
           }
+          showSave(`Deleted ${deletedSessions} session${deletedSessions !== 1 ? "s" : ""}`);
           break;
         }
         case "reset-leaderboard": {
-          await supabase.from("xp_transactions").delete().neq("id", "none");
+          const { count: xpCount } = await supabase.from("xp_transactions").delete().neq("id", "none");
           await supabase.from("user_levels").delete().neq("user_id", "none");
+          showSave(`Deleted ${xpCount || 0} XP transactions and all level data`);
           break;
         }
         case "delete-old-reports": {
           const daysAgo = extra?.days || 30;
           const date = new Date(Date.now() - daysAgo * 86400000).toISOString();
-          await supabase.from("question_reports").delete().eq("status", "pending").lt("created_at", date);
+          const { count } = await supabase.from("question_reports").delete().eq("status", "pending").lt("created_at", date);
+          showSave(`Deleted ${count || 0} old pending report${count !== 1 ? "s" : ""}`);
           break;
         }
         case "export-csv": {
@@ -235,13 +288,27 @@ export function SettingsClient({
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a"); a.href = url; a.download = "questions_export.csv"; a.click();
             URL.revokeObjectURL(url);
+            showSave(`Exported ${data.length} questions`);
           }
           break;
         }
       }
-      showSave("Action completed!");
     } catch (e: any) { alert(e.message || "Action failed"); }
     finally { setActionLoading(null); }
+  };
+
+  const handleSendTestEmail = async () => {
+    setSendingTestEmail(true);
+    try {
+      const res = await fetch("/api/admin/settings/test-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromName: notifConfig.emailFromName, fromEmail: notifConfig.emailFromAddr }),
+      });
+      if (res.ok) showSave("Test email sent!");
+      else { const err = await res.json(); alert(err.error || "Failed to send test email"); }
+    } catch { alert("Failed to send test email"); }
+    finally { setSendingTestEmail(false); }
   };
 
   const handleTriggerCron = async (job: string) => {
@@ -390,6 +457,11 @@ export function SettingsClient({
                 ))}
               </tbody>
             </table>
+            {filteredCountdowns.length === 0 && (
+              <div className="px-4 py-8 text-center text-sm text-muted-foreground">
+                {countdownSearch ? `No countdowns match "${countdownSearch}"` : "No exam dates added yet"}
+              </div>
+            )}
           </div>
           <div className="border rounded-xl p-5 space-y-3">
             <h3 className="text-sm font-medium">Add Exam Date</h3>
@@ -401,8 +473,9 @@ export function SettingsClient({
                 <option value="expected">Expected Date</option>
                 <option value="official">Official Date</option>
               </select>
-              <Button onClick={handleAddCountdown} disabled={!countdownForm.label || !countdownForm.examDate}>
-                <Plus className="h-4 w-4 mr-1.5" /> Add
+              <Button onClick={handleAddCountdown} disabled={!countdownForm.label || !countdownForm.examDate || countdownAdding}>
+                {countdownAdding ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                Add
               </Button>
             </div>
           </div>
@@ -463,6 +536,12 @@ export function SettingsClient({
                 <Input type="email" value={notifConfig.emailFromAddr || ""} onChange={(e) => setNotifConfig({ ...notifConfig, emailFromAddr: e.target.value })} placeholder="noreply@yourdomain.com" className="h-9" />
               </div>
             </div>
+            <div className="flex justify-end">
+              <Button variant="outline" size="sm" onClick={handleSendTestEmail} disabled={sendingTestEmail || !notifConfig.emailFromAddr}>
+                {sendingTestEmail ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Mail className="h-3.5 w-3.5 mr-1" />}
+                Send Test Email
+              </Button>
+            </div>
             <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-1">
               <p className="font-medium text-xs text-muted-foreground">Email Template Preview</p>
               <p className="border-b pb-1">Subject: Daily Question — {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
@@ -517,24 +596,49 @@ export function SettingsClient({
           </div>
           <div className="border rounded-xl p-5 space-y-3">
             <h3 className="text-sm font-medium">Grant Admin Access</h3>
-            <div className="flex items-end gap-3">
-              <div className="flex-1 space-y-1.5">
-                <label className="text-xs font-medium">User Email</label>
-                <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" />
+            {grantConfirmUser ? (
+              <div className="space-y-3">
+                <div className="bg-muted/50 rounded-lg p-4 space-y-1.5">
+                  <p className="text-sm font-medium">{grantConfirmUser.full_name || "Unnamed"}</p>
+                  <p className="text-xs text-muted-foreground">{grantConfirmUser.email}</p>
+                  <p className="text-xs text-muted-foreground">XP: {grantConfirmUser.xp?.toLocaleString() || 0} &middot; Joined: {new Date(grantConfirmUser.created_at).toLocaleDateString()}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-medium">Grant role:</span>
+                  <select value={grantRole} onChange={(e) => setGrantRole(e.target.value)}
+                    className="h-8 rounded-lg border border-input bg-background px-2 text-xs flex-1">
+                    <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" onClick={() => setGrantConfirmUser(null)}>Cancel</Button>
+                  <Button size="sm" onClick={handleConfirmGrant} disabled={granting}>
+                    {granting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 mr-1" />}
+                    Confirm Grant
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium">Role</label>
-                <select value={grantRole} onChange={(e) => setGrantRole(e.target.value)}
-                  className="h-9 rounded-lg border border-input bg-background px-3 text-sm">
-                  <option value="admin">Admin</option>
-                  <option value="moderator">Moderator</option>
-                </select>
+            ) : (
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1.5">
+                  <label className="text-xs font-medium">User Email</label>
+                  <Input value={grantEmail} onChange={(e) => setGrantEmail(e.target.value)} placeholder="user@example.com" onKeyDown={(e) => e.key === "Enter" && handleLookupUser()} />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium">Role</label>
+                  <select value={grantRole} onChange={(e) => setGrantRole(e.target.value)}
+                    className="h-9 rounded-lg border border-input bg-background px-3 text-sm">
+                    <option value="admin">Admin</option>
+                    <option value="moderator">Moderator</option>
+                  </select>
+                </div>
+                <Button onClick={handleLookupUser} disabled={!grantEmail.trim() || granting}>
+                  {granting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UserCheck className="h-4 w-4 mr-1.5" />}
+                  Look Up
+                </Button>
               </div>
-              <Button onClick={handleGrantAdmin} disabled={!grantEmail.trim() || granting}>
-                {granting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <UserCheck className="h-4 w-4 mr-1.5" />}
-                Grant
-              </Button>
-            </div>
+            )}
           </div>
           <div className="border rounded-xl p-5">
             <h3 className="text-sm font-medium mb-3">Role Permissions</h3>
@@ -618,6 +722,12 @@ export function SettingsClient({
               </div>
             </div>
           </div>
+          {contentRules.srsMinEase && contentRules.srsMaxEase && contentRules.srsMinEase >= contentRules.srsMaxEase && (
+            <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              Min Ease Factor should be less than Max Ease Factor
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => { setContentRules(CONTENT_DEFAULTS); }}>
               <RefreshCw className="h-4 w-4 mr-1.5" /> Reset to Defaults
@@ -641,7 +751,7 @@ export function SettingsClient({
               <div className="flex items-center gap-2 shrink-0">
                 <Input type="date" value={clearBeforeDate} onChange={(e) => setClearBeforeDate(e.target.value)} className="h-8 text-xs w-[140px]" title="Only clear sessions before this date" />
                 <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0"
-                  onClick={() => handleDangerAction("clear-sessions", clearBeforeDate ? { before: new Date(clearBeforeDate).toISOString() } : undefined)} disabled={!!actionLoading}>
+                  onClick={() => previewDangerAction("clear-sessions", clearBeforeDate ? { before: new Date(clearBeforeDate).toISOString() } : undefined)} disabled={!!actionLoading}>
                   {actionLoading === "clear-sessions" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                   Clear{clearBeforeDate ? " Old" : " All"}
                 </Button>
@@ -657,7 +767,7 @@ export function SettingsClient({
               </div>
             </div>
             <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 shrink-0 ml-3"
-              onClick={() => handleDangerAction("reset-leaderboard")} disabled={!!actionLoading}>
+              onClick={() => previewDangerAction("reset-leaderboard")} disabled={!!actionLoading}>
               {actionLoading === "reset-leaderboard" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
               Reset
             </Button>
@@ -689,7 +799,7 @@ export function SettingsClient({
                   <span className="text-xs text-muted-foreground">days</span>
                 </div>
                 <Button variant="outline" size="sm" className="text-orange-600 border-orange-600/30 hover:bg-orange-50 shrink-0"
-                  onClick={() => handleDangerAction("delete-old-reports", { days: reportAgeDays })} disabled={!!actionLoading}>
+                  onClick={() => previewDangerAction("delete-old-reports", { days: reportAgeDays })} disabled={!!actionLoading}>
                   {actionLoading === "delete-old-reports" ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
                   Delete
                 </Button>
@@ -734,6 +844,24 @@ export function SettingsClient({
       <div className="border rounded-xl p-6">
         {renderTab()}
       </div>
+
+      {/* Danger Preview Modal */}
+      {dangerPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setDangerPreview(null)} />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-sm mx-4 p-6 space-y-4">
+            <h2 className="font-semibold text-destructive flex items-center gap-2"><AlertTriangle className="h-5 w-5" /> Confirm Action</h2>
+            <p className="text-sm">{dangerPreview.label}</p>
+            <p className="text-xs text-muted-foreground">This action cannot be undone.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setDangerPreview(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => handleDangerAction(dangerPreview.action, dangerPreview.action === "clear-sessions" ? (clearBeforeDate ? { before: new Date(clearBeforeDate).toISOString() } : undefined) : dangerPreview.action === "delete-old-reports" ? { days: reportAgeDays } : undefined)}>
+                {dangerPreview.count > 0 ? `Delete ${dangerPreview.count}` : "Proceed"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
