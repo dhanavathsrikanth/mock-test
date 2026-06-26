@@ -177,7 +177,7 @@ export function TestSelectForm({
   };
 
   return (
-    <div className="space-y-4 max-w-2xl">
+    <div className="space-y-4 max-w-2xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">New Test</h1>
         <p className="text-muted-foreground mt-1">
