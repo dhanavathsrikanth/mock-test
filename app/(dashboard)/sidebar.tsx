@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
+import NotificationBell from "@/components/NotificationBell";
 import {
   LayoutDashboard,
   PlaySquare,
@@ -128,7 +129,10 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
             <span className="text-sm font-medium truncate">{userName}</span>
           </div>
           <div className="flex items-center justify-between">
-            <ThemeSwitcher />
+            <div className="flex items-center gap-1">
+              <ThemeSwitcher />
+              <NotificationBell />
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -185,6 +189,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
                   {userRole}
                 </p>
               </div>
+              <NotificationBell />
             </div>
           </div>
 

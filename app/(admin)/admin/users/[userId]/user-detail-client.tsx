@@ -30,8 +30,16 @@ import {
   MessageSquare,
   Clock,
   ChevronRight,
+  BarChart3,
+  LineChart,
+  Sun,
+  Flame,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area, LineChart as RechartsLineChart, Line,
+} from "recharts";
 
 interface UserDetail {
   id: string;
@@ -60,6 +68,16 @@ interface Stats {
   reports: number;
   totalXpEarned: number;
   subjectBreakdown: Record<string, number>;
+  dailyQTotal: number;
+  dailyQCorrect: number;
+  dailyQAccuracy: number;
+}
+
+interface SessionStats {
+  correct: number;
+  wrong: number;
+  skipped: number;
+  total: number;
 }
 
 interface Session {
@@ -70,6 +88,7 @@ interface Session {
   startedAt: string;
   completedAt: string | null;
   createdAt: string;
+  sessionStats: SessionStats;
 }
 
 interface Report {
@@ -91,8 +110,19 @@ interface Badge {
   unlockedAt: string;
 }
 
+interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  message: string | null;
+  link: string | null;
+  isRead: boolean;
+  createdAt: string;
+}
+
 export function UserDetailClient({
   user, stats, sessions, reports, transactions, badges,
+  subjectAccuracy, accuracyTrend, xpTimeline, notifications,
 }: {
   user: UserDetail;
   stats: Stats;
@@ -100,6 +130,10 @@ export function UserDetailClient({
   reports: Report[];
   transactions: Transaction[];
   badges: Badge[];
+  subjectAccuracy: { name: string; accuracy: number; attempts: number }[];
+  accuracyTrend: { date: string; accuracy: number }[];
+  xpTimeline: { date: string; xp: number }[];
+  notifications: NotificationItem[];
 }) {
   const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -150,18 +184,26 @@ export function UserDetailClient({
     if (!notifTitle.trim()) return;
     setSending(true);
     try {
-      const res = await fetch("/api/push/send", {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          type: "admin",
+          title: notifTitle,
+          message: notifBody || null,
+          link: null,
+        }),
+      });
+      // Also attempt push notification (best-effort)
+      fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId: user.id, title: notifTitle, body: notifBody }),
-      });
-      if (res.ok) {
-        setNotifOpen(false);
-        setNotifTitle("");
-        setNotifBody("");
-      } else {
-        alert("Failed to send notification");
-      }
+      }).catch(() => {});
+      setNotifOpen(false);
+      setNotifTitle("");
+      setNotifBody("");
     } finally {
       setSending(false);
     }
@@ -206,7 +248,7 @@ export function UserDetailClient({
       </div>
 
       {/* Level & Streak */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div className="border rounded-xl p-4 text-center">
           <p className="text-xs text-muted-foreground">Level</p>
           <p className="text-2xl font-bold mt-0.5">{user.level}</p>
@@ -226,6 +268,11 @@ export function UserDetailClient({
           <p className="text-xs text-muted-foreground">Accuracy</p>
           <p className="text-2xl font-bold mt-0.5">{stats.accuracy}%</p>
           <p className="text-xs text-muted-foreground">{stats.correctCount}/{stats.totalAttempted} correct</p>
+        </div>
+        <div className="border rounded-xl p-4 text-center">
+          <p className="text-xs text-muted-foreground">Daily Q's</p>
+          <p className="text-2xl font-bold mt-0.5">{stats.dailyQTotal}</p>
+          <p className="text-xs text-muted-foreground">{stats.dailyQAccuracy}% accuracy</p>
         </div>
       </div>
 
@@ -252,6 +299,57 @@ export function UserDetailClient({
         </div>
       </div>
 
+      {/* Subject-wise Accuracy */}
+      {subjectAccuracy.length > 0 && (
+        <div className="border rounded-xl p-5">
+          <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><Target className="h-4 w-4" /> Subject-Wise Accuracy</h2>
+          <div className="space-y-2">
+            {subjectAccuracy.slice(0, 8).map((s) => (
+              <div key={s.name} className="flex items-center gap-3">
+                <span className="text-xs w-28 truncate shrink-0">{s.name}</span>
+                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full" style={{ width: `${s.accuracy}%`, background: s.accuracy >= 60 ? "#22c55e" : s.accuracy >= 40 ? "#f59e0b" : "#ef4444" }} />
+                </div>
+                <span className="text-xs font-medium w-10 text-right">{s.accuracy}%</span>
+                <span className="text-[10px] text-muted-foreground w-16 text-right">{s.attempts} attempts</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Charts: Accuracy Trend + XP Timeline */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        {accuracyTrend.length > 1 && (
+          <div className="border rounded-xl p-5">
+            <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><LineChart className="h-4 w-4" /> Accuracy Trend</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <RechartsLineChart data={accuracyTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                <Line type="monotone" dataKey="accuracy" stroke="#8b5cf6" strokeWidth={2} dot={{ fill: "#8b5cf6", r: 3 }} />
+              </RechartsLineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {xpTimeline.length > 0 && (
+          <div className="border rounded-xl p-5">
+            <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><Zap className="h-4 w-4" /> XP Earned (Daily)</h2>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={xpTimeline}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
+                <Tooltip contentStyle={{ background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12 }} />
+                <Area type="monotone" dataKey="xp" stroke="#22c55e" fill="#22c55e20" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
       {/* Test History */}
       <div className="border rounded-xl overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
@@ -262,31 +360,45 @@ export function UserDetailClient({
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">No test sessions</div>
         ) : (
           <div className="divide-y">
-            {sessions.slice(0, 10).map((s) => (
-              <div key={s.id} className="px-4 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {s.status === "completed" ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-                  ) : s.status === "in_progress" ? (
-                    <Clock className="h-4 w-4 text-blue-500 shrink-0" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                  )}
-                  <div>
-                    <p className="text-sm font-medium capitalize">{s.mode.replace(/_/g, " ")}</p>
-                    <p className="text-xs text-muted-foreground">{s.totalQuestions} questions &middot; {new Date(s.createdAt).toLocaleDateString()}</p>
+            {sessions.slice(0, 15).map((s) => {
+              const st = s.sessionStats;
+              const sessionAcc = st.total > 0 ? Math.round((st.correct / st.total) * 100) : 0;
+              return (
+                <div key={s.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                      {s.status === "completed" ? (
+                        <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                      ) : s.status === "in_progress" ? (
+                        <Clock className="h-4 w-4 text-blue-500 shrink-0" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                      )}
+                      <p className="text-sm font-medium capitalize">{s.mode.replace(/_/g, " ")}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground">{new Date(s.createdAt).toLocaleDateString()}</span>
+                    </div>
                   </div>
+                  {st.total > 0 && (
+                    <div className="flex items-center gap-3 text-xs ml-6">
+                      <span className="text-green-600 font-medium">{st.correct} correct</span>
+                      <span className="text-red-500">{st.wrong} wrong</span>
+                      <span className="text-muted-foreground">{st.skipped} skipped</span>
+                      <span className="text-muted-foreground">· {sessionAcc}%</span>
+                      <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden max-w-[120px]">
+                        <div className="h-full rounded-full" style={{ width: `${sessionAcc}%`, background: sessionAcc >= 60 ? "#22c55e" : sessionAcc >= 40 ? "#f59e0b" : "#ef4444" }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                  <Link href={`/admin/reports`}>View</Link>
-                </Button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Bookmarks + Subject Breakdown */}
+      {/* Bookmarks & Daily Questions */}
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
@@ -311,30 +423,36 @@ export function UserDetailClient({
           )}
         </div>
 
-        {/* Reports by this user */}
+        {/* Daily Questions */}
         <div className="border rounded-xl p-5">
           <div className="flex items-center gap-2 mb-3">
-            <Flag className="h-4 w-4 text-muted-foreground" />
-            <h2 className="font-semibold text-sm">Reports Submitted</h2>
-            <span className="text-xs text-muted-foreground ml-auto">{stats.reports} total</span>
+            <Sun className="h-4 w-4 text-muted-foreground" />
+            <h2 className="font-semibold text-sm">Daily Questions</h2>
+            <span className="text-xs text-muted-foreground ml-auto">{stats.dailyQTotal} total</span>
           </div>
-          {reports.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No reports submitted</p>
+          {stats.dailyQTotal === 0 ? (
+            <p className="text-sm text-muted-foreground">No daily questions answered</p>
           ) : (
             <div className="space-y-2">
-              {reports.slice(0, 5).map((r) => (
-                <div key={r.id} className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm truncate">{r.reportType.replace(/_/g, " ")}</p>
-                    <p className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</p>
-                  </div>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${
-                    r.status === "pending" ? "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600" :
-                    r.status === "resolved" ? "bg-green-50 dark:bg-green-950/30 text-green-600" :
-                    "bg-blue-50 dark:bg-blue-950/30 text-blue-600"
-                  }`}>{r.status}</span>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Answered</span>
+                <span className="font-medium">{stats.dailyQTotal}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-green-600">Correct</span>
+                <span className="font-medium text-green-600">{stats.dailyQCorrect}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-red-500">Wrong</span>
+                <span className="font-medium text-red-500">{stats.dailyQTotal - stats.dailyQCorrect}</span>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <span className="text-xs text-muted-foreground">Accuracy</span>
+                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${stats.dailyQAccuracy}%` }} />
                 </div>
-              ))}
+                <span className="text-xs font-medium">{stats.dailyQAccuracy}%</span>
+              </div>
             </div>
           )}
         </div>
@@ -385,6 +503,74 @@ export function UserDetailClient({
                 </div>
                 <p className="text-[10px] font-medium capitalize">{b.badgeType.replace(/_/g, " ")}</p>
                 <p className="text-[10px] text-muted-foreground">{new Date(b.unlockedAt).toLocaleDateString()}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Reports Submitted */}
+      <div className="border rounded-xl p-5">
+        <div className="flex items-center gap-2 mb-3">
+          <Flag className="h-4 w-4 text-muted-foreground" />
+          <h2 className="font-semibold text-sm">Reports Submitted</h2>
+          <span className="text-xs text-muted-foreground ml-auto">{stats.reports} total</span>
+        </div>
+        {reports.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No reports submitted</p>
+        ) : (
+          <div className="space-y-2">
+            {reports.slice(0, 5).map((r) => (
+              <div key={r.id} className="flex items-center justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm truncate">{r.reportType.replace(/_/g, " ")}</p>
+                  <p className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleDateString()}</p>
+                </div>
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ml-2 ${
+                  r.status === "pending" ? "bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600" :
+                  r.status === "resolved" ? "bg-green-50 dark:bg-green-950/30 text-green-600" :
+                  "bg-blue-50 dark:bg-blue-950/30 text-blue-600"
+                }`}>{r.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Notifications History */}
+      <div className="border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b bg-muted/30 flex items-center justify-between">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <Bell className="h-4 w-4" /> Notifications Sent
+          </h2>
+          <span className="text-xs text-muted-foreground">{notifications.length} total</span>
+        </div>
+        {notifications.length === 0 ? (
+          <div className="px-4 py-8 text-center text-sm text-muted-foreground">No notifications sent yet</div>
+        ) : (
+          <div className="divide-y max-h-[300px] overflow-y-auto">
+            {notifications.map((n) => (
+              <div key={n.id} className="px-4 py-2.5">
+                <div className="flex items-start gap-2">
+                  <div className={`mt-1 w-2 h-2 rounded-full shrink-0 ${n.isRead ? "bg-muted-foreground/30" : "bg-primary"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{n.title}</p>
+                      <span className="text-[10px] text-muted-foreground shrink-0 ml-2">
+                        {new Date(n.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {n.message && <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>}
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] capitalize px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{n.type}</span>
+                      {n.isRead ? (
+                        <span className="text-[10px] text-muted-foreground">Read</span>
+                      ) : (
+                        <span className="text-[10px] text-primary font-medium">Unread</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>

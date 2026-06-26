@@ -17,6 +17,18 @@ import {
   Loader2,
   ExternalLink,
   Send,
+  Info,
+  MessageSquare,
+  History,
+  Bell,
+  Edit3,
+  User,
+  Calendar,
+  Tag,
+  BookOpen,
+  FileText,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 
 const STATUS_TABS = [
@@ -418,6 +430,13 @@ function ReportRow({
   );
 }
 
+const PANEL_TABS = [
+  { key: "info", label: "Report Info", icon: Info },
+  { key: "question", label: "Question", icon: BookOpen },
+  { key: "activity", label: "Activity", icon: History },
+  { key: "notifications", label: "Notifications", icon: Bell },
+];
+
 function ReportDetailPanel({
   report,
   onClose,
@@ -431,6 +450,7 @@ function ReportDetailPanel({
   onRefresh: () => void;
   onNotify: (id: string) => void;
 }) {
+  const [activeTab, setActiveTab] = useState("info");
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [qText, setQText] = useState(report.questions?.question_text || "");
@@ -442,6 +462,8 @@ function ReportDetailPanel({
   const [explanation, setExplanation] = useState("");
   const [noteDraft, setNoteDraft] = useState(report.admin_note || "");
   const [savingNote, setSavingNote] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
 
   const [questionData, setQuestionData] = useState<any>(null);
 
@@ -466,6 +488,16 @@ function ReportDetailPanel({
     }
     load();
   }, [report.question_id]);
+
+  useEffect(() => {
+    if (activeTab === "notifications" && report.reported_by) {
+      setLoadingNotifs(true);
+      fetch(`/api/notifications?userId=${report.reported_by}`)
+        .then((r) => r.json())
+        .then((data) => setNotifications(data.notifications || []))
+        .finally(() => setLoadingNotifs(false));
+    }
+  }, [activeTab, report.reported_by]);
 
   const handleSaveCorrection = async () => {
     setSaving(true);
@@ -518,16 +550,17 @@ function ReportDetailPanel({
   };
 
   const statusActions = [
-    { status: "pending", label: "Pending", disabled: report.status === "pending" },
-    { status: "under_review", label: "Under Review", disabled: report.status === "under_review" },
-    { status: "resolved", label: "Resolved", disabled: report.status === "resolved" },
-    { status: "rejected", label: "Rejected", disabled: report.status === "rejected" },
+    { status: "pending", label: "Pending", icon: Clock, disabled: report.status === "pending" },
+    { status: "under_review", label: "Under Review", icon: Search, disabled: report.status === "under_review" },
+    { status: "resolved", label: "Resolved", icon: CheckCircle2, disabled: report.status === "resolved" },
+    { status: "rejected", label: "Rejected", icon: XCircle, disabled: report.status === "rejected" },
   ];
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="fixed inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-xl bg-background border-l shadow-2xl overflow-y-auto">
+      <div className="relative w-full max-w-xl bg-background border-l shadow-2xl flex flex-col">
+        {/* Header */}
         <div className="sticky top-0 bg-background border-b px-5 py-4 flex items-center justify-between z-10">
           <div>
             <h2 className="font-semibold">Report Detail</h2>
@@ -538,241 +571,396 @@ function ReportDetailPanel({
           </Button>
         </div>
 
-        <div className="p-5 space-y-6">
-          {/* Section A - Report Info */}
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Report Information
-            </h3>
-            <div className="space-y-3">
-              <div className="bg-muted/30 rounded-lg p-3 space-y-2">
-                <p className="text-sm leading-relaxed"><MathText text={report.questions?.question_text || ""} /></p>
-                {questionData && (
-                  <div className="space-y-1 text-xs">
-                    {[1, 2, 3, 4].map((n) => {
-                      const opt = (questionData as any)[`option_${n}`];
-                      const isCorrect = n === questionData.correct_option;
-                      return (
-                        <div
-                          key={n}
-                          className={`rounded px-2 py-1 ${
-                            isCorrect
-                              ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {String.fromCharCode(64 + n)}. {opt}
-                          {isCorrect && <span className="ml-1.5 text-[10px] font-medium">(Correct)</span>}
-                        </div>
-                      );
-                    })}
+        {/* Tabs */}
+        <div className="flex border-b bg-muted/30 overflow-x-auto">
+          {PANEL_TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium whitespace-nowrap border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-5">
+          {activeTab === "info" && (
+            <div className="space-y-5">
+              {/* Reporter Details */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5" />
+                  Reporter Details
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Name</p>
+                    <p className="font-medium mt-0.5">{report.profiles?.full_name || "Unknown"}</p>
                   </div>
-                )}
-              </div>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="font-medium mt-0.5 text-sm truncate">{report.profiles?.email || "—"}</p>
+                  </div>
+                </div>
+              </section>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <span className="text-muted-foreground">Type:</span>
-                  <span className="ml-1.5 font-medium">
-                    {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
-                  </span>
+              {/* Report Details */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5" />
+                  Report Details
+                </h3>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Type</p>
+                    <span className={`inline-block mt-0.5 text-[10px] px-1.5 py-0.5 rounded-full border ${
+                      REPORT_TYPE_COLORS[report.report_type] || ""
+                    }`}>
+                      {REPORT_TYPE_LABELS[report.report_type] || report.report_type}
+                    </span>
+                  </div>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Status</p>
+                    <div className="mt-0.5"><ReportStatusBadge status={report.status} /></div>
+                  </div>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Submitted</p>
+                    <p className="font-medium mt-0.5">{format(new Date(report.created_at), "MMM d, yyyy HH:mm")}</p>
+                  </div>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground">Last Updated</p>
+                    <p className="font-medium mt-0.5">{format(new Date(report.updated_at), "MMM d, yyyy HH:mm")}</p>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-muted-foreground">Reported by:</span>
-                  <span className="ml-1.5 font-medium">
-                    {report.profiles?.full_name || "Unknown"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date:</span>
-                  <span className="ml-1.5 font-medium">
-                    {format(new Date(report.created_at), "MMM d, yyyy HH:mm")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Status:</span>
-                  <span className="ml-1.5">
-                    <ReportStatusBadge status={report.status} />
-                  </span>
-                </div>
-              </div>
+              </section>
 
+              {/* Description */}
               {report.description && (
-                <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">Reporter&apos;s description:</p>
-                  <p className="text-sm mt-0.5">{report.description}</p>
-                </div>
+                <section>
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                    Reporter&apos;s Description
+                  </h3>
+                  <div className="bg-muted/30 rounded-lg p-3">
+                    <p className="text-sm">{report.description}</p>
+                  </div>
+                </section>
               )}
-            </div>
-          </section>
 
-          {/* Section B - Admin Actions: Status */}
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Status
-            </h3>
-            <div className="flex flex-wrap gap-1.5">
-              {statusActions.map((action) => (
-                <Button
-                  key={action.status}
-                  size="sm"
-                  variant={report.status === action.status ? "default" : "outline"}
-                  disabled={action.disabled}
-                  onClick={() => onStatusChange(report.id, action.status)}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </div>
-          </section>
-
-          {/* Section C - Edit Question */}
-          <section>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Question
-              </h3>
-              {!editMode ? (
-                <Button size="sm" variant="outline" onClick={() => setEditMode(true)}>
-                  Edit & Correct
-                </Button>
-              ) : (
-                <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
-                  Cancel
-                </Button>
-              )}
-            </div>
-
-            {editMode && questionData ? (
-              <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-medium">Question Text</label>
+              {/* Admin Note */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Admin Note
+                </h3>
+                <div className="space-y-2">
                   <textarea
-                    value={qText}
-                    onChange={(e) => setQText(e.target.value)}
-                    className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                    value={noteDraft}
+                    onChange={(e) => setNoteDraft(e.target.value)}
+                    placeholder="Add internal note..."
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
                   />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSaveNote}
+                      disabled={savingNote}
+                    >
+                      {savingNote ? "Saving..." : "Save Note"}
+                    </Button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[1, 2, 3, 4].map((n) => {
-                    const val = [opt1, opt2, opt3, opt4][n - 1];
-                    const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
+              </section>
+            </div>
+          )}
+
+          {activeTab === "question" && (
+            <div className="space-y-5">
+              {/* Status Actions */}
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Status
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusActions.map((action) => {
+                    const Icon = action.icon;
                     return (
-                      <div key={n}>
-                        <label className="text-xs font-medium">
-                          Option {String.fromCharCode(64 + n)}
-                        </label>
-                        <input
-                          value={val}
-                          onChange={(e) => setter(e.target.value)}
-                          className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                        />
-                      </div>
+                      <Button
+                        key={action.status}
+                        size="sm"
+                        variant={report.status === action.status ? "default" : "outline"}
+                        disabled={action.disabled}
+                        onClick={() => onStatusChange(report.id, action.status)}
+                        className="gap-1.5"
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {action.label}
+                      </Button>
                     );
                   })}
                 </div>
-                <div>
-                  <label className="text-xs font-medium">Correct Option</label>
-                  <div className="flex gap-2 mt-1">
-                    {[1, 2, 3, 4].map((n) => (
-                      <button
-                        key={n}
-                        onClick={() => setCorrectOpt(n)}
-                        className={`h-8 w-8 rounded-lg border text-sm font-medium transition-all ${
-                          correctOpt === n
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border hover:bg-accent"
-                        }`}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
+              </section>
+
+              {/* Question Display / Edit */}
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Question
+                  </h3>
+                  {!editMode ? (
+                    <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5">
+                      <Edit3 className="h-3.5 w-3.5" />
+                      Edit & Correct
+                    </Button>
+                  ) : (
+                    <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
+                      Cancel
+                    </Button>
+                  )}
                 </div>
-                <div>
-                  <label className="text-xs font-medium">Explanation</label>
-                  <textarea
-                    value={explanation}
-                    onChange={(e) => setExplanation(e.target.value)}
-                    className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+
+                {editMode && questionData ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium">Question Text</label>
+                      <textarea
+                        value={qText}
+                        onChange={(e) => setQText(e.target.value)}
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[1, 2, 3, 4].map((n) => {
+                        const val = [opt1, opt2, opt3, opt4][n - 1];
+                        const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
+                        return (
+                          <div key={n}>
+                            <label className="text-xs font-medium">
+                              Option {String.fromCharCode(64 + n)}
+                            </label>
+                            <input
+                              value={val}
+                              onChange={(e) => setter(e.target.value)}
+                              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Correct Option</label>
+                      <div className="flex gap-2 mt-1">
+                        {[1, 2, 3, 4].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setCorrectOpt(n)}
+                            className={`h-8 w-8 rounded-lg border text-sm font-medium transition-all ${
+                              correctOpt === n
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border hover:bg-accent"
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Explanation</label>
+                      <textarea
+                        value={explanation}
+                        onChange={(e) => setExplanation(e.target.value)}
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                      />
+                    </div>
+                    <Button onClick={handleSaveCorrection} disabled={saving} className="w-full">
+                      {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                      Save Correction
+                    </Button>
+                  </div>
+                ) : questionData && (
+                  <div className="text-sm space-y-2">
+                    <p className="leading-relaxed"><MathText text={questionData.question_text} /></p>
+                    <div className="space-y-1">
+                      {[1, 2, 3, 4].map((n) => {
+                        const opt = (questionData as any)[`option_${n}`];
+                        const isCorrect = n === questionData.correct_option;
+                        return (
+                          <div
+                            key={n}
+                            className={`rounded-lg px-3 py-2 ${
+                              isCorrect
+                                ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                : "bg-muted/30 text-muted-foreground"
+                            }`}
+                          >
+                            <span className="font-medium">{String.fromCharCode(64 + n)}.</span> {opt}
+                            {isCorrect && <Check className="h-3.5 w-3.5 inline ml-1.5" />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {(questionData as any).explanation && (
+                      <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-3 text-sm mt-3">
+                        <p className="text-xs text-muted-foreground mb-1">Explanation:</p>
+                        <p>{(questionData as any).explanation}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
+
+          {activeTab === "activity" && (
+            <div className="space-y-5">
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Report Timeline
+                </h3>
+                <div className="space-y-3">
+                  <ActivityItem
+                    icon={AlertTriangle}
+                    color="text-yellow-500"
+                    title="Report Created"
+                    description={`Reported as "${REPORT_TYPE_LABELS[report.report_type] || report.report_type}"`}
+                    time={report.created_at}
+                  />
+                  {report.status === "under_review" && (
+                    <ActivityItem
+                      icon={Search}
+                      color="text-blue-500"
+                      title="Marked as Under Review"
+                      time={report.updated_at}
+                    />
+                  )}
+                  {report.status === "resolved" && (
+                    <ActivityItem
+                      icon={CheckCircle2}
+                      color="text-green-500"
+                      title="Resolved"
+                      description={report.admin_note ? `Note: ${report.admin_note}` : undefined}
+                      time={report.resolved_at || report.updated_at}
+                    />
+                  )}
+                  {report.status === "rejected" && (
+                    <ActivityItem
+                      icon={XCircle}
+                      color="text-red-500"
+                      title="Rejected"
+                      description={report.admin_note ? `Note: ${report.admin_note}` : undefined}
+                      time={report.resolved_at || report.updated_at}
+                    />
+                  )}
+                  <ActivityItem
+                    icon={History}
+                    color="text-muted-foreground"
+                    title="Last Updated"
+                    time={report.updated_at}
+                    muted
                   />
                 </div>
-                <Button onClick={handleSaveCorrection} disabled={saving} className="w-full">
-                  {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-                  Save Correction
-                </Button>
-              </div>
-            ) : questionData && (
-              <div className="text-xs space-y-1.5">
-                {[1, 2, 3, 4].map((n) => {
-                  const opt = (questionData as any)[`option_${n}`];
-                  const isCorrect = n === questionData.correct_option;
-                  return (
-                    <div
-                      key={n}
-                      className={`rounded px-2 py-1 ${
-                        isCorrect
-                          ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300"
-                          : "text-muted-foreground"
-                      }`}
-                    >
-                      {String.fromCharCode(64 + n)}. {opt}
-                      {isCorrect && <Check className="h-3 w-3 inline ml-1" />}
-                    </div>
-                  );
-                })}
-                {(questionData as any).explanation && (
-                  <p className="text-muted-foreground mt-2 pt-2 border-t">
-                    {(questionData as any).explanation}
-                  </p>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Admin Note */}
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Admin Note
-            </h3>
-            <div className="space-y-2">
-              <textarea
-                value={noteDraft}
-                onChange={(e) => setNoteDraft(e.target.value)}
-                placeholder="Add internal note..."
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
-              />
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleSaveNote}
-                disabled={savingNote}
-              >
-                {savingNote ? "Saving..." : "Save Note"}
-              </Button>
+              </section>
             </div>
-          </section>
+          )}
 
-          {/* Notify */}
-          <section>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-              Notifications
-            </h3>
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-2"
-              onClick={() => onNotify(report.id)}
-              disabled={report.status !== "resolved"}
-            >
-              <Send className="h-3.5 w-3.5" />
-              Email Reporter
-            </Button>
-            <p className="text-[10px] text-muted-foreground mt-1">
-              Requires RESEND_API_KEY to be configured
-            </p>
-          </section>
+          {activeTab === "notifications" && (
+            <div className="space-y-5">
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Send Notification
+                </h3>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => onNotify(report.id)}
+                    disabled={report.status !== "resolved"}
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Email Reporter
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Requires RESEND_API_KEY to be configured
+                </p>
+              </section>
+
+              <section>
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                  Notification History
+                </h3>
+                {loadingNotifs ? (
+                  <p className="text-sm text-muted-foreground">Loading...</p>
+                ) : notifications.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No notifications sent yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {notifications.map((notif: any) => (
+                      <div key={notif.id} className="flex items-start gap-3 bg-muted/30 rounded-lg p-3">
+                        <div className={`mt-0.5 ${notif.is_read ? "text-muted-foreground" : "text-primary"}`}>
+                          <Bell className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{notif.title}</p>
+                          {notif.message && (
+                            <p className="text-xs text-muted-foreground mt-0.5">{notif.message}</p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {format(new Date(notif.created_at), "MMM d, yyyy HH:mm")}
+                            {notif.is_read && " • Read"}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityItem({
+  icon: Icon,
+  color,
+  title,
+  description,
+  time,
+  muted,
+}: {
+  icon: any;
+  color: string;
+  title: string;
+  description?: string;
+  time: string;
+  muted?: boolean;
+}) {
+  return (
+    <div className={`flex items-start gap-3 rounded-lg p-3 ${muted ? "" : "bg-muted/30"}`}>
+      <div className={`mt-0.5 ${muted ? "text-muted-foreground" : color}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${muted ? "text-muted-foreground" : ""}`}>{title}</p>
+        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {format(new Date(time), "MMM d, yyyy HH:mm")}
+        </p>
       </div>
     </div>
   );

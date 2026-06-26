@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import {
   Megaphone, Plus, Pencil, Trash2, Eye, EyeOff, Loader2, Calendar,
   X, Check, Info, AlertTriangle, CheckCircle, AlertCircle,
-  Monitor, Globe, Link2, Clock, Ban,
+  Monitor, Globe, Link2, Clock, Ban, Send, Bell,
 } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -157,6 +157,34 @@ export default function AnnouncementsPage() {
   const toggleActive = async (id: string, current: boolean) => {
     const { error } = await supabase.from("announcements").update({ is_active: !current }).eq("id", id);
     if (!error) fetchAnnouncements();
+  };
+
+  const [notifying, setNotifying] = useState<string | null>(null);
+
+  const notifyUsers = async (a: Announcement) => {
+    if (!confirm(`Send push notification about this announcement to ${a.audience === "all" ? "all users" : a.audience === "free" ? "free users" : "pro users"}?`)) return;
+    setNotifying(a.id);
+    try {
+      const res = await fetch("/api/notifications/broadcast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "announcement",
+          title: a.type.charAt(0).toUpperCase() + a.type.slice(1),
+          message: a.message,
+          link: null,
+          audience: a.audience,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Notification sent to ${data.sent} users`);
+      } else {
+        alert(data.error || "Failed");
+      }
+    } finally {
+      setNotifying(null);
+    }
   };
 
   const getStatus = (a: Announcement) => {
@@ -412,6 +440,9 @@ export default function AnnouncementsPage() {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-0.5">
+                          <button onClick={() => notifyUsers(a)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title="Notify Users" disabled={notifying === a.id}>
+                            {notifying === a.id ? <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" /> : <Bell className="h-4 w-4 text-muted-foreground" />}
+                          </button>
                           <button onClick={() => toggleActive(a.id, a.is_active)} className="p-1.5 rounded-md hover:bg-muted transition-colors" title={a.is_active ? "Deactivate" : "Activate"}>
                             {a.is_active ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
                           </button>
