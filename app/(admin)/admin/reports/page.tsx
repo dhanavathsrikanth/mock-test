@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
-import { ReportButton } from "@/components/report/ReportButton";
 import {
   Search,
   ChevronDown,
@@ -119,25 +118,6 @@ export default function AdminReportsPage() {
       setSelectedReport(null);
       fetchReports();
     }
-  };
-
-  const updateNote = async (reportId: string, adminNote: string) => {
-    await fetch(`/api/admin/reports/${reportId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adminNote }),
-    });
-  };
-
-  const [noteDraft, setNoteDraft] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
-
-  const handleSaveNote = async () => {
-    if (!selectedReport || !noteDraft.trim()) return;
-    setSavingNote(true);
-    await updateNote(selectedReport.id, noteDraft);
-    setSavingNote(false);
-    setSelectedReport({ ...selectedReport, admin_note: noteDraft });
   };
 
   const handleNotify = async (reportId: string) => {
@@ -520,14 +500,20 @@ function ReportDetailPanel({
 
   const handleSaveNote = async () => {
     setSavingNote(true);
-    const res = await fetch(`/api/admin/reports/${report.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ adminNote: noteDraft }),
-    });
-    setSavingNote(false);
-    if (res.ok) {
-      alert("Note saved");
+    try {
+      const res = await fetch(`/api/admin/reports/${report.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ adminNote: noteDraft }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || "Failed to save note");
+        return;
+      }
+      onRefresh();
+    } finally {
+      setSavingNote(false);
     }
   };
 
