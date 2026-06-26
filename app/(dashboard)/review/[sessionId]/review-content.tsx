@@ -298,6 +298,18 @@ export function ReviewContent({
                           <Check className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                         )}
                       </div>
+                      {isSelected && (
+                        <div className={`mt-2 text-xs font-medium flex items-center gap-1 ${
+                          isCorrect ? "text-green-600" : "text-red-600"
+                        }`}>
+                          Your answer: {optionLabels[idx - 1]}
+                        </div>
+                      )}
+                      {showCorrect && !isSelected && (
+                        <div className="mt-2 text-xs font-medium flex items-center gap-1 text-green-600">
+                          Correct answer: {optionLabels[idx - 1]}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
