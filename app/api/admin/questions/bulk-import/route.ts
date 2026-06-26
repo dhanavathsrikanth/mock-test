@@ -27,7 +27,22 @@ export async function POST(req: NextRequest) {
     .from("subjects")
     .select("id, slug");
 
+  const SLUG_ALIASES: Record<string, string> = {
+    "som": "solid-mechanics",
+    "rcc": "rcc-design",
+    "hydraulics": "fluid-mechanics",
+    "estimation": "estimation-costing",
+    "hydrology": "water-resources-engg",
+    "environmental": "environmental-engg",
+    "transportation": "transportation-engg",
+    "soil-mechanics": "geotechnical-engg",
+  };
+
   const subjectMap = new Map((subjects || []).map((s) => [s.slug, s.id]));
+  const resolveSlug = (slug: string) => {
+    const normalized = slug.toLowerCase().trim();
+    return subjectMap.get(normalized) || subjectMap.get(SLUG_ALIASES[normalized] || "");
+  };
 
   const { data: exams } = await supabase
     .from("exams")
@@ -52,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
 
     const subjectId = q.subject_slug
-      ? subjectMap.get(q.subject_slug)
+      ? resolveSlug(q.subject_slug)
       : null;
 
     if (!subjectId) {
