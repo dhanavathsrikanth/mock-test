@@ -4,6 +4,7 @@ interface ExamState {
   currentIndex: number;
   answers: Record<string, number | null>;
   bookmarks: Set<string>;
+  reportedQuestions: Set<string>;
   timeRemaining: number;
   isSubmitting: boolean;
 
@@ -11,6 +12,7 @@ interface ExamState {
   setAnswer: (questionId: string, option: number | null) => void;
   toggleBookmark: (questionId: string) => void;
   initBookmarks: (ids: string[]) => void;
+  markReported: (questionId: string) => void;
   setTimeRemaining: (seconds: number) => void;
   tick: () => void;
   setIsSubmitting: (val: boolean) => void;
@@ -20,6 +22,7 @@ export const useExamStore = create<ExamState>((set) => ({
   currentIndex: 0,
   answers: {},
   bookmarks: new Set(),
+  reportedQuestions: new Set(),
   timeRemaining: 0,
   isSubmitting: false,
 
@@ -42,6 +45,13 @@ export const useExamStore = create<ExamState>((set) => ({
     }),
 
   initBookmarks: (ids) => set({ bookmarks: new Set(ids) }),
+
+  markReported: (questionId) =>
+    set((state) => {
+      const next = new Set(state.reportedQuestions);
+      next.add(questionId);
+      return { reportedQuestions: next };
+    }),
 
   setTimeRemaining: (seconds) => set({ timeRemaining: seconds }),
 

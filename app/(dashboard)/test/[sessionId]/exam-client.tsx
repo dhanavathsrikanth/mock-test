@@ -111,6 +111,7 @@ export function ExamClient({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswer] = useState<Record<string, number | null>>({});
   const [bookmarks, setBookmarks] = useState(new Set<string>());
+  const [reportedQuestions, setReportedQuestions] = useState(new Set<string>());
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const currentIndexRef = useRef(0);
@@ -338,6 +339,11 @@ export function ExamClient({
               questionText={currentQuestion?.question_text}
               questionNumber={currentIndex + 1}
               className="p-2 rounded-lg hover:bg-muted transition-colors"
+              isReported={currentQuestion ? reportedQuestions.has(currentQuestion.id) : false}
+              onReported={(id) => {
+                setReportedQuestions(new Set(reportedQuestions).add(id));
+                useExamStore.getState().markReported(id);
+              }}
             />
 
             <div className="h-5 w-px bg-border" />

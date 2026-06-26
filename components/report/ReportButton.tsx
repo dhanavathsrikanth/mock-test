@@ -20,6 +20,8 @@ interface ReportButtonProps {
   year?: number;
   questionNumber?: number;
   className?: string;
+  isReported?: boolean;
+  onReported?: (questionId: string) => void;
 }
 
 export function ReportButton({
@@ -29,25 +31,17 @@ export function ReportButton({
   year,
   questionNumber,
   className = "",
+  isReported = false,
+  onReported,
 }: ReportButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [reportStatus, setReportStatus] = useState<"none" | "reported" | "corrected">("none");
   const [showToast, setShowToast] = useState(false);
 
   const handleReportSubmit = () => {
-    setReportStatus("reported");
+    onReported?.(questionId);
     setShowToast(true);
     setTimeout(() => setShowToast(false), 3000);
   };
-
-  if (reportStatus === "corrected") {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
-        <span className="text-green-500">&#10003;</span>
-        Corrected
-      </span>
-    );
-  }
 
   return (
     <>
@@ -55,18 +49,18 @@ export function ReportButton({
         type="button"
         onClick={() => setIsOpen(true)}
         className={`inline-flex items-center gap-1 text-xs font-medium transition-colors ${
-          reportStatus === "reported"
+          isReported
             ? "text-orange-500"
             : "text-muted-foreground hover:text-foreground"
         } ${className}`}
-        title="Report an issue"
+        title={isReported ? "Reported" : "Report an issue"}
       >
         <Flag
           className={`h-3.5 w-3.5 ${
-            reportStatus === "reported" ? "fill-orange-500" : ""
+            isReported ? "fill-orange-500" : ""
           }`}
         />
-        {reportStatus === "reported" ? "Reported" : null}
+        {isReported ? "Reported" : null}
       </button>
 
       {showToast && (
