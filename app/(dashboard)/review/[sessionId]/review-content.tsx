@@ -382,25 +382,6 @@ export function ReviewContent({
               Previous
             </Button>
 
-            <div className="flex items-center gap-1.5">
-              {filtered.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setCurrentIndex(idx)}
-                  className={`h-2 rounded-full transition-all ${
-                    idx === currentIndex
-                      ? "w-6 bg-primary"
-                      : filtered[idx].is_correct === true
-                        ? "w-2 bg-green-500"
-                        : filtered[idx].selected_option == null
-                          ? "w-2 bg-muted-foreground/30"
-                          : "w-2 bg-red-500"
-                  }`}
-                />
-              ))}
-            </div>
-
             <Button
               variant="outline"
               disabled={currentIndex >= filtered.length - 1}
