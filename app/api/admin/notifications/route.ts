@@ -79,6 +79,22 @@ export async function POST(request: Request) {
     }).eq("id", data.id);
 
     if (updateError) console.error("Failed to update notification status:", updateError);
+
+    // Also save to notifications table so they appear in the bell icon dropdown
+    const userIds = await getAudienceUserIds(supabase, audience_type || "all", audience_filter);
+    const batchSize = 100;
+    for (let i = 0; i < userIds.length; i += batchSize) {
+      const batch = userIds.slice(i, i + batchSize);
+      const rows = batch.map((uid: string) => ({
+        user_id: uid,
+        type: "admin",
+        title: title.trim(),
+        message: notifBody?.trim() || null,
+        link: url || "/daily",
+      }));
+      await supabase.from("notifications").insert(rows);
+    }
+
     return NextResponse.json({ ...data, status: "sent", sent_count: result.sent, failed_count: result.failed });
   } catch (err) {
     await supabase.from("admin_notifications").update({ status: "failed" }).eq("id", data.id);
