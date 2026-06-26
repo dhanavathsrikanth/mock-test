@@ -8,7 +8,14 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
+
+function getBarColor(accuracy: number) {
+  if (accuracy >= 60) return "#22c55e";
+  if (accuracy >= 35) return "#eab308";
+  return "#ef4444";
+}
 
 export function SubjectChart({
   data,
@@ -53,11 +60,11 @@ export function SubjectChart({
             background: "hsl(var(--background))",
           }}
         />
-        <Bar
-          dataKey="accuracy"
-          fill="hsl(var(--primary))"
-          radius={[4, 4, 0, 0]}
-        />
+        <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
+          {data.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={getBarColor(entry.accuracy)} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

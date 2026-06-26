@@ -12,11 +12,14 @@ import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import {
   ClipboardList,
-  Percent,
-  Trophy,
-  FileQuestion,
   ArrowRight,
   Play,
+  TrendingUp,
+  Target,
+  BarChart3,
+  BookOpen,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import Link from "next/link";
 import { SubjectChart } from "./subject-chart";
@@ -53,6 +56,24 @@ const modeLabels: Record<string, string> = {
   topic_wise: "Subject-wise",
   custom: "Custom",
 };
+
+const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
+  full_mock: "default",
+  topic_wise: "secondary",
+  custom: "outline",
+};
+
+function getScoreColor(score: number) {
+  if (score >= 60) return "text-green-600 dark:text-green-400";
+  if (score >= 35) return "text-yellow-600 dark:text-yellow-400";
+  return "text-red-600 dark:text-red-400";
+}
+
+function getScoreBg(score: number) {
+  if (score >= 60) return "bg-green-500";
+  if (score >= 35) return "bg-yellow-500";
+  return "bg-red-500";
+}
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -100,9 +121,11 @@ export default async function DashboardPage() {
       (a) => a.session_id === s.id
     );
     const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
+    const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
+    const skipped = sessionAnswers.filter((a) => a.is_correct === null).length;
     const total = s.total_questions;
     const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    return { ...s, correct, score };
+    return { ...s, correct, wrong, skipped, score };
   });
 
   const totalTests = sessions?.length || 0;
@@ -159,10 +182,11 @@ export default async function DashboardPage() {
     .sort((a, b) => b.accuracy - a.accuracy);
 
   return (
-    <div className="space-y-4">
-      {/* Exam Countdown - prominent first element */}
+    <div className="space-y-6 py-6">
+      {/* Exam Countdown */}
       <ExamCountdown />
 
+      {/* Welcome + Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2">
           <h1 className="text-2xl font-bold tracking-tight">
@@ -181,164 +205,193 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Total Tests Taken
-            </CardTitle>
-            <ClipboardList className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{totalTests}</div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <ClipboardList className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Tests Taken</p>
+              <p className="text-xl font-bold">{totalTests}</p>
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Average Score
-            </CardTitle>
-            <Percent className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{avgScore}%</div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="h-5 w-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Average Score</p>
+              <p className={`text-xl font-bold ${getScoreColor(avgScore)}`}>{avgScore}%</p>
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Best Score</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{bestScore}%</div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
+              <Target className="h-5 w-5 text-yellow-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Best Score</p>
+              <p className={`text-xl font-bold ${getScoreColor(bestScore)}`}>{bestScore}%</p>
+            </div>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">
-              Questions Practiced
-            </CardTitle>
-            <FileQuestion className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{totalQuestions}</div>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+              <BarChart3 className="h-5 w-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Questions</p>
+              <p className="text-xl font-bold">{totalQuestions}</p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Tests</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {recentTests.length === 0 ? (
-            <p className="text-muted-foreground text-sm py-4">
-              No tests completed yet. Start your first test below!
-            </p>
-          ) : (
-            <div className="divide-y">
-              {recentTests.map((test) => (
-                <div
-                  key={test.id}
-                  className="flex items-center justify-between py-3"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm truncate">
-                        {(test as any).subjects?.name || "General"}
-                      </span>
-                      <Badge variant="secondary" className="text-xs">
-                        {modeLabels[test.mode] || test.mode}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {format(
-                        new Date(test.completed_at!),
-                        "MMM d, yyyy h:mm a"
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-4 ml-4">
-                    <span
-                      className={`text-sm font-semibold ${
-                        test.score >= 60
-                          ? "text-green-600 dark:text-green-400"
-                          : test.score >= 35
-                          ? "text-yellow-600 dark:text-yellow-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {test.score}%
-                    </span>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/result/${test.id}`}>Result</Link>
-                      </Button>
-                      <Button variant="outline" size="sm" asChild>
-                        <Link href={`/review/${test.id}`}>Review</Link>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      {/* Quick Start */}
       <div>
-        <h2 className="text-xl font-semibold mb-3">Quick Start</h2>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Zap className="h-5 w-5 text-primary" />
+          Quick Start
+        </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <Link
             href="/test/select"
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 hover:shadow-md transition-shadow"
+            className="group relative overflow-hidden rounded-xl border bg-card p-5 hover:shadow-md hover:border-primary/30 transition-all"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Play className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Full Mock Test</h3>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Play className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Full Mock Test</h3>
+                <p className="text-xs text-muted-foreground">150 Questions · 150 min</p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              150 Questions · 150 min
-            </p>
             <ArrowRight className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
           <Link
             href="/test/select"
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 hover:shadow-md transition-shadow"
+            className="group relative overflow-hidden rounded-xl border bg-card p-5 hover:shadow-md hover:border-primary/30 transition-all"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Play className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Subject-wise Test</h3>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-lg bg-secondary/50 flex items-center justify-center">
+                <BookOpen className="h-5 w-5 text-secondary-foreground" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Subject-wise Test</h3>
+                <p className="text-xs text-muted-foreground">Pick a subject to practice</p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Pick a subject to practice
-            </p>
             <ArrowRight className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
           <Link
             href="/test/select"
-            className="group relative overflow-hidden rounded-xl border bg-card p-6 hover:shadow-md transition-shadow"
+            className="group relative overflow-hidden rounded-xl border bg-card p-5 hover:shadow-md hover:border-primary/30 transition-all"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <Play className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Custom Test</h3>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-10 w-10 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <Sparkles className="h-5 w-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Custom Test</h3>
+                <p className="text-xs text-muted-foreground">Pick year · subject · count</p>
+              </div>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Pick year · subject · count
-            </p>
             <ArrowRight className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
           </Link>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Subject Performance</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SubjectChart data={subjectPerformance} />
-        </CardContent>
-      </Card>
+      {/* Main grid: Recent Tests + Subject Performance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Recent Tests */}
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg">Recent Tests</CardTitle>
+              {recentTests.length > 0 && (
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/recent-tests">
+                    View all
+                    <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                  </Link>
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {recentTests.length === 0 ? (
+              <div className="flex flex-col items-center py-8 gap-3">
+                <ClipboardList className="h-10 w-10 text-muted-foreground" />
+                <div className="text-center">
+                  <p className="font-medium">No tests yet</p>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Complete your first test to see results here.
+                  </p>
+                </div>
+                <Button size="sm" asChild>
+                  <Link href="/test/select">
+                    <Play className="h-3.5 w-3.5" />
+                    Start a test
+                  </Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {recentTests.map((test) => (
+                  <div
+                    key={test.id}
+                    className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm truncate">
+                          {(test as any).subjects?.name || "General"}
+                        </span>
+                        <Badge variant={modeVariants[test.mode] || "outline"} className="text-[10px] px-1.5 py-0">
+                          {modeLabels[test.mode] || test.mode}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {format(new Date(test.completed_at!), "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 ml-3">
+                      <span className={`text-sm font-semibold ${getScoreColor(test.score)}`}>
+                        {test.score}%
+                      </span>
+                      <div className="flex gap-1.5">
+                        <Button variant="outline" size="sm" asChild className="h-7 text-xs px-2">
+                          <Link href={`/result/${test.id}`}>Result</Link>
+                        </Button>
+                        <Button variant="outline" size="sm" asChild className="h-7 text-xs px-2">
+                          <Link href={`/review/${test.id}`}>Review</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Subject Performance */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Subject Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SubjectChart data={subjectPerformance} />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
