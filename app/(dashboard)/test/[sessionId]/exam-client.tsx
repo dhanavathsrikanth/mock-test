@@ -25,7 +25,6 @@ interface Question {
   option_2: string;
   option_3: string;
   option_4: string;
-  correct_option: number;
   image_url?: string;
 }
 
@@ -133,14 +132,8 @@ export function ExamClient({
   const saveAnswer = useCallback(
     async (questionId: string, option: number | null) => {
       setSaveStatus("saving");
-      const question = questions.find((q) => q.id === questionId);
-      const isCorrect =
-        option != null && question
-          ? option === question.correct_option
-            ? true
-            : false
-          : null;
 
+      // is_correct is computed server-side on submission — never sent to client
       const { error } = await createClient()
         .from("test_answers")
         .upsert(
@@ -148,7 +141,6 @@ export function ExamClient({
             session_id: session.id,
             question_id: questionId,
             selected_option: option,
-            is_correct: isCorrect,
           },
           { onConflict: "session_id, question_id" }
         );
@@ -161,7 +153,7 @@ export function ExamClient({
         );
       }
     },
-    [session.id, questions]
+    [session.id]
   );
 
   const handleOptionClick = (optionIndex: number) => {
@@ -201,23 +193,21 @@ export function ExamClient({
   };
 
   const handleSubmit = async () => {
-    if (useExamStore.getState().isSubmitting) return;
+    if (isSubmitting) return;
     setIsSubmitting(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("test_sessions")
-      .update({
-        status: "completed",
-        completed_at: new Date().toISOString(),
-      })
-      .eq("id", session.id);
 
-    if (!error) {
-      triggerStreakUpdate();
-      awardTestXP(session.id);
-      addWrongToSRS(session.id);
-      router.push(`/result/${session.id}`);
+    const { submitTest } = await import("./actions");
+    const result = await submitTest(session.id, userId);
+
+    if (result.error) {
+      setIsSubmitting(false);
+      return;
     }
+
+    triggerStreakUpdate();
+    awardTestXP(session.id);
+    addWrongToSRS(session.id);
+    router.push(`/result/${session.id}`);
   };
 
   const handleSubmitRef = useRef(handleSubmit);

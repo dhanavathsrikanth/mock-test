@@ -155,6 +155,26 @@ export async function awardTestXP(
 ): Promise<AwardXPResult> {
   const supabase = await createClient();
 
+  // Guard: check if XP was already awarded for this session
+  const { data: existing } = await supabase
+    .from("xp_transactions")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("reason", "Test completed")
+    .contains("metadata", JSON.stringify({ session_id: sessionId }))
+    .maybeSingle();
+
+  if (existing) {
+    // Already awarded — return zero XP (idempotent)
+    return {
+      xpAwarded: 0,
+      newTotal: 0,
+      leveledUp: false,
+      newLevelName: null,
+      newLevelNumber: null,
+    };
+  }
+
   const { data: session } = await supabase
     .from("test_sessions")
     .select("total_questions")

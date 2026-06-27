@@ -82,37 +82,51 @@ export default async function DashboardPage() {
 
   const userId = user.id;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, email")
-    .eq("id", userId)
-    .single();
-
-  const userName = profile?.full_name || "User";
-
-  const { data: sessions } = await supabase
-    .from("test_sessions")
-    .select(
+  // Parallelize independent queries
+  const [profileResult, sessionsResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, email")
+      .eq("id", userId)
+      .single(),
+    supabase
+      .from("test_sessions")
+      .select(
+        `
+        id,
+        total_questions,
+        mode,
+        completed_at,
+        subject_id,
+        subjects ( name )
       `
-      id,
-      total_questions,
-      mode,
-      completed_at,
-      subject_id,
-      subjects ( name )
-    `
-    )
-    .eq("user_id", userId)
-    .eq("status", "completed")
-    .order("completed_at", { ascending: false });
+      )
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .order("completed_at", { ascending: false }),
+  ]);
+
+  const profile = profileResult.data;
+  const sessions = sessionsResult.data;
+  const userName = profile?.full_name || "User";
 
   const sessionIds = sessions?.map((s) => s.id) || [];
 
+  // Single query for all answer data (replaces two separate queries)
   const { data: allAnswers } =
     sessionIds.length > 0
       ? await supabase
           .from("test_answers")
-          .select("session_id, is_correct")
+          .select(
+            `
+          session_id,
+          is_correct,
+          questions (
+            subject_id,
+            subjects ( name )
+          )
+        `
+          )
           .in("session_id", sessionIds)
       : { data: [] };
 
@@ -145,24 +159,9 @@ export default async function DashboardPage() {
 
   const recentTests = sessionScores.slice(0, 5);
 
-  const { data: subjectAnswers } =
-    sessionIds.length > 0
-      ? await supabase
-          .from("test_answers")
-          .select(
-            `
-          is_correct,
-          questions (
-            subject_id,
-            subjects ( name )
-          )
-        `
-          )
-          .in("session_id", sessionIds)
-      : { data: [] };
-
+  // Derive subject performance from the combined answer data
   const subjectMap = new Map<string, { correct: number; total: number }>();
-  (subjectAnswers || []).forEach((a: any) => {
+  (allAnswers || []).forEach((a: any) => {
     const subjectName = a.questions?.subjects?.name;
     if (!subjectName) return;
     const entry = subjectMap.get(subjectName) || { correct: 0, total: 0 };

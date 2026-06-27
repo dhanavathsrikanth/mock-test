@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getQuestionsForSession } from "@/lib/question-distribution";
 import { ExamClient } from "./exam-client";
 
 export async function generateMetadata({
@@ -41,21 +42,15 @@ async function ExamPageContent({
   if (session.status !== "in_progress")
     redirect(`/result/${sessionId}`);
 
-  let query = supabase
-    .from("questions")
-    .select("*")
-    .eq("exam_id", session.exam_id);
+  const questions = await getQuestionsForSession(userId, {
+    exam_id: session.exam_id,
+    subject_id: session.subject_id,
+    year: session.year,
+    total_questions: session.total_questions,
+  });
 
-  if (session.subject_id) {
-    query = query.eq("subject_id", session.subject_id);
-  }
-  if (session.year) {
-    query = query.eq("year", session.year);
-  }
-
-  const { data: questions } = await query
-    .limit(session.total_questions)
-    .order("created_at");
+  // Strip correct_option — never send correct answers to the client
+  const safeQuestions = questions.map(({ correct_option, ...rest }) => rest);
 
   const { data: existingAnswers } = await supabase
     .from("test_answers")
@@ -80,7 +75,7 @@ async function ExamPageContent({
     <ExamClient
       userId={userId}
       session={session}
-      questions={questions || []}
+      questions={safeQuestions || []}
       initialAnswers={initialAnswers}
       initialBookmarks={initialBookmarks}
     />
