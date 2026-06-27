@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
 import { MaintenanceBanner } from "@/components/MaintenanceBanner";
+import { TestLayoutWrapper } from "./test-layout-wrapper";
 
 const XPBar = dynamic(
   () => import("@/components/xp/XPBar").then((m) => m.XPBar)
@@ -44,11 +45,13 @@ export default async function DashboardLayout({
   return (
     <div className="min-h-screen bg-background flex">
       <Sidebar userName={userName} userRole={userRole} />
-      <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
-        <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={userRole === "admin"} />
-        <XPBar />
-        <div className="px-3 py-2 flex-1">{children}</div>
-      </main>
+      <TestLayoutWrapper>
+        <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
+          <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={userRole === "admin"} />
+          <XPBar />
+          <div className="px-3 py-2 flex-1">{children}</div>
+        </main>
+      </TestLayoutWrapper>
       <XPToast />
       <LevelUpModal />
     </div>

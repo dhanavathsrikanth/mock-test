@@ -398,7 +398,7 @@ export function ExamClient({
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 lg:py-8">
             {currentQuestion && (
               <div className="space-y-6">
-                {/* Question number badge */}
+                {/* Question number badge + mobile report */}
                 <div className="flex items-center gap-3">
                   <span className="inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg bg-primary text-primary-foreground text-sm font-bold">
                     {currentIndex + 1}
@@ -411,6 +411,19 @@ export function ExamClient({
                       {answeredCount}/{totalQuestions} answered
                     </span>
                   )}
+                  <div className="lg:hidden ml-auto">
+                    <ReportButton
+                      questionId={currentQuestion?.id || ""}
+                      questionText={currentQuestion?.question_text}
+                      questionNumber={currentIndex + 1}
+                      className="p-2 rounded-lg hover:bg-muted transition-colors"
+                      isReported={currentQuestion ? reportedQuestions.has(currentQuestion.id) : false}
+                      onReported={(id) => {
+                        setReportedQuestions(new Set(reportedQuestions).add(id));
+                        useExamStore.getState().markReported(id);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* Question text */}
@@ -533,7 +546,7 @@ export function ExamClient({
       </div>
 
       {/* ===== BOTTOM NAVIGATION BAR ===== */}
-      <footer className="shrink-0 border-t bg-card sticky bottom-0 z-10">
+      <footer className="shrink-0 border-t bg-card sticky bottom-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
         <div className="flex items-center justify-between px-4 sm:px-6 h-16">
           <Button
             variant="outline"
