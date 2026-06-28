@@ -208,7 +208,7 @@ export function ExamClient({
     }
 
     triggerStreakUpdate();
-    awardTestXP(session.id);
+    await awardTestXP(session.id);
     addWrongToSRS(session.id);
     router.push(`/result/${session.id}`);
   };
