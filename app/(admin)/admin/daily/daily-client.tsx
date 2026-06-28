@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,6 +25,8 @@ import {
   Eye,
   RotateCcw,
   TrendingUp,
+  Filter,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
@@ -60,6 +62,17 @@ interface DailySettings {
   noConsecutiveSame: boolean;
   diffRotation: string;
   notifTime: string;
+}
+
+interface Subject {
+  id: string;
+  name: string;
+}
+
+interface Topic {
+  id: string;
+  name: string;
+  subject_id: string;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -100,8 +113,24 @@ export function DailyClient({
   const [selectedQId, setSelectedQId] = useState<string | null>(null);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>("");
+  const [selectedTopic, setSelectedTopic] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); }, [settings]);
+
+  useEffect(() => {
+    const fetchSubjectsAndTopics = async () => {
+      const supabase = (await import("@/lib/supabase/client")).createClient();
+      const { data: subjs } = await supabase.from("subjects").select("id, name").order("name");
+      setSubjects(subjs || []);
+      const { data: tpcs } = await supabase.from("topics").select("id, name, subject_id").order("name");
+      setTopics(tpcs || []);
+    };
+    fetchSubjectsAndTopics();
+  }, []);
 
   const scheduleByDate = useMemo(() => {
     const map: Record<string, DQItem> = {};
@@ -126,18 +155,30 @@ export function DailyClient({
     return `${year}-${m}-${day}`;
   };
 
-  const searchQuestions = async (q: string) => {
+  const searchQuestions = useCallback(async (q: string, subjectId: string, topicId: string) => {
     setQuestionSearch(q);
-    if (!q.trim()) { setSearchResults([]); return; }
     setSearching(true);
     try {
-      const res = await fetch(`/api/admin/questions?search=${encodeURIComponent(q)}&limit=20`);
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("search", q);
+      if (subjectId) params.set("subject_id", subjectId);
+      if (topicId) params.set("topic_id", topicId);
+      params.set("limit", "30");
+      
+      const res = await fetch(`/api/admin/questions?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data.questions || []);
       }
     } finally { setSearching(false); }
-  };
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      searchQuestions(questionSearch, selectedSubject, selectedTopic);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [questionSearch, selectedSubject, selectedTopic, searchQuestions]);
 
   const handleAutoFill = async (days: number) => {
     setAutoFilling(true);
@@ -463,29 +504,103 @@ export function DailyClient({
       {/* Schedule Modal */}
       {scheduleModal && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-10 sm:pt-20">
-          <div className="fixed inset-0 bg-black/60" onClick={() => { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); }} />
-          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-            <div className="sticky top-0 bg-background border-b px-6 py-4 rounded-t-xl">
-              <h2 className="font-semibold">Schedule Question</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {selectedDate ? new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "Pick a date and question"}
-              </p>
+          <div className="fixed inset-0 bg-black/60" onClick={() => { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); setSelectedSubject(""); setSelectedTopic(""); }} />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-background border-b px-4 sm:px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold">Schedule Question</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {selectedDate ? new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" }) : "Pick a date and question"}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`p-2 rounded-lg transition-colors ${showFilters ? "bg-primary/10 text-primary" : "hover:bg-muted"}`}
+                  title="Toggle filters"
+                >
+                  <Filter className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
+              {/* Date */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Date</label>
                 <Input type="date" value={selectedDate || ""} onChange={(e) => setSelectedDate(e.target.value)} />
               </div>
+
+              {/* Filters */}
+              {showFilters && (
+                <div className="space-y-3 p-3 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium">Filter by Subject & Topic</span>
+                    {(selectedSubject || selectedTopic) && (
+                      <button
+                        onClick={() => { setSelectedSubject(""); setSelectedTopic(""); }}
+                        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                      >
+                        <X className="h-3 w-3" /> Clear
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-muted-foreground">Subject</label>
+                      <select
+                        value={selectedSubject}
+                        onChange={(e) => {
+                          setSelectedSubject(e.target.value);
+                          setSelectedTopic("");
+                        }}
+                        className="w-full h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                      >
+                        <option value="">All subjects</option>
+                        {subjects.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-muted-foreground">Topic</label>
+                      <select
+                        value={selectedTopic}
+                        onChange={(e) => setSelectedTopic(e.target.value)}
+                        className="w-full h-9 rounded-lg border border-input bg-background px-2 text-sm"
+                        disabled={!selectedSubject}
+                      >
+                        <option value="">All topics</option>
+                        {topics
+                          .filter((t) => !selectedSubject || t.subject_id === selectedSubject)
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>{t.name}</option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Search */}
               <div className="space-y-1.5">
                 <label className="text-xs font-medium">Search Question</label>
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input value={questionSearch} onChange={(e) => searchQuestions(e.target.value)} placeholder="Search by text..." className="pl-8" />
+                  <Input 
+                    value={questionSearch} 
+                    onChange={(e) => setQuestionSearch(e.target.value)} 
+                    placeholder={selectedSubject || selectedTopic ? "Search within filter..." : "Search by text..."} 
+                    className="pl-8" 
+                  />
                 </div>
               </div>
+
+              {/* Results */}
               <div className="border rounded-lg max-h-[250px] overflow-y-auto">
                 {searching ? (
-                  <div className="p-4 text-center text-sm text-muted-foreground"><Loader2 className="h-4 w-4 mx-auto animate-spin" /></div>
+                  <div className="p-4 text-center text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 mx-auto animate-spin" />
+                  </div>
                 ) : searchResults.length > 0 ? (
                   <div className="divide-y">
                     {searchResults.map((q: any) => (
@@ -494,21 +609,23 @@ export function DailyClient({
                       >
                         <span className="line-clamp-1"><MathText text={q.question_text} /></span>
                         <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                          {q.subjects?.name || "No subject"} {q.year ? `· ${q.year}` : ""}
+                          {q.subjects?.name || "No subject"} {q.topics?.name ? `· ${q.topics.name}` : ""} {q.year ? `· ${q.year}` : ""}
                         </span>
                       </button>
                     ))}
                   </div>
-                ) : questionSearch.trim() ? (
+                ) : (questionSearch.trim() || selectedSubject || selectedTopic) ? (
                   <div className="p-4 text-center text-sm text-muted-foreground">No questions found</div>
                 ) : (
                   <div className="p-4 text-center text-sm text-muted-foreground">
                     {stats.totalQuestions === 0 ? (
                       <>No questions in the bank yet. <Link href="/admin/questions/new" className="text-primary underline">Add one</Link></>
-                    ) : "Type to search questions"}
+                    ) : "Type to search or use filters to browse questions"}
                   </div>
                 )}
               </div>
+
+              {/* Preview */}
               {selectedQId && searchResults.find((q: any) => q.id === selectedQId) && (
                 <div className="bg-muted/50 rounded-lg p-3 text-sm border">
                   <p className="font-medium text-xs text-muted-foreground mb-1">Preview</p>
@@ -516,8 +633,8 @@ export function DailyClient({
                 </div>
               )}
             </div>
-            <div className="sticky bottom-0 bg-background border-t px-6 py-4 rounded-b-xl flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); }}>Cancel</Button>
+            <div className="sticky bottom-0 bg-background border-t px-4 sm:px-6 py-4 rounded-b-xl flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); setSelectedSubject(""); setSelectedTopic(""); }}>Cancel</Button>
               <Button onClick={handleAssign} disabled={!selectedDate || !selectedQId}>Assign</Button>
             </div>
           </div>
