@@ -90,7 +90,19 @@ export default function DailyQuestionPage() {
       if (!res.ok) {
         const err = await res.json();
         if (res.status === 409) {
-          alert("You have already answered this question.");
+          const refresh = await fetch("/api/daily-question");
+          if (refresh.ok) {
+            const json = await refresh.json();
+            setData(json);
+            if (json.userAnswer) {
+              setResult({
+                isCorrect: json.userAnswer.isCorrect,
+                correctOption: json.question.correctOption,
+                explanation: json.question.explanation,
+              });
+              setSelected(json.userAnswer.selectedOption);
+            }
+          }
         } else {
           alert(err.error || "Failed to submit");
         }
