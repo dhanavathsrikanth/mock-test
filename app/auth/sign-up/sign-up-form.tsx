@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MailCheck } from "lucide-react";
+import { MailCheck, Mail } from "lucide-react";
 import Link from "next/link";
 
 function GoogleIcon({ className }: { className?: string }) {
@@ -36,6 +36,7 @@ function SignUpFormInner() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [showEmailForm, setShowEmailForm] = useState(false);
 
   if (searchParams.has("success")) {
     return (
@@ -113,13 +114,45 @@ function SignUpFormInner() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl">Sign up</CardTitle>
-        <CardDescription>Create a new account</CardDescription>
+      <CardHeader className="text-center">
+        <CardTitle className="text-2xl">Create an account</CardTitle>
+        <CardDescription>
+          Start your preparation journey today
+        </CardDescription>
       </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSignUp}>
-          <div className="flex flex-col gap-6">
+      <CardContent className="space-y-4">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full h-11"
+          onClick={handleGoogleSignUp}
+          disabled={isGoogleLoading}
+        >
+          <GoogleIcon className="mr-2 h-5 w-5" />
+          {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
+        </Button>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-card px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        {!showEmailForm ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-11"
+            onClick={() => setShowEmailForm(true)}
+          >
+            <Mail className="mr-2 h-4 w-4" />
+            Continue with Email
+          </Button>
+        ) : (
+          <form onSubmit={handleSignUp} className="space-y-4">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -129,6 +162,7 @@ function SignUpFormInner() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoFocus
               />
             </div>
             <div className="grid gap-2">
@@ -152,30 +186,13 @@ function SignUpFormInner() {
               />
             </div>
             {error && <p className="text-sm text-red-500">{error}</p>}
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full h-11" disabled={isLoading}>
               {isLoading ? "Creating an account..." : "Sign up"}
             </Button>
-          </div>
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-card px-2 text-muted-foreground">or</span>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full"
-            onClick={handleGoogleSignUp}
-            disabled={isGoogleLoading}
-          >
-            <GoogleIcon className="mr-2 h-4 w-4" />
-            {isGoogleLoading ? "Redirecting..." : "Continue with Google"}
-          </Button>
-        </form>
-        <div className="mt-4 text-center text-sm">
+          </form>
+        )}
+
+        <div className="text-center text-sm">
           Already have an account?{" "}
           <Link href="/auth/login" className="underline underline-offset-4">
             Login
