@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 
 export function TestLayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isTestScreen = pathname.startsWith("/test/");
+  const isTestScreen = /^\/test\/[a-f0-9-]+/.test(pathname);
 
   return (
     <div className={isTestScreen ? "!pb-0" : ""}>

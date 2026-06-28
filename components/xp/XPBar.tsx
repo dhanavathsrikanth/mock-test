@@ -46,7 +46,7 @@ export function XPBar() {
   }, [data, prevXP]);
 
   if (!data) return null;
-  if (pathname.startsWith("/test/")) return null;
+  if (/^\/test\/[a-f0-9-]+/.test(pathname)) return null;
 
   return (
     <div className="w-full bg-background border-b px-3 py-1.5">

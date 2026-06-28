@@ -254,8 +254,8 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
         </div>
       </div>
 
-      {/* Mobile: bottom tab bar — hidden during test-taking */}
-      {!pathname.startsWith("/test/") && (
+      {/* Mobile: bottom tab bar — hidden during active test-taking only */}
+      {!(/^\/test\/[a-f0-9-]+/.test(pathname)) && (
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-center justify-around h-16 px-1">
           {TAB_ITEMS.map((item) => {
