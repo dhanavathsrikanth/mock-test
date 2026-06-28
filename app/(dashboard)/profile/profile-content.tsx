@@ -28,6 +28,14 @@ import {
   Camera,
   X,
   Upload,
+  Zap,
+  Trophy,
+  Star,
+  Flame,
+  BookOpen,
+  TrendingUp,
+  Clock,
+  Award,
 } from "lucide-react";
 
 interface Profile {
@@ -38,6 +46,7 @@ interface Profile {
   xp: number;
   target_exam_id?: string | null;
   avatar_url?: string | null;
+  created_at?: string | null;
 }
 
 interface Exam {
@@ -48,7 +57,31 @@ interface Exam {
 interface ProfileContentProps {
   profile: Profile | null;
   exams: Exam[];
+  levelData: { total_xp: number; current_level: number; level_name: string } | null;
+  xpTransactions: { id: string; amount: number; reason: string; created_at: string }[];
+  badges: { id: string; badge_type: string; unlocked_at: string | null; streak_at_unlock: number | null }[];
+  totalTests: number;
+  totalBookmarks: number;
 }
+
+const XP_LEVELS = [
+  { level: 0, name: "Trainee", xp: 0, icon: "🎓" },
+  { level: 1, name: "Junior AEE", xp: 500, icon: "📘" },
+  { level: 2, name: "AEE", xp: 1500, icon: "🔧" },
+  { level: 3, name: "Senior AEE", xp: 3500, icon: "🏛️" },
+  { level: 4, name: "Assistant Executive", xp: 7000, icon: "⚡" },
+  { level: 5, name: "Executive Engineer", xp: 12000, icon: "🌟" },
+  { level: 6, name: "Chief Engineer", xp: 20000, icon: "👑" },
+];
+
+const BADGE_DEFS: Record<string, { label: string; icon: string; description: string }> = {
+  week_warrior: { label: "Week Warrior", icon: "🔥", description: "7-day practice streak" },
+  iron_will: { label: "Iron Will", icon: "💪", description: "30-day practice streak" },
+  first_test: { label: "First Steps", icon: "🎯", description: "Completed your first test" },
+  perfect_score: { label: "Perfectionist", icon: "💯", description: "Scored 100% on a test" },
+  bookworm: { label: "Bookworm", icon: "📚", description: "Bookmarked 10 questions" },
+  centurion: { label: "Centurion", icon: "⚔️", description: "Answered 100 questions correctly" },
+};
 
 function UserAvatar({ userName, avatarUrl, className }: { userName: string; avatarUrl?: string | null; className?: string }) {
   const [imgError, setImgError] = useState(false);
@@ -69,7 +102,7 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
   );
 }
 
-export function ProfileContent({ profile: serverProfile, exams }: ProfileContentProps) {
+export function ProfileContent({ profile: serverProfile, exams, levelData, xpTransactions, badges, totalTests, totalBookmarks }: ProfileContentProps) {
   const router = useRouter();
   const getSupabase = () => createClient();
   const [profile, setProfile] = useState(serverProfile);
@@ -419,6 +452,167 @@ export function ProfileContent({ profile: serverProfile, exams }: ProfileContent
         </CardContent>
       </Card>
 
+      {/* XP & Level Card */}
+      <Card className="overflow-hidden">
+        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6">
+          <div className="flex items-center gap-4">
+            <div className="text-5xl">{XP_LEVELS[levelData?.current_level || 0].icon}</div>
+            <div className="flex-1">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Current Level</p>
+              <h2 className="text-2xl font-bold">{levelData?.level_name || "Trainee"}</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {levelData?.total_xp || 0} XP earned
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-3xl font-bold text-primary">{levelData?.total_xp || 0}</p>
+              <p className="text-xs text-muted-foreground">Total XP</p>
+            </div>
+          </div>
+          {/* Level Progress Bar */}
+          {(() => {
+            const currentLevel = levelData?.current_level || 0;
+            const totalXp = levelData?.total_xp || 0;
+            const current = XP_LEVELS[currentLevel];
+            const next = XP_LEVELS[currentLevel + 1];
+            if (!next) return null;
+            const xpInLevel = totalXp - current.xp;
+            const xpRequired = next.xp - current.xp;
+            const progress = Math.min((xpInLevel / xpRequired) * 100, 100);
+            return (
+              <div className="mt-4">
+                <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
+                  <span>{current.name}</span>
+                  <span>{next.name} ({next.xp - totalXp} XP to go)</span>
+                </div>
+                <div className="h-3 bg-muted rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </Card>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="p-4 text-center">
+          <Zap className="h-5 w-5 mx-auto text-yellow-500 mb-1" />
+          <p className="text-2xl font-bold">{levelData?.total_xp || 0}</p>
+          <p className="text-[10px] text-muted-foreground">Total XP</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <Trophy className="h-5 w-5 mx-auto text-purple-500 mb-1" />
+          <p className="text-2xl font-bold">{totalTests}</p>
+          <p className="text-[10px] text-muted-foreground">Tests Done</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <BookOpen className="h-5 w-5 mx-auto text-blue-500 mb-1" />
+          <p className="text-2xl font-bold">{totalBookmarks}</p>
+          <p className="text-[10px] text-muted-foreground">Bookmarks</p>
+        </Card>
+      </div>
+
+      {/* Badges */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Award className="h-5 w-5 text-muted-foreground" />
+            Badges ({badges.length}/{Object.keys(BADGE_DEFS).length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {Object.entries(BADGE_DEFS).map(([type, def]) => {
+              const earned = badges.find((b) => b.badge_type === type);
+              return (
+                <div
+                  key={type}
+                  className={`relative flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
+                    earned
+                      ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-950/30"
+                      : "border-muted bg-muted/20 opacity-40"
+                  }`}
+                >
+                  <span className="text-2xl">{def.icon}</span>
+                  <span className="text-[10px] font-semibold text-center leading-tight">{def.label}</span>
+                  {earned ? (
+                    <span className="text-[9px] text-emerald-600 dark:text-emerald-400 font-medium">Earned</span>
+                  ) : (
+                    <span className="text-[9px] text-muted-foreground">🔒</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* XP History */}
+      {xpTransactions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
+              XP History
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {xpTransactions.map((tx) => (
+                <div key={tx.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 ${tx.amount > 0 ? "bg-green-100 dark:bg-green-950/30" : "bg-red-100 dark:bg-red-950/30"}`}>
+                      {tx.amount > 0 ? <TrendingUp className="h-3.5 w-3.5 text-green-600" /> : <TrendingUp className="h-3.5 w-3.5 text-red-600 rotate-180" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{tx.reason}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {new Date(tx.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-bold shrink-0 ${tx.amount > 0 ? "text-green-600" : "text-red-600"}`}>
+                    {tx.amount > 0 ? "+" : ""}{tx.amount}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Level Roadmap */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="h-5 w-5 text-muted-foreground" />
+            Level Roadmap
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {XP_LEVELS.map((lvl) => {
+              const isCurrentOrBelow = (levelData?.current_level || 0) >= lvl.level;
+              const isCurrent = (levelData?.current_level || 0) === lvl.level;
+              return (
+                <div key={lvl.level} className={`flex items-center gap-3 p-2 rounded-lg ${isCurrent ? "bg-primary/10 border border-primary/20" : ""}`}>
+                  <span className="text-xl">{lvl.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-sm font-medium ${isCurrentOrBelow ? "" : "text-muted-foreground"}`}>{lvl.name}</p>
+                    <p className="text-[10px] text-muted-foreground">{lvl.xp} XP required</p>
+                  </div>
+                  {isCurrent && <span className="text-[10px] font-medium text-primary bg-primary/10 px-2 py-0.5 rounded-full">Current</span>}
+                  {isCurrentOrBelow && !isCurrent && <span className="text-[10px] text-green-600">✓</span>}
+                  {!isCurrentOrBelow && <span className="text-[10px] text-muted-foreground">🔒</span>}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Account Info */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -432,8 +626,8 @@ export function ProfileContent({ profile: serverProfile, exams }: ProfileContent
             <span className="font-medium capitalize">{profile.role}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">XP</span>
-            <span className="font-medium">{profile.xp}</span>
+            <span className="text-muted-foreground">Member Since</span>
+            <span className="font-medium">{new Date(profile.created_at || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
           </div>
         </CardContent>
       </Card>
