@@ -9,3 +9,6 @@ node_modules/
 next-env.d.ts
 npm-install.log
 mock-test/
+scripts/
+questions_dataset.backup.csv
+deepseek_csv_*.txt
