@@ -31,13 +31,13 @@ export default async function AnalyticsPage() {
   ] = await Promise.all([
     supabase.from("profiles").select("id, created_at"),
     supabase.from("streaks").select("user_id, current_streak, last_activity_date"),
-    supabase.from("test_sessions").select("total_questions, subject_id, year, mode, started_at, completed_at, status, duration_minutes, subjects!inner(name)").gte("started_at", thirtyDaysAgo).limit(5000),
+    supabase.from("test_sessions").select("user_id, total_questions, subject_id, year, mode, started_at, completed_at, status, duration_minutes, subjects!inner(name)").gte("started_at", thirtyDaysAgo).limit(5000),
     supabase.from("test_answers").select("question_id, is_correct, selected_option, questions(question_text, subject_id, subjects(name))").limit(10000),
     supabase.from("bookmarks").select("question_id, questions(question_text, subjects(name))"),
     supabase.from("xp_transactions").select("amount, created_at").gte("created_at", thirtyDaysAgo).limit(5000),
     supabase.from("user_levels").select("user_id, total_xp, profiles(full_name)").order("total_xp", { ascending: false }).limit(10),
     supabase.from("user_badges").select("badge_type, user_id"),
-    supabase.from("daily_question_answers").select("is_correct, selected_option, created_at, daily_questions(question_id)").gte("created_at", thirtyDaysAgo).limit(5000),
+    supabase.from("daily_question_answers").select("user_id, is_correct, selected_option, created_at, daily_questions(question_id)").gte("created_at", thirtyDaysAgo).limit(5000),
     supabase.from("spaced_repetition").select("question_id, last_reviewed_at").gte("last_reviewed_at", thirtyDaysAgo).limit(5000),
     supabase.from("questions").select("id, explanation"),
     supabase.from("question_reports").select("status, created_at, resolved_at").limit(2000),
@@ -106,7 +106,42 @@ export default async function AnalyticsPage() {
   }
   const signupWeekTimeline = Object.entries(signupsByWeek).map(([name, count]) => ({ name, count }));
 
-  // Streak & Activity
+  // ─── Activity: derive from streaks, sessions, and answers combined ───
+  // Build activity maps from multiple sources for accurate user activity tracking
+  const activityByUser: Record<string, { lastDate: string; dates: Set<string> }> = {};
+
+  function recordActivity(userId: string, dateStr: string) {
+    if (!userId || !dateStr) return;
+    const d = dateStr.slice(0, 10);
+    if (!activityByUser[userId]) activityByUser[userId] = { lastDate: d, dates: new Set() };
+    activityByUser[userId].dates.add(d);
+    if (d > activityByUser[userId].lastDate) activityByUser[userId].lastDate = d;
+  }
+
+  // Source 1: streaks
+  streaks.forEach((s: any) => {
+    if (s.user_id && s.last_activity_date) recordActivity(s.user_id, s.last_activity_date);
+  });
+
+  // Source 2: test_sessions (started_at or completed_at)
+  sessions.forEach((s: any) => {
+    if (s.user_id) {
+      if (s.completed_at) recordActivity(s.user_id, s.completed_at);
+      else if (s.started_at) recordActivity(s.user_id, s.started_at);
+    }
+  });
+
+  // Source 3: daily_question_answers
+  dailyAnswers.forEach((a: any) => {
+    if (a.user_id && a.created_at) recordActivity(a.user_id, a.created_at);
+  });
+
+  // Source 4: xp_transactions
+  xps.forEach((x: any) => {
+    if (x.user_id && x.created_at) recordActivity(x.user_id, x.created_at);
+  });
+
+  // Now compute activity metrics from the combined data
   let activeToday = 0;
   let activeWeek = 0;
   let activeMonth = 0;
@@ -115,15 +150,18 @@ export default async function AnalyticsPage() {
   let streakCount = 0;
   const streakBuckets = { zero: 0, oneToThree: 0, fourToSeven: 0, eightToFourteen: 0, fifteenPlus: 0 };
 
+  const totalUsers = profiles.length;
+
+  // Activity counts from combined sources
+  Object.values(activityByUser).forEach((a) => {
+    const ld = a.lastDate;
+    if (ld === todayDate) activeToday++;
+    if (ld >= weekAgo) activeWeek++;
+    if (ld >= monthAgo) activeMonth++;
+  });
+
+  // Streak stats from streaks table
   streaks.forEach((s: any) => {
-    if (s.last_activity_date) {
-      if (s.last_activity_date === todayDate) activeToday++;
-      if (s.last_activity_date >= weekAgo) activeWeek++;
-      if (s.last_activity_date >= monthAgo) activeMonth++;
-      else churned++;
-    } else {
-      churned++;
-    }
     const streak = s.current_streak || 0;
     totalStreak += streak;
     streakCount++;
@@ -134,14 +172,22 @@ export default async function AnalyticsPage() {
     else streakBuckets.fifteenPlus++;
   });
 
-  const totalUsers = profiles.length;
+  // Fill streak bucket for users without streak records
+  const usersWithStreak = new Set(streaks.map((s: any) => s.user_id));
+  profiles.forEach((p: any) => {
+    if (!usersWithStreak.has(p.id)) streakBuckets.zero++;
+  });
+
   const avgStreak = streakCount > 0 ? Math.round((totalStreak / streakCount) * 10) / 10 : 0;
-  const usersWithActivity = streakCount;
+  const usersWithActivity = Object.keys(activityByUser).length;
+  churned = totalUsers - activeMonth;
 
   // Retention: users who joined 28+ days ago still active in last 7 days
   const week1Users = profiles.filter((p: any) => p.created_at && p.created_at.slice(0, 10) <= fourWeeksAgo);
   const week1ActiveUserIds = new Set(
-    streaks.filter((s: any) => s.last_activity_date && s.last_activity_date >= weekAgo).map((s: any) => s.user_id)
+    Object.entries(activityByUser)
+      .filter(([, a]) => a.lastDate >= weekAgo)
+      .map(([uid]) => uid)
   );
   const retentionRate = week1Users.length > 0
     ? Math.round(([...week1Users].filter((u: any) => week1ActiveUserIds.has(u.id)).length / week1Users.length) * 100)
