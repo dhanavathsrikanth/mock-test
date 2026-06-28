@@ -117,7 +117,7 @@ export function DailyClient({
   const [topics, setTopics] = useState<Topic[]>([]);
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [selectedTopic, setSelectedTopic] = useState<string>("");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); }, [settings]);
 
@@ -215,13 +215,13 @@ export function DailyClient({
 
   const handleAssign = async () => {
     if (!selectedDate || !selectedQId) return;
-    const res = await fetch("/api/daily-question", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: selectedDate, questionId: selectedQId }),
+    const supabase = (await import("@/lib/supabase/client")).createClient();
+    const { error } = await supabase.from("daily_questions").insert({
+      assigned_date: selectedDate,
+      question_id: selectedQId,
     });
-    if (res.ok) { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); window.location.reload(); }
-    else { const err = await res.json(); alert(err.error || "Failed to assign"); }
+    if (!error) { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); setSelectedSubject(""); setSelectedTopic(""); window.location.reload(); }
+    else { alert(error.message || "Failed to assign"); }
   };
 
   const handleRemove = async (id: string) => {
