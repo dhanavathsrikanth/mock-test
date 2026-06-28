@@ -18,6 +18,9 @@ import {
 import Link from "next/link";
 import { ReportButton } from "@/components/report/ReportButton";
 import { MathText } from "@/components/MathText";
+import { MatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchOption } from "@/components/MatchOption";
+import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
 interface BookmarkItem {
   question_id: string;
@@ -238,7 +241,11 @@ export function BookmarksContent({
                         !isExpanded ? "line-clamp-2" : ""
                       }`}
                     >
-                      <MathText text={q.question_text} />
+                      {isMatchingQuestion(q.question_text) ? (
+                        <MatchingQuestion text={q.question_text} />
+                      ) : (
+                        <MathText text={q.question_text} />
+                      )}
                     </div>
 
                     {/* Expanded answer */}
@@ -265,7 +272,11 @@ export function BookmarksContent({
                               <span className="inline-flex items-center justify-center w-5 h-5 rounded-full border text-xs font-medium mr-2">
                                 {String.fromCharCode(64 + idx)}
                               </span>
-                              {text}
+                              {isMatchCodeOption(String(text)) ? (
+                                <MatchOption text={String(text)} className="text-xs" />
+                              ) : (
+                                text
+                              )}
                               {isCorrect && (
                                 <span className="ml-2 text-xs text-green-600 font-medium">
                                   Correct Answer

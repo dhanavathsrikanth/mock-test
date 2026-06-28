@@ -9,7 +9,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { ReportButton } from "@/components/report/ReportButton";
 import { MathText } from "@/components/MathText";
-import { MatchingQuestion, isMatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchOption } from "@/components/MatchOption";
+import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
 interface AnswerData {
   question_id: string;
@@ -253,7 +255,7 @@ export function ReviewContent({
                   {/* Question text */}
                   <div className="text-sm sm:text-base lg:text-lg leading-relaxed">
                     {isMatchingQuestion(currentQ.question_text) ? (
-                      <MatchingQuestion questionText={currentQ.question_text} />
+                      <MatchingQuestion text={currentQ.question_text} />
                     ) : (
                       <MathText text={currentQ.question_text} />
                     )}
@@ -310,22 +312,8 @@ export function ReviewContent({
                             <span className="flex-1 leading-relaxed break-words">
                               {(() => {
                                 const optionText = currentQ[`option_${idx}` as keyof typeof currentQ] as string;
-                                const isMatchingCode = isMatchingQuestion(currentQ.question_text) && /^[A-P]\s*[-–]\s*\d/.test(optionText || "");
-                                if (isMatchingCode) {
-                                  return (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {optionText!.split(/[,\s]+/).filter(Boolean).map((pair, i) => {
-                                        const [code, num] = pair.split(/[-–]/);
-                                        return (
-                                          <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-xs font-medium">
-                                            <span className="font-bold text-primary">{code?.trim()}</span>
-                                            <span className="text-muted-foreground">→</span>
-                                            <span className="font-bold text-primary">{num?.trim()}</span>
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  );
+                                if (isMatchCodeOption(optionText || "")) {
+                                  return <MatchOption text={optionText || ""} className="text-xs" />;
                                 }
                                 return optionText;
                               })()}

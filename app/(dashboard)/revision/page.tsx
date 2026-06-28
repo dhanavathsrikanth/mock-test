@@ -25,6 +25,9 @@ import {
   EyeOff,
 } from "lucide-react";
 import Link from "next/link";
+import { MatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchOption } from "@/components/MatchOption";
+import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
 interface SRSQuestion {
   srsId: string;
@@ -297,7 +300,11 @@ export default function RevisionPage() {
           </div>
 
           <div className="text-base lg:text-lg leading-relaxed font-medium">
-            {q.question.text}
+            {isMatchingQuestion(q.question.text) ? (
+              <MatchingQuestion text={q.question.text} />
+            ) : (
+              q.question.text
+            )}
           </div>
 
           {/* Options */}
@@ -325,7 +332,13 @@ export default function RevisionPage() {
                     >
                       {optionLabels[idx]}
                     </span>
-                    <span className="flex-1 leading-relaxed">{opt}</span>
+                    <span className="flex-1 leading-relaxed">
+                      {isMatchCodeOption(opt) ? (
+                        <MatchOption text={opt} className="text-xs" />
+                      ) : (
+                        opt
+                      )}
+                    </span>
                     {isCorrectAnswer && (
                       <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                     )}

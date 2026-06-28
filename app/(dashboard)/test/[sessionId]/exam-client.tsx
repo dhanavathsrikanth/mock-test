@@ -17,7 +17,9 @@ import {
 import { ReportButton } from "@/components/report/ReportButton";
 import Image from "next/image";
 import { MathText } from "@/components/MathText";
-import { MatchingQuestion, isMatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchingQuestion } from "@/components/MatchingQuestion";
+import { MatchOption } from "@/components/MatchOption";
+import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
 interface Question {
   id: string;
@@ -498,7 +500,7 @@ export function ExamClient({
 
                 {/* Question text */}
                 {isMatchingQuestion(currentQuestion.question_text) ? (
-                  <MatchingQuestion questionText={currentQuestion.question_text} />
+                  <MatchingQuestion text={currentQuestion.question_text} />
                 ) : (
                   <MathText text={currentQuestion.question_text} className="text-base lg:text-lg leading-relaxed font-medium" as="p" />
                 )}
@@ -523,7 +525,7 @@ export function ExamClient({
                     const isSelected = answers[currentQuestion.id] === n;
                     const optionLabel = String.fromCharCode(64 + n);
                     const optionText = currentQuestion[`option_${n}` as keyof Question] as string;
-                    const isMatchingCode = isMatchingQuestion(currentQuestion.question_text) && /^[A-P]\s*[-–]\s*\d/.test(optionText || "");
+                    const isMatchingCode = isMatchCodeOption(optionText || "");
                     return (
                       <button
                         key={n}
@@ -546,18 +548,7 @@ export function ExamClient({
                             {optionLabel}
                           </span>
                           {isMatchingCode ? (
-                            <div className="flex flex-wrap gap-2">
-                              {optionText!.split(/[,\s]+/).filter(Boolean).map((pair, i) => {
-                                const [code, num] = pair.split(/[-–]/);
-                                return (
-                                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-sm font-medium">
-                                    <span className="font-bold text-primary">{code?.trim()}</span>
-                                    <span className="text-muted-foreground">→</span>
-                                    <span className="font-bold text-primary">{num?.trim()}</span>
-                                  </span>
-                                );
-                              })}
-                            </div>
+                            <MatchOption text={optionText || ""} className="text-sm" />
                           ) : (
                             <span className="text-sm leading-relaxed">
                               {optionText}

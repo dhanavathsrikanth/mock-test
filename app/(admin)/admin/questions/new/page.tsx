@@ -13,9 +13,14 @@ import {
   ImagePlus,
   X,
   Upload,
+  ArrowDownUp,
+  FileText,
 } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
+
+type QuestionType = "regular" | "matching";
 
 export default function NewQuestionPage() {
   const router = useRouter();
@@ -28,6 +33,7 @@ export default function NewQuestionPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [uploadedImagePath, setUploadedImagePath] = useState<string | null>(null);
+  const [questionType, setQuestionType] = useState<QuestionType>("regular");
 
   const [form, setForm] = useState({
     exam_id: "",
@@ -95,6 +101,22 @@ export default function NewQuestionPage() {
     setImagePreview(null);
     setUploadedImagePath(null);
     if (form.image_url) setForm((prev) => ({ ...prev, image_url: "" }));
+  };
+
+  const handleMatchingQuestionChange = (
+    questionText: string,
+    options: string[],
+    correctOption: number
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      question_text: questionText,
+      option_1: options[0] || "",
+      option_2: options[1] || "",
+      option_3: options[2] || "",
+      option_4: options[3] || "",
+      correct_option: correctOption,
+    }));
   };
 
   const handleSave = async (addAnother: boolean) => {
@@ -288,6 +310,31 @@ export default function NewQuestionPage() {
           )}
         </div>
 
+        {/* Question Type Selector */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium">Question Type</label>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={questionType === "regular" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setQuestionType("regular")}
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              Regular Question
+            </Button>
+            <Button
+              type="button"
+              variant={questionType === "matching" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setQuestionType("matching")}
+            >
+              <ArrowDownUp className="h-4 w-4 mr-1.5" />
+              Matching Question
+            </Button>
+          </div>
+        </div>
+
         {/* Image Upload */}
         <div className="space-y-1.5">
           <label className="text-xs font-medium">Question Image <span className="text-muted-foreground font-normal">(optional)</span></label>
@@ -322,55 +369,70 @@ export default function NewQuestionPage() {
           )}
         </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium">Question Text *</label>
-          <textarea
-            value={form.question_text}
-            onChange={(e) => set("question_text", e.target.value)}
-            placeholder="Type or paste the question text here..."
-            className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
-            required
+        {/* Question Content - Regular or Matching */}
+        {questionType === "matching" ? (
+          <MatchingQuestionBuilder
+            onChange={handleMatchingQuestionChange}
+            initialData={{
+              questionText: form.question_text,
+              options: [form.option_1, form.option_2, form.option_3, form.option_4],
+              correctOption: form.correct_option,
+            }}
           />
-          <p className="text-[10px] text-muted-foreground">
-            Supports basic text. Use ^ for superscript (e.g., m^3 for m³).
-          </p>
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-3">
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="space-y-1.5">
-              <label className="text-xs font-medium">
-                Option {String.fromCharCode(64 + n)} *
-              </label>
-              <input
-                value={(form as any)[`option_${n}`]}
-                onChange={(e) => set(`option_${n}`, e.target.value)}
-                placeholder={`Option ${n}`}
-                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm"
+        ) : (
+          <>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Question Text *</label>
+              <textarea
+                value={form.question_text}
+                onChange={(e) => set("question_text", e.target.value)}
+                placeholder="Type or paste the question text here..."
+                className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
                 required
               />
+              <p className="text-[10px] text-muted-foreground">
+                Supports basic text. Use ^ for superscript (e.g., m^3 for m³).
+              </p>
             </div>
-          ))}
-        </div>
 
-        <div className="space-y-1.5">
-          <label className="text-xs font-medium">Correct Answer *</label>
-          <div className="flex gap-2">
-            {[1, 2, 3, 4].map((n) => (
-              <button
-                key={n}
-                onClick={() => set("correct_option", n)}
-                className={`h-10 w-10 rounded-lg border text-sm font-medium transition-all ${
-                  form.correct_option === n
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border hover:bg-accent"
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              {[1, 2, 3, 4].map((n) => (
+                <div key={n} className="space-y-1.5">
+                  <label className="text-xs font-medium">
+                    Option {String.fromCharCode(64 + n)} *
+                  </label>
+                  <input
+                    value={(form as any)[`option_${n}`]}
+                    onChange={(e) => set(`option_${n}`, e.target.value)}
+                    placeholder={`Option ${n}`}
+                    className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm"
+                    required
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Correct Answer *</label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => set("correct_option", n)}
+                    className={`h-10 w-10 rounded-lg border text-sm font-medium transition-all ${
+                      form.correct_option === n
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border hover:bg-accent"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="space-y-1.5">
           <label className="text-xs font-medium">Explanation <span className="text-muted-foreground font-normal">(optional)</span></label>

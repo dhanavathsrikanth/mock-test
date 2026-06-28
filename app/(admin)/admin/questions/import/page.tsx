@@ -58,6 +58,7 @@ export default function ImportQuestionsPage() {
       TEMPLATE_HEADER.join(","),
       '2024,Paper-I,fluid-mechanics,"What is the unit of pressure?",Pa,bar,atm,psi,1,"Pressure unit",medium',
       '2023,Paper-II,solid-mechanics,"Young modulus measures:",Stiffness,Hardness,Toughness,Plasticity,1,,easy',
+      '2024,Paper-I,environmental,"Match list I with list II:\n\n| **List I** | **List II** |\n| --- | --- |\n| **1. Ethnic** | **a.** Either only one or two level government |\n| **2. Majoritarianism** | **b.** A violent conflict opposing groups within a country |\n| **3. Civil war** | **c.** Belief that the majority community should be able to rule a country |\n| **4. Unitary system** | **d.** A social division based on culture |","1. d), 2. a), 3. c), 4. b)","1. b), 2. d), 3. a), 4. c)","1. c), 2. a), 3. b), 4. d)","1. d), 2. c), 3. b), 4. a)",4,,medium',
     ].join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -206,9 +207,9 @@ export default function ImportQuestionsPage() {
 
         <div className="border-t pt-4">
           <h2 className="font-semibold text-sm">Step 2: Upload CSV</h2>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-3">
-            Drag and drop or click to select your CSV file
-          </p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+              Drag and drop or click to select your CSV file. Supports regular questions and matching questions (with table format).
+            </p>
 
           <div
             onDrop={handleDrop}
@@ -229,6 +230,9 @@ export default function ImportQuestionsPage() {
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               Supported columns: year, paper, subject_slug, question_text, option_1-4, correct_option, explanation, difficulty
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              <strong>Matching questions:</strong> Use markdown tables in question_text with | separators. Options format: "1. d), 2. a), 3. c), 4. b)"
             </p>
           </div>
         </div>
