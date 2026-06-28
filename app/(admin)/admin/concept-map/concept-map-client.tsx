@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from "react";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ function TabbedConceptMap({ subjects, topics, unlinkedCount, routerRefresh }: { 
 /* ──────── TAB 1: NODE MANAGER ──────── */
 
 function NodeManagerTab({ subjects, topics, routerRefresh }: { subjects: Subject[]; topics: Topic[]; routerRefresh: () => void }) {
+  const { confirmDialog } = useConfirm();
   const [subjectFilter, setSubjectFilter] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -101,9 +103,9 @@ function NodeManagerTab({ subjects, topics, routerRefresh }: { subjects: Subject
   const handleDelete = async (id: string) => {
     const children = getChildren(filteredTopics, id);
     const t = topics.find((x) => x.id === id);
-    if (t && t.questionCount > 0 && !confirm(`This node has ${t.questionCount} linked questions. Delete anyway?`)) return;
-    if (children.length > 0 && !confirm(`This node has ${children.length} child nodes. Delete all?`)) return;
-    if (!t?.questionCount && !children.length && !confirm(`Delete "${t?.name}"?`)) return;
+    if (t && t.questionCount > 0 && !await confirmDialog({ title: "Delete Node", message: `This node has ${t.questionCount} linked questions. Delete anyway?` })) return;
+    if (children.length > 0 && !await confirmDialog({ title: "Delete Node", message: `This node has ${children.length} child nodes. Delete all?` })) return;
+    if (!t?.questionCount && !children.length && !await confirmDialog({ title: "Delete Node", message: `Delete "${t?.name}"?` })) return;
     await supabase.from("topics").delete().eq("id", id);
     routerRefresh();
   };

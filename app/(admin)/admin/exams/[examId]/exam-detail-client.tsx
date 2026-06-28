@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -12,6 +14,8 @@ const EMOJIS = ["📚", "📐", "🔬", "📖", "🧮", "⚡", "🌍", "🧬", "
 
 export function ExamDetailClient({ exam, subjects }: { exam: any; subjects: any[] }) {
   const router = useRouter();
+  const { toast } = useToast();
+  const { confirmDialog } = useConfirm();
   const [examForm, setExamForm] = useState({
     name: exam.name, fullName: exam.full_name || "", category: exam.category || "Engineering",
     examType: exam.exam_type || "state", isActive: exam.is_active,
@@ -41,13 +45,13 @@ export function ExamDetailClient({ exam, subjects }: { exam: any; subjects: any[
       exam_id: exam.id, name: newSubject.name.trim(), slug, icon: newSubject.icon,
     });
     setAdding(false);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, "error"); return; }
     setNewSubject({ name: "", slug: "", icon: "📚" });
     router.refresh();
   };
 
   const handleDeleteSubject = async (id: string) => {
-    if (!confirm("Delete this subject and all its questions?")) return;
+    if (!await confirmDialog({ title: "Delete Subject", message: "Delete this subject and all its questions?" })) return;
     await supabase.from("subjects").delete().eq("id", id);
     router.refresh();
   };

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import {
   Award,
   Trophy,
@@ -122,6 +123,7 @@ interface BadgesClientProps {
 }
 
 export function BadgesClient({ initialBadges, initialThresholds, initialXpRules }: BadgesClientProps) {
+  const { toast } = useToast();
   // ── Active section tab ──
   const [section, setSection] = useState<"badges" | "levels" | "rules">("badges");
 
@@ -256,7 +258,7 @@ export function BadgesClient({ initialBadges, initialThresholds, initialXpRules 
           fetchStats();
         } else {
           const err = await res.json();
-          alert(err.error || "Failed to create badge");
+          toast(err.error || "Failed to create badge", "error");
         }
       } else {
         const res = await fetch(`/api/admin/badges/definitions/${data.id}`, {
@@ -278,7 +280,7 @@ export function BadgesClient({ initialBadges, initialThresholds, initialXpRules 
           fetchStats();
         } else {
           const err = await res.json();
-          alert(err.error || "Failed to update badge");
+          toast(err.error || "Failed to update badge", "error");
         }
       }
     } finally { setSavingBadge(false); }
@@ -327,7 +329,7 @@ export function BadgesClient({ initialBadges, initialThresholds, initialXpRules 
         fetchThresholds();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to save threshold");
+        toast(err.error || "Failed to save threshold", "error");
       }
     } finally { setSavingThresholds(false); }
   };
@@ -359,7 +361,7 @@ export function BadgesClient({ initialBadges, initialThresholds, initialXpRules 
         fetchXpRules();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to save XP rules");
+        toast(err.error || "Failed to save XP rules", "error");
       }
     } finally { setSavingRules(false); }
   };

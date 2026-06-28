@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Megaphone, Plus, Pencil, Trash2, Eye, EyeOff, Loader2, Calendar,
   X, Check, Info, AlertTriangle, CheckCircle, AlertCircle,
@@ -85,6 +87,8 @@ function AnnouncementPreview({ type, message, ctaText, ctaUrl, isDismissible }: 
 
 export default function AnnouncementsPage() {
   const supabase = createClient();
+  const { toast } = useToast();
+  const { confirmDialog } = useConfirm();
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState<Announcement | null>(null);
@@ -137,10 +141,10 @@ export default function AnnouncementsPage() {
 
       if (editing) {
         const { error } = await supabase.from("announcements").update(payload).eq("id", editing.id);
-        if (error) { alert(error.message); return; }
+        if (error) { toast(error.message, "error"); return; }
       } else {
         const { error } = await supabase.from("announcements").insert(payload);
-        if (error) { alert(error.message); return; }
+        if (error) { toast(error.message, "error"); return; }
       }
       resetForm();
       fetchAnnouncements();
@@ -148,9 +152,9 @@ export default function AnnouncementsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this announcement?")) return;
+    if (!await confirmDialog({ title: "Delete Announcement", message: "Delete this announcement?" })) return;
     const { error } = await supabase.from("announcements").delete().eq("id", id);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, "error"); return; }
     setAnnouncements(announcements.filter((a) => a.id !== id));
   };
 
@@ -162,7 +166,7 @@ export default function AnnouncementsPage() {
   const [notifying, setNotifying] = useState<string | null>(null);
 
   const notifyUsers = async (a: Announcement) => {
-    if (!confirm(`Send push notification about this announcement to ${a.audience === "all" ? "all users" : a.audience === "free" ? "free users" : "pro users"}?`)) return;
+    if (!await confirmDialog({ title: "Send Notification", message: `Send push notification about this announcement to ${a.audience === "all" ? "all users" : a.audience === "free" ? "free users" : "pro users"}?` })) return;
     setNotifying(a.id);
     try {
       const res = await fetch("/api/notifications/broadcast", {
@@ -178,9 +182,9 @@ export default function AnnouncementsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert(`Notification sent to ${data.sent} users`);
+        toast(`Notification sent to ${data.sent} users`, "success");
       } else {
-        alert(data.error || "Failed");
+        toast(data.error || "Failed", "error");
       }
     } finally {
       setNotifying(null);

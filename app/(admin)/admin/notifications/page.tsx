@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -136,6 +137,7 @@ function NotificationPreview({ title, body, url }: { title: string; body: string
 // ─── Main Component ──────────────────────────────────────────────
 
 export default function NotificationsPage() {
+  const { toast } = useToast();
   const [tab, setTab] = useState<"send" | "history" | "cron">("send");
 
   // ── Tab: Send Broadcast ──
@@ -247,7 +249,7 @@ export default function NotificationsPage() {
         fetchNotifications();
       } else {
         const err = await res.json();
-        alert(err.error || "Failed to send");
+        toast(err.error || "Failed to send", "error");
       }
     } finally { setSending(false); }
   };
@@ -265,7 +267,7 @@ export default function NotificationsPage() {
       const res = await fetch(`/api/admin/cron-jobs/${name}/run`, { method: "POST" });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Job failed");
+        toast(err.error || "Job failed", "error");
       }
       fetchCronJobs();
     } finally { setRunningJob(null); }

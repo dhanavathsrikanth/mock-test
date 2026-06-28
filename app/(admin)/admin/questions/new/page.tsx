@@ -19,10 +19,12 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
+import { useToast } from "@/components/ui/toast-provider";
 
 type QuestionType = "regular" | "matching";
 
 export default function NewQuestionPage() {
+  const { toast } = useToast();
   const router = useRouter();
   const [exams, setExams] = useState<{ id: string; name: string }[]>([]);
   const [subjects, setSubjects] = useState<{ id: string; name: string }[]>([]);
@@ -77,7 +79,7 @@ export default function NewQuestionPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image too large. Max 5MB.");
+      toast("Image too large. Max 5MB.", "error");
       return;
     }
     setImageFile(file);
@@ -134,7 +136,7 @@ export default function NewQuestionPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        alert(err.error || "Failed to upload image");
+        toast(err.error || "Failed to upload image", "error");
         setSaving(false);
         setUploading(false);
         return;
@@ -171,7 +173,7 @@ export default function NewQuestionPage() {
         await supabase.storage.from("question-images").remove([uploadedImagePath]);
         setUploadedImagePath(null);
       }
-      alert(error.message);
+      toast(error.message, "error");
       return;
     }
 

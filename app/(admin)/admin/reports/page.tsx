@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -80,6 +81,7 @@ interface Report {
 }
 
 export default function AdminReportsPage() {
+  const { toast } = useToast();
   const [reports, setReports] = useState<Report[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -139,10 +141,10 @@ export default function AdminReportsPage() {
       body: JSON.stringify({ reportId }),
     });
     if (res.ok) {
-      alert("Notification sent to reporter!");
+      toast("Notification sent to reporter!", "success");
     } else {
       const data = await res.json();
-      alert(data.message || data.error || "Failed to send notification");
+      toast(data.message || data.error || "Failed to send notification", "error");
     }
   };
 
@@ -450,6 +452,7 @@ function ReportDetailPanel({
   onRefresh: () => void;
   onNotify: (id: string) => void;
 }) {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -523,7 +526,7 @@ function ReportDetailPanel({
         onRefresh();
         onClose();
       } else {
-        alert(data.error || "Failed to save");
+        toast(data.error || "Failed to save", "error");
       }
     } finally {
       setSaving(false);
@@ -540,7 +543,7 @@ function ReportDetailPanel({
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Failed to save note");
+        toast(data.error || "Failed to save note", "error");
         return;
       }
       onRefresh();

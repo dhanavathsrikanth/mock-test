@@ -30,6 +30,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MathText } from "@/components/MathText";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 interface DQItem {
   id: string;
@@ -118,6 +120,8 @@ export function DailyClient({
   const [selectedSubject, setSelectedSubject] = useState<string>("");
   const [selectedTopic, setSelectedTopic] = useState<string>("");
   const [showFilters, setShowFilters] = useState(true);
+  const { toast } = useToast();
+  const { confirmDialog } = useConfirm();
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); }, [settings]);
 
@@ -209,7 +213,7 @@ export function DailyClient({
         body: JSON.stringify({ days, subjectRotation: settings.noConsecutiveSame, difficulty: settings.diffRotation }),
       });
       if (res.ok) window.location.reload();
-      else { const err = await res.json(); alert(err.error || "Auto-fill failed"); }
+      else { const err = await res.json(); toast(err.error || "Auto-fill failed", "error"); }
     } finally { setAutoFilling(false); }
   };
 
@@ -225,7 +229,8 @@ export function DailyClient({
       .maybeSingle();
 
     if (existing) {
-      if (!confirm(`A question is already assigned to ${selectedDate}. Replace it?`)) return;
+      const ok = await confirmDialog({ title: "Replace Question", message: `A question is already assigned to ${selectedDate}. Replace it?`, destructive: true });
+      if (!ok) return;
       await supabase.from("daily_questions").delete().eq("id", existing.id);
     }
 
@@ -234,18 +239,20 @@ export function DailyClient({
       question_id: selectedQId,
     });
     if (!error) { setScheduleModal(false); setSelectedQId(null); setQuestionSearch(""); setSearchResults([]); setSelectedSubject(""); setSelectedTopic(""); window.location.reload(); }
-    else { alert(error.message || "Failed to assign"); }
+    else { toast(error.message || "Failed to assign", "error"); }
   };
 
   const handleRemove = async (id: string) => {
-    if (!confirm("Remove this daily question?")) return;
+    const ok = await confirmDialog({ title: "Remove Question", message: "Remove this daily question?", destructive: true });
+    if (!ok) return;
     const supabase = (await import("@/lib/supabase/client")).createClient();
     await supabase.from("daily_questions").delete().eq("id", id);
     window.location.reload();
   };
 
   const handleReuse = async (item: DQItem) => {
-    if (!confirm(`Re-use this question on a future date?`)) return;
+    const ok = await confirmDialog({ title: "Re-use Question", message: "Re-use this question on a future date?" });
+    if (!ok) return;
     setSelectedDate(null);
     setSelectedQId(item.questionId);
     setScheduleModal(true);

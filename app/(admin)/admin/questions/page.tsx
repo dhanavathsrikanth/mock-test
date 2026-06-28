@@ -23,6 +23,7 @@ import {
 import Link from "next/link";
 import Image from "next/image";
 import { MathText } from "@/components/MathText";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface Question {
   id: string;
@@ -57,6 +58,7 @@ const SORT_OPTIONS = [
 ];
 
 export default function AdminQuestionsPage() {
+  const { toast } = useToast();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -206,7 +208,7 @@ export default function AdminQuestionsPage() {
   const handleImageUpload = async (file: File) => {
     if (!editingQ) return;
     if (file.size > 5 * 1024 * 1024) {
-      alert("Image too large. Max 5MB.");
+      toast("Image too large. Max 5MB.", "error");
       return;
     }
     setUploadingImg(true);
@@ -220,7 +222,7 @@ export default function AdminQuestionsPage() {
     setUploadingImg(false);
     if (!res.ok) {
       const err = await res.json();
-      alert(err.error || "Failed to upload image");
+      toast(err.error || "Failed to upload image", "error");
       return;
     }
     const { url } = await res.json();
@@ -241,14 +243,14 @@ export default function AdminQuestionsPage() {
       fetchQuestions();
     } else {
       const err = await res.json();
-      alert(err.error || "Failed to save");
+      toast(err.error || "Failed to save", "error");
     }
   };
 
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("questions").delete().eq("id", id);
     if (error) {
-      alert(error.message);
+      toast(error.message, "error");
     } else {
       setDeleteConfirm(null);
       fetchQuestions();

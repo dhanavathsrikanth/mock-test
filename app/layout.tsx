@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Analytics } from "@vercel/analytics/next";
+import { ToastProvider } from "@/components/ui/toast-provider";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 
@@ -35,8 +37,12 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ToastProvider>
+          <ConfirmProvider>
           {children}
           <Analytics />
+          </ConfirmProvider>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

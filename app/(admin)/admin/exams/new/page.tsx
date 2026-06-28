@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import Link from "next/link";
 
 export default function NewExamPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [form, setForm] = useState({ name: "", fullName: "", category: "Engineering", examType: "state", isActive: true });
   const [saving, setSaving] = useState(false);
   const supabase = createClient();
@@ -25,7 +27,7 @@ export default function NewExamPage() {
       is_active: form.isActive,
     }).select("id").single();
     setSaving(false);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, "error"); return; }
     router.push(`/admin/exams/${data.id}`);
   };
 

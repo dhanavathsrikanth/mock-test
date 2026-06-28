@@ -13,6 +13,7 @@ import {
   FileText,
 } from "lucide-react";
 import Link from "next/link";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface ParsedRow {
   row: number;
@@ -47,6 +48,7 @@ const TEMPLATE_HEADER = [
 ];
 
 export default function ImportQuestionsPage() {
+  const { toast } = useToast();
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -73,7 +75,7 @@ export default function ImportQuestionsPage() {
   const parseCSV = (text: string) => {
     const lines = text.split("\n").filter((l) => l.trim());
     if (lines.length < 2) {
-      alert("CSV must have a header row and at least one data row");
+      toast("CSV must have a header row and at least one data row", "error");
       return;
     }
 
@@ -83,7 +85,7 @@ export default function ImportQuestionsPage() {
 
     const missing = REQUIRED_COLS.filter((c) => !colMap.has(c));
     if (missing.length > 0) {
-      alert(`Missing required columns: ${missing.join(", ")}`);
+      toast(`Missing required columns: ${missing.join(", ")}`, "error");
       return;
     }
 

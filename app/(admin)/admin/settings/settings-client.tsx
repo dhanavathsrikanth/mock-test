@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Settings2,
   Calendar,
@@ -75,6 +77,8 @@ export function SettingsClient({
   adminProfiles: AdminProfile[];
 }) {
   const router = useRouter();
+  const { toast } = useToast();
+  const { confirmDialog } = useConfirm();
   const [tab, setTab] = useState("general");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
@@ -144,7 +148,7 @@ export function SettingsClient({
         is_official: countdownForm.isOfficial,
         is_active: true,
       }).select().single();
-      if (error) { alert(error.message); return; }
+      if (error) { toast(error.message, "error"); return; }
       setCountdowns([...countdowns, {
         id: data.id,
         examId: data.exam_id,
@@ -160,13 +164,13 @@ export function SettingsClient({
 
   const handleUpdateCountdown = async (id: string, updates: any) => {
     const { error } = await supabase.from("exam_countdown").update(updates).eq("id", id);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, "error"); return; }
     setCountdowns(countdowns.map((c) => c.id === id ? { ...c, ...updates } : c));
     setEditingCountdown(null);
   };
 
   const handleDeleteCountdown = async (id: string) => {
-    if (!confirm("Delete this exam date?")) return;
+    if (!await confirmDialog({ title: "Delete Exam Date", message: "Delete this exam date?" })) return;
     await supabase.from("exam_countdown").delete().eq("id", id);
     setCountdowns(countdowns.filter((c) => c.id !== id));
   };
@@ -176,7 +180,7 @@ export function SettingsClient({
     setGranting(true);
     const { data: users } = await supabase.from("profiles").select("id, full_name, email, xp, created_at").ilike("email", grantEmail.trim());
     setGranting(false);
-    if (!users || users.length === 0) { alert("User not found with that email"); return; }
+    if (!users || users.length === 0) { toast("User not found with that email", "error"); return; }
     setGrantConfirmUser(users[0]);
   };
 
@@ -184,7 +188,7 @@ export function SettingsClient({
     if (!grantConfirmUser) return;
     setGranting(true);
     const { error } = await supabase.from("admin_profiles").insert({ user_id: grantConfirmUser.id, role: grantRole });
-    if (error) { alert(error.message); setGranting(false); return; }
+    if (error) { toast(error.message, "error"); setGranting(false); return; }
     if (grantRole === "admin") {
       await supabase.from("profiles").update({ role: "admin" }).eq("id", grantConfirmUser.id);
     }
@@ -205,8 +209,8 @@ export function SettingsClient({
   const handleRevokeAdmin = async (ap: AdminProfile) => {
     const { data: { user } } = await supabase.auth.getUser();
     const isSelf = user && ap.userId === user.id;
-    if (isSelf && !confirm("⚠️ You are revoking YOUR OWN admin access! You will lose access to this page. Continue?")) return;
-    if (!isSelf && !confirm(`Revoke admin access from ${ap.email}?`)) return;
+    if (isSelf && !await confirmDialog({ title: "Revoke Own Admin Access", message: "⚠️ You are revoking YOUR OWN admin access! You will lose access to this page. Continue?" })) return;
+    if (!isSelf && !await confirmDialog({ title: "Revoke Admin Access", message: `Revoke admin access from ${ap.email}?` })) return;
     await supabase.from("admin_profiles").delete().eq("user_id", ap.userId);
     await supabase.from("profiles").update({ role: "user" }).eq("id", ap.userId);
     setAdminProfiles(adminProfiles.filter((a) => a.id !== ap.id));
@@ -293,7 +297,7 @@ export function SettingsClient({
           break;
         }
       }
-    } catch (e: any) { alert(e.message || "Action failed"); }
+    } catch (e: any) { toast(e.message || "Action failed", "error"); }
     finally { setActionLoading(null); }
   };
 
@@ -306,8 +310,8 @@ export function SettingsClient({
         body: JSON.stringify({ fromName: notifConfig.emailFromName, fromEmail: notifConfig.emailFromAddr }),
       });
       if (res.ok) showSave("Test email sent!");
-      else { const err = await res.json(); alert(err.error || "Failed to send test email"); }
-    } catch { alert("Failed to send test email"); }
+      else { const err = await res.json(); toast(err.error || "Failed to send test email", "error"); }
+    } catch { toast("Failed to send test email", "error"); }
     finally { setSendingTestEmail(false); }
   };
 
@@ -316,7 +320,7 @@ export function SettingsClient({
     try {
       const res = await fetch(`/api/admin/cron-jobs/${job}/run`, { method: "POST" });
       if (res.ok) showSave(`${job} triggered!`);
-      else { const err = await res.json(); alert(err.error || "Failed"); }
+      else { const err = await res.json(); toast(err.error || "Failed", "error"); }
     } finally {
       setActionLoading(null);
       fetch("/api/admin/cron-jobs").then((r) => r.json()).then(setCronStatus).catch(() => {});

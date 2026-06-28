@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface DailyData {
   id: string;
@@ -38,6 +39,7 @@ interface DailyData {
 const optionLabels = ["A", "B", "C", "D"];
 
 export default function DailyQuestionPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<DailyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<number | null>(null);
@@ -104,7 +106,7 @@ export default function DailyQuestionPage() {
             }
           }
         } else {
-          alert(err.error || "Failed to submit");
+          toast(err.error || "Failed to submit", "error");
         }
       } else {
         const json = await res.json();
@@ -132,7 +134,7 @@ export default function DailyQuestionPage() {
         }
       }
     } catch {
-      alert("Network error. Please try again.");
+      toast("Network error. Please try again.", "error");
     }
     setSubmitting(false);
   }, [data, selected, submitting]);

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import Link from "next/link";
 
 export default function NewTopicPage() {
   const router = useRouter();
+  const { toast } = useToast();
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [form, setForm] = useState({ subjectId: "", parentId: "", name: "", description: "" });
@@ -30,7 +32,7 @@ export default function NewTopicPage() {
       subject_id: form.subjectId, parent_id: form.parentId || null, name: form.name.trim(), description: form.description || null, sort_order: 0,
     });
     setSaving(false);
-    if (error) { alert(error.message); return; }
+    if (error) { toast(error.message, "error"); return; }
     router.push("/admin/concept-map");
   };
 

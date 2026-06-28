@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useToast } from "@/components/ui/toast-provider";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ interface Stats {
 }
 
 export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }) {
+  const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [page, setPage] = useState(1);
@@ -97,10 +99,10 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
         setNotifBody("");
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to send notifications");
+        toast(data.error || "Failed to send notifications", "error");
       }
     } catch {
-      alert("Failed to send notifications");
+      toast("Failed to send notifications", "error");
     } finally {
       setSending(false);
     }
@@ -119,10 +121,10 @@ export function UsersClient({ users, stats }: { users: UserRow[]; stats: Stats }
         setSelected(new Set());
       } else {
         const data = await res.json();
-        alert(data.error || "Failed to ban users");
+        toast(data.error || "Failed to ban users", "error");
       }
     } catch {
-      alert("Failed to ban users");
+      toast("Failed to ban users", "error");
     } finally {
       setBanning(false);
     }

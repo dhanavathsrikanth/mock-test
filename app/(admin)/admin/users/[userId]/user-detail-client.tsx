@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useToast } from "@/components/ui/toast-provider";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -136,6 +138,8 @@ export function UserDetailClient({
   notifications: NotificationItem[];
 }) {
   const router = useRouter();
+  const { toast } = useToast();
+  const { confirmDialog } = useConfirm();
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifTitle, setNotifTitle] = useState("");
   const [notifBody, setNotifBody] = useState("");
@@ -143,7 +147,7 @@ export function UserDetailClient({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const handleAction = async (action: string) => {
-    if (!confirm(`Are you sure you want to ${action} this user?`)) return;
+    if (!await confirmDialog({ title: `${action} User`, message: `Are you sure you want to ${action} this user?` })) return;
     setActionLoading(action);
     const supabase = createClient();
     try {
@@ -174,7 +178,7 @@ export function UserDetailClient({
       }
       router.refresh();
     } catch (e) {
-      alert("Action failed");
+      toast("Action failed", "error");
     } finally {
       setActionLoading(null);
     }
