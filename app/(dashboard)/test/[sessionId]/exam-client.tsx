@@ -17,6 +17,7 @@ import {
 import { ReportButton } from "@/components/report/ReportButton";
 import Image from "next/image";
 import { MathText } from "@/components/MathText";
+import { MatchingQuestion, isMatchingQuestion } from "@/components/MatchingQuestion";
 
 interface Question {
   id: string;
@@ -496,7 +497,11 @@ export function ExamClient({
                 </div>
 
                 {/* Question text */}
-                <MathText text={currentQuestion.question_text} className="text-base lg:text-lg leading-relaxed font-medium" as="p" />
+                {isMatchingQuestion(currentQuestion.question_text) ? (
+                  <MatchingQuestion questionText={currentQuestion.question_text} />
+                ) : (
+                  <MathText text={currentQuestion.question_text} className="text-base lg:text-lg leading-relaxed font-medium" as="p" />
+                )}
 
                 {/* Image */}
                 {currentQuestion.image_url && (
@@ -517,6 +522,8 @@ export function ExamClient({
                   {[1, 2, 3, 4].map((n) => {
                     const isSelected = answers[currentQuestion.id] === n;
                     const optionLabel = String.fromCharCode(64 + n);
+                    const optionText = currentQuestion[`option_${n}` as keyof Question] as string;
+                    const isMatchingCode = isMatchingQuestion(currentQuestion.question_text) && /^[A-P]\s*[-–]\s*\d/.test(optionText || "");
                     return (
                       <button
                         key={n}
@@ -538,9 +545,24 @@ export function ExamClient({
                           >
                             {optionLabel}
                           </span>
-                          <span className="text-sm leading-relaxed">
-                            {currentQuestion[`option_${n}` as keyof Question]}
-                          </span>
+                          {isMatchingCode ? (
+                            <div className="flex flex-wrap gap-2">
+                              {optionText!.split(/[,\s]+/).filter(Boolean).map((pair, i) => {
+                                const [code, num] = pair.split(/[-–]/);
+                                return (
+                                  <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20 text-sm font-medium">
+                                    <span className="font-bold text-primary">{code?.trim()}</span>
+                                    <span className="text-muted-foreground">→</span>
+                                    <span className="font-bold text-primary">{num?.trim()}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-sm leading-relaxed">
+                              {optionText}
+                            </span>
+                          )}
                         </div>
                       </button>
                     );
