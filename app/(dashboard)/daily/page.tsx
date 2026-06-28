@@ -174,7 +174,7 @@ export default function DailyQuestionPage() {
         .select("id")
         .eq("user_id", user.id)
         .eq("question_id", data.question.id)
-        .single();
+        .maybeSingle();
 
       setBookmarked(!!bm);
     };

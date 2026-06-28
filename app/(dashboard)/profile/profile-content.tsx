@@ -262,7 +262,7 @@ export function ProfileContent({ profile: serverProfile, exams }: ProfileContent
       }
 
       const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(filePath);
-      const avatarUrl = `${urlData}?t=${Date.now()}`;
+      const avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
       await supabase.from("profiles").update({ avatar_url: avatarUrl }).eq("id", userId);
       setProfile((p) => p ? { ...p, avatar_url: avatarUrl } : p);
