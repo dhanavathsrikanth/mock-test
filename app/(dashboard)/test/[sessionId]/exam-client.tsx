@@ -213,6 +213,75 @@ export function ExamClient({
   const handleSubmitRef = useRef(handleSubmit);
   handleSubmitRef.current = handleSubmit;
 
+  // ---- Exit guard: warn on tab close, back button, or navigation away ----
+  const [showExitDialog, setShowExitDialog] = useState(false);
+  const pendingExitRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, []);
+
+  useEffect(() => {
+    const originalPush = router.push.bind(router);
+    const originalReplace = router.replace.bind(router);
+
+    const shouldBlock = (url: string) => {
+      if (url.startsWith(`/test/${session.id}`)) return false;
+      if (url === `/test/${session.id}`) return false;
+      return true;
+    };
+
+    router.push = (url: string, options?: any) => {
+      if (shouldBlock(url)) {
+        pendingExitRef.current = () => originalPush(url, options);
+        setShowExitDialog(true);
+        return;
+      }
+      originalPush(url, options);
+    };
+
+    router.replace = (url: string, options?: any) => {
+      if (shouldBlock(url)) {
+        pendingExitRef.current = () => originalReplace(url, options);
+        setShowExitDialog(true);
+        return;
+      }
+      originalReplace(url, options);
+    };
+
+    const handlePopState = () => {
+      setShowExitDialog(true);
+      window.history.pushState(null, "", window.location.href);
+    };
+
+    window.history.pushState(null, "", window.location.href);
+    window.addEventListener("popstate", handlePopState);
+
+    return () => {
+      router.push = originalPush;
+      router.replace = originalReplace;
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, [router, session.id]);
+
+  const confirmExit = async () => {
+    setShowExitDialog(false);
+    setIsSubmitting(true);
+    const { submitTest } = await import("./actions");
+    await submitTest(session.id, userId);
+    pendingExitRef.current?.();
+  };
+
+  const cancelExit = () => {
+    setShowExitDialog(false);
+    pendingExitRef.current = null;
+  };
+
   useEffect(() => {
     const startTime = new Date(session.started_at).getTime();
     const end = startTime + session.duration_minutes * 60 * 1000;
@@ -722,6 +791,50 @@ export function ExamClient({
               </Button>
               <Button onClick={handleSubmit} disabled={isSubmitting}>
                 {isSubmitting ? "Submitting..." : "Submit Test"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== EXIT TEST DIALOG ===== */}
+      {showExitDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={cancelExit}
+          />
+          <div className="relative bg-background rounded-xl shadow-2xl border w-full max-w-md mx-4 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">Leave Test?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Your test will be automatically submitted if you leave.
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              You have answered{" "}
+              <span className="font-medium text-foreground">{answeredCount}</span>{" "}
+              of {totalQuestions} questions so far.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                variant="outline"
+                onClick={cancelExit}
+                disabled={isSubmitting}
+              >
+                Stay on Test
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmExit}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Submitting..." : "Submit & Leave"}
               </Button>
             </div>
           </div>
