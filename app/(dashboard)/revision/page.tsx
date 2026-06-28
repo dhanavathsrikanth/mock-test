@@ -159,29 +159,29 @@ export default function RevisionPage() {
           <h1 className="text-2xl font-bold tracking-tight">Revision Complete!</h1>
         </motion.div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <Card>
-            <CardContent className="p-4 text-center space-y-1.5">
+            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
               <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+              <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">
                 {correctCount}
               </div>
               <p className="text-xs text-muted-foreground">Correct</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4 text-center space-y-1.5">
+            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
               <XCircle className="h-5 w-5 text-red-500 mx-auto" />
-              <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+              <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">
                 {wrongCount}
               </div>
               <p className="text-xs text-muted-foreground">Still Learning</p>
             </CardContent>
           </Card>
           <Card>
-            <CardContent className="p-4 text-center space-y-1.5">
+            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
               <Clock className="h-5 w-5 text-muted-foreground mx-auto" />
-              <div className="text-2xl font-bold text-muted-foreground">
+              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
                 {skippedCount}
               </div>
               <p className="text-xs text-muted-foreground">Skipped</p>
@@ -359,28 +359,34 @@ export default function RevisionPage() {
                   How did you do?
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
                 <Button
                   variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-4 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 hover:border-red-300"
+                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 hover:border-red-300"
                   onClick={() => handleRate("wrong")}
                   disabled={submitting}
                 >
                   <Brain className="h-5 w-5 text-red-500" />
-                  <span className="text-xs font-medium">Still Confused</span>
+                  <span className="text-xs font-medium">
+                    <span className="sm:hidden">Confused</span>
+                    <span className="hidden sm:inline">Still Confused</span>
+                  </span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-4 border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950/30 hover:border-amber-300"
+                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950/30 hover:border-amber-300"
                   onClick={() => handleRate("correct")}
                   disabled={submitting}
                 >
                   <HelpCircle className="h-5 w-5 text-amber-500" />
-                  <span className="text-xs font-medium">Got it with effort</span>
+                  <span className="text-xs font-medium">
+                    <span className="sm:hidden">Effort</span>
+                    <span className="hidden sm:inline">Got it with effort</span>
+                  </span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-4 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/30 hover:border-emerald-300"
+                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/30 hover:border-emerald-300"
                   onClick={() => handleRate("correct")}
                   disabled={submitting}
                 >

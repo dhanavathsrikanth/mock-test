@@ -112,7 +112,7 @@ export default function DailyHistoryPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Card>
           <CardContent className="p-3 sm:p-4 flex items-center gap-3">
             <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">

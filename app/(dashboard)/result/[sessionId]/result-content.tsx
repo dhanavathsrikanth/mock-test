@@ -127,35 +127,35 @@ export function ResultContent({
         {message.subtitle} {message.icon}
       </p>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-4 sm:pt-6 text-center">
             <Check className="h-5 w-5 text-green-600 mx-auto mb-1" />
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-xl sm:text-2xl font-bold text-green-600">
               {correctCount}
             </div>
             <div className="text-xs text-muted-foreground">Correct</div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-4 sm:pt-6 text-center">
             <X className="h-5 w-5 text-red-600 mx-auto mb-1" />
-            <div className="text-2xl font-bold text-red-600">
+            <div className="text-xl sm:text-2xl font-bold text-red-600">
               {wrongCount}
             </div>
             <div className="text-xs text-muted-foreground">Wrong</div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-6 text-center">
+          <CardContent className="pt-4 sm:pt-6 text-center">
             <Minus className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
-            <div className="text-2xl font-bold">{skippedCount}</div>
+            <div className="text-xl sm:text-2xl font-bold">{skippedCount}</div>
             <div className="text-xs text-muted-foreground">Skipped</div>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Accuracy</CardTitle>
