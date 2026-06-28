@@ -216,6 +216,19 @@ export function DailyClient({
   const handleAssign = async () => {
     if (!selectedDate || !selectedQId) return;
     const supabase = (await import("@/lib/supabase/client")).createClient();
+
+    // Check if a question is already assigned to this date
+    const { data: existing } = await supabase
+      .from("daily_questions")
+      .select("id")
+      .eq("assigned_date", selectedDate)
+      .maybeSingle();
+
+    if (existing) {
+      if (!confirm(`A question is already assigned to ${selectedDate}. Replace it?`)) return;
+      await supabase.from("daily_questions").delete().eq("id", existing.id);
+    }
+
     const { error } = await supabase.from("daily_questions").insert({
       assigned_date: selectedDate,
       question_id: selectedQId,
