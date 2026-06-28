@@ -46,9 +46,29 @@ const TAB_ITEMS = [
 interface SidebarProps {
   userName: string;
   userRole: string;
+  avatarUrl?: string | null;
 }
 
-export function Sidebar({ userName, userRole }: SidebarProps) {
+function UserAvatar({ userName, avatarUrl, className }: { userName: string; avatarUrl?: string | null; className?: string }) {
+  const [imgError, setImgError] = useState(false);
+  if (avatarUrl && !imgError) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={userName}
+        className={`${className} object-cover`}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+  return (
+    <div className={`${className} bg-primary/10 flex items-center justify-center text-sm font-semibold`}>
+      {userName.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -123,9 +143,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
 
         <div className="p-3 border-t space-y-2">
           <div className="flex items-center gap-3 px-1">
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-semibold">
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            <UserAvatar userName={userName} avatarUrl={avatarUrl} className="w-8 h-8 rounded-full" />
             <span className="text-sm font-medium truncate">{userName}</span>
           </div>
           <div className="flex items-center justify-between">
@@ -180,9 +198,7 @@ export function Sidebar({ userName, userRole }: SidebarProps) {
 
           <div className="px-4 py-4 border-b bg-muted/30">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center font-semibold">
-                {userName.charAt(0).toUpperCase()}
-              </div>
+              <UserAvatar userName={userName} avatarUrl={avatarUrl} className="w-10 h-10 rounded-full" />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">{userName}</p>
                 <p className="text-xs text-muted-foreground capitalize">

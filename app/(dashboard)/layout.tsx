@@ -30,7 +30,7 @@ export default async function DashboardLayout({
   const [profileRes, configRes] = await Promise.all([
     supabase
       .from("profiles")
-      .select("full_name, role")
+      .select("full_name, role, avatar_url")
       .eq("id", user.id)
       .single(),
     supabase.from("app_config").select("*").eq("key", "general").maybeSingle(),
@@ -41,10 +41,11 @@ export default async function DashboardLayout({
   const maintenanceMode = generalConfig?.maintenanceMode === true;
   const userRole = profile?.role || "user";
   const userName = profile?.full_name || "User";
+  const avatarUrl = profile?.avatar_url || null;
 
   return (
     <div className="min-h-screen bg-background flex">
-      <Sidebar userName={userName} userRole={userRole} />
+      <Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />
       <TestLayoutWrapper>
         <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
           <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={userRole === "admin"} />
