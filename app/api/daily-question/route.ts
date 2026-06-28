@@ -83,12 +83,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ question: null, message: "No question assigned for today yet" });
   }
 
-  const { data: answer } = await supabase
+  // Fetch all answers for this daily question, then find the user's answer in JS
+  // This avoids RLS issues with user_id text/uuid type mismatch
+  const { data: allAnswers } = await supabase
     .from("daily_question_answers")
     .select("*")
-    .eq("daily_question_id", daily.id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .eq("daily_question_id", daily.id);
+
+  const finalAnswer = (allAnswers || []).find((a: any) => a.user_id === user.id) || null;
 
   const question = (daily as any).questions;
 
@@ -99,15 +101,15 @@ export async function GET(req: NextRequest) {
       id: question.id,
       text: question.question_text,
       options: [question.option_1, question.option_2, question.option_3, question.option_4],
-      correctOption: answer ? question.correct_option : null,
-      explanation: answer ? question.explanation : null,
+      correctOption: finalAnswer ? question.correct_option : null,
+      explanation: finalAnswer ? question.explanation : null,
       year: question.year,
       subject: question.subjects?.name || null,
     },
-    userAnswer: answer
+    userAnswer: finalAnswer
       ? {
-          selectedOption: answer.selected_option,
-          isCorrect: answer.is_correct,
+          selectedOption: finalAnswer.selected_option,
+          isCorrect: finalAnswer.is_correct,
         }
       : null,
   });
@@ -141,12 +143,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Daily question not found" }, { status: 404 });
   }
 
-  const { data: existing } = await supabase
+  // Check for existing answer - fetch all for this daily question and filter in JS
+  // Avoids RLS user_id text/uuid type mismatch issues
+  const { data: allExisting } = await supabase
     .from("daily_question_answers")
-    .select("id")
-    .eq("daily_question_id", dailyQuestionId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    .select("id, user_id")
+    .eq("daily_question_id", dailyQuestionId);
+
+  const existing = (allExisting || []).find((a: any) => a.user_id === user.id) || null;
 
   if (existing) {
     return NextResponse.json({ error: "Already answered" }, { status: 409 });
