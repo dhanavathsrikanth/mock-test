@@ -156,7 +156,6 @@ export function DailyClient({
   };
 
   const searchQuestions = useCallback(async (q: string, subjectId: string, topicId: string) => {
-    setQuestionSearch(q);
     setSearching(true);
     try {
       const params = new URLSearchParams();
@@ -173,12 +172,33 @@ export function DailyClient({
     } finally { setSearching(false); }
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      searchQuestions(questionSearch, selectedSubject, selectedTopic);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [questionSearch, selectedSubject, selectedTopic, searchQuestions]);
+  const handleSearchChange = (value: string) => {
+    setQuestionSearch(value);
+    if (value.trim() || selectedSubject || selectedTopic) {
+      searchQuestions(value, selectedSubject, selectedTopic);
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const handleSubjectChange = (subjectId: string) => {
+    setSelectedSubject(subjectId);
+    setSelectedTopic("");
+    if (questionSearch.trim() || subjectId) {
+      searchQuestions(questionSearch, subjectId, "");
+    } else {
+      setSearchResults([]);
+    }
+  };
+
+  const handleTopicChange = (topicId: string) => {
+    setSelectedTopic(topicId);
+    if (questionSearch.trim() || selectedSubject || topicId) {
+      searchQuestions(questionSearch, selectedSubject, topicId);
+    } else {
+      setSearchResults([]);
+    }
+  };
 
   const handleAutoFill = async (days: number) => {
     setAutoFilling(true);
@@ -537,7 +557,7 @@ export function DailyClient({
                     <span className="text-xs font-medium">Filter by Subject & Topic</span>
                     {(selectedSubject || selectedTopic) && (
                       <button
-                        onClick={() => { setSelectedSubject(""); setSelectedTopic(""); }}
+                        onClick={() => { setSelectedSubject(""); setSelectedTopic(""); setSearchResults([]); }}
                         className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
                       >
                         <X className="h-3 w-3" /> Clear
@@ -549,10 +569,7 @@ export function DailyClient({
                       <label className="text-[10px] text-muted-foreground">Subject</label>
                       <select
                         value={selectedSubject}
-                        onChange={(e) => {
-                          setSelectedSubject(e.target.value);
-                          setSelectedTopic("");
-                        }}
+                        onChange={(e) => handleSubjectChange(e.target.value)}
                         className="w-full h-9 rounded-lg border border-input bg-background px-2 text-sm"
                       >
                         <option value="">All subjects</option>
@@ -565,7 +582,7 @@ export function DailyClient({
                       <label className="text-[10px] text-muted-foreground">Topic</label>
                       <select
                         value={selectedTopic}
-                        onChange={(e) => setSelectedTopic(e.target.value)}
+                        onChange={(e) => handleTopicChange(e.target.value)}
                         className="w-full h-9 rounded-lg border border-input bg-background px-2 text-sm"
                         disabled={!selectedSubject}
                       >
@@ -588,7 +605,7 @@ export function DailyClient({
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
                     value={questionSearch} 
-                    onChange={(e) => setQuestionSearch(e.target.value)} 
+                    onChange={(e) => handleSearchChange(e.target.value)} 
                     placeholder={selectedSubject || selectedTopic ? "Search within filter..." : "Search by text..."} 
                     className="pl-8" 
                   />
