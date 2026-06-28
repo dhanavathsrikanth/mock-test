@@ -22,7 +22,12 @@ import {
   ClipboardList,
   MessageSquare,
   FileDown,
+  Menu,
+  X,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
+import { useState, useEffect } from "react";
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -56,15 +61,32 @@ const SECONDARY_ITEMS = [
 
 interface AdminSidebarProps {
   userName: string;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
-export function AdminSidebar({ userName }: AdminSidebarProps) {
+export function AdminSidebar({ userName, isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [expandedItems, setExpandedItems] = useState<string[]>([]);
+
+  useEffect(() => {
+    NAV_ITEMS.forEach((item) => {
+      if ("sub" in item && isActive(item.href)) {
+        setExpandedItems((prev) => [...prev, item.href]);
+      }
+    });
+  }, [pathname]);
 
   const isActive = (href: string) => {
     if (href === "/admin") return pathname === "/admin";
     return pathname.startsWith(href);
+  };
+
+  const toggleExpand = (href: string) => {
+    setExpandedItems((prev) =>
+      prev.includes(href) ? prev.filter((h) => h !== href) : [...prev, href]
+    );
   };
 
   const handleLogout = async () => {
@@ -73,15 +95,27 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
     router.push("/auth/login");
   };
 
-  return (
-    <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:bg-card h-screen sticky top-0">
-      <div className="p-3 border-b">
-        <Link href="/admin" className="flex items-center gap-2">
+  const handleNavClick = () => {
+    if (window.innerWidth < 1024) {
+      onClose();
+    }
+  };
+
+  const sidebarContent = (
+    <>
+      <div className="p-3 border-b flex items-center justify-between">
+        <Link href="/admin" className="flex items-center gap-2" onClick={handleNavClick}>
           <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center text-xs font-bold text-primary-foreground">
             A
           </div>
           <span className="font-bold text-sm">Admin Panel</span>
         </Link>
+        <button
+          onClick={onClose}
+          className="lg:hidden p-1.5 rounded-md hover:bg-muted"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
       <div className="px-3 py-2 border-b bg-muted/20">
@@ -102,26 +136,48 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
           const active = isActive(item.href);
           const hasSub = "sub" in item;
           const isParentActive = hasSub && isActive(item.href);
+          const isExpanded = expandedItems.includes(item.href);
 
           return (
             <div key={item.href} className="space-y-0.5">
-              <Link
-                href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  active && !isParentActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-accent"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-              {hasSub && (
+              {hasSub ? (
+                <button
+                  onClick={() => toggleExpand(item.href)}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    active && !isParentActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {isExpanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </button>
+              ) : (
+                <Link
+                  href={item.href}
+                  onClick={handleNavClick}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    active && !isParentActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              )}
+              {hasSub && isExpanded && (
                 <div className="ml-3 pl-3 border-l space-y-0.5">
                   {(item as any).sub.map((sub: { href: string; label: string }) => (
                     <Link
                       key={sub.href}
                       href={sub.href}
+                      onClick={handleNavClick}
                       className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                         pathname === sub.href
                           ? "bg-primary/10 text-primary"
@@ -143,7 +199,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
           const Icon = item.icon;
           const active = isActive(item.href);
           return (
-            <Link key={item.href} href={item.href}
+            <Link key={item.href} href={item.href} onClick={handleNavClick}
               className={`flex items-center gap-3 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-accent"
               }`}>
@@ -161,7 +217,7 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
           className="w-full justify-start gap-2 text-muted-foreground text-xs"
           asChild
         >
-          <Link href="/dashboard">
+          <Link href="/dashboard" onClick={handleNavClick}>
             <ChevronLeft className="h-3.5 w-3.5" />
             Back to App
           </Link>
@@ -176,6 +232,28 @@ export function AdminSidebar({ userName }: AdminSidebarProps) {
           Sign Out
         </Button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:bg-card h-screen sticky top-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Sidebar Overlay */}
+      {isOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={onClose}
+          />
+          <div className="relative w-72 bg-background border-r shadow-2xl flex flex-col h-full">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

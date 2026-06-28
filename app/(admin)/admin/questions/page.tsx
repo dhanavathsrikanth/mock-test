@@ -281,76 +281,202 @@ export default function AdminQuestionsPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search question text..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            className="pl-8 h-9"
-          />
+      <div className="space-y-2">
+        <div className="flex flex-wrap gap-2 items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search question text..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="pl-8 h-9"
+            />
+          </div>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+          </select>
         </div>
-        <select
-          value={subjectFilter}
-          onChange={(e) => { setSubjectFilter(e.target.value); setPage(1); }}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          <option value="">All subjects</option>
-          {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <select
-          value={yearFilter}
-          onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          <option value="">All years</option>
-          {years.map((y) => <option key={y} value={y}>{y}</option>)}
-        </select>
-        <select
-          value={paperFilter}
-          onChange={(e) => { setPaperFilter(e.target.value); setPage(1); }}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          <option value="">All papers</option>
-          <option value="Paper-I">Paper-I</option>
-          <option value="Paper-II">Paper-II</option>
-        </select>
-        <select
-          value={explanationFilter}
-          onChange={(e) => { setExplanationFilter(e.target.value); setPage(1); }}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          <option value="all">All explanations</option>
-          <option value="yes">Has explanation</option>
-          <option value="no">No explanation</option>
-        </select>
-        <select
-          value={reportsFilter}
-          onChange={(e) => { setReportsFilter(e.target.value); setPage(1); }}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          <option value="all">All reports</option>
-          <option value="yes">Has reports</option>
-          <option value="no">No reports</option>
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
-          suppressHydrationWarning
-        >
-          {SORT_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
-        </select>
+        
+        {/* Mobile Filter Toggle */}
+        <div className="flex flex-wrap gap-2 items-center lg:hidden">
+          <select
+            value={subjectFilter}
+            onChange={(e) => { setSubjectFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm flex-1 min-w-[120px]"
+            suppressHydrationWarning
+          >
+            <option value="">All subjects</option>
+            {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select
+            value={yearFilter}
+            onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm flex-1 min-w-[100px]"
+            suppressHydrationWarning
+          >
+            <option value="">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2 items-center lg:hidden">
+          <select
+            value={paperFilter}
+            onChange={(e) => { setPaperFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm flex-1 min-w-[100px]"
+            suppressHydrationWarning
+          >
+            <option value="">All papers</option>
+            <option value="Paper-I">Paper-I</option>
+            <option value="Paper-II">Paper-II</option>
+          </select>
+          <select
+            value={explanationFilter}
+            onChange={(e) => { setExplanationFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm flex-1 min-w-[120px]"
+            suppressHydrationWarning
+          >
+            <option value="all">All explanations</option>
+            <option value="yes">Has explanation</option>
+            <option value="no">No explanation</option>
+          </select>
+          <select
+            value={reportsFilter}
+            onChange={(e) => { setReportsFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm flex-1 min-w-[120px]"
+            suppressHydrationWarning
+          >
+            <option value="all">All reports</option>
+            <option value="yes">Has reports</option>
+            <option value="no">No reports</option>
+          </select>
+        </div>
+        
+        {/* Desktop Filters */}
+        <div className="hidden lg:flex flex-wrap gap-2 items-center">
+          <select
+            value={subjectFilter}
+            onChange={(e) => { setSubjectFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            <option value="">All subjects</option>
+            {subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+          <select
+            value={yearFilter}
+            onChange={(e) => { setYearFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            <option value="">All years</option>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <select
+            value={paperFilter}
+            onChange={(e) => { setPaperFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            <option value="">All papers</option>
+            <option value="Paper-I">Paper-I</option>
+            <option value="Paper-II">Paper-II</option>
+          </select>
+          <select
+            value={explanationFilter}
+            onChange={(e) => { setExplanationFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            <option value="all">All explanations</option>
+            <option value="yes">Has explanation</option>
+            <option value="no">No explanation</option>
+          </select>
+          <select
+            value={reportsFilter}
+            onChange={(e) => { setReportsFilter(e.target.value); setPage(1); }}
+            className="h-9 rounded-lg border border-input bg-background px-3 text-sm"
+            suppressHydrationWarning
+          >
+            <option value="all">All reports</option>
+            <option value="yes">Has reports</option>
+            <option value="no">No reports</option>
+          </select>
+        </div>
       </div>
 
-      {/* Table */}
-      <div className="border rounded-xl overflow-hidden">
+      {/* Mobile Card View */}
+      <div className="lg:hidden space-y-3">
+        {loading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        ) : questions.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">No questions found</div>
+        ) : (
+          questions.map((q, i) => (
+            <div key={q.id} className="border rounded-xl p-4 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs text-muted-foreground font-mono">#{(page - 1) * limit + i + 1}</span>
+                    {q.year && <span className="text-xs text-muted-foreground">· {q.year}</span>}
+                    {q.paper && <span className="text-xs text-muted-foreground">· {q.paper}</span>}
+                  </div>
+                  <MathText text={q.question_text} className="text-sm line-clamp-2" />
+                </div>
+                {q.image_url && (
+                  <Image
+                    src={q.image_url}
+                    alt=""
+                    width={48}
+                    height={48}
+                    className="rounded object-cover w-12 h-12 shrink-0"
+                  />
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="px-2 py-0.5 rounded-full bg-muted">{getSubject(q)}</span>
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                  {String.fromCharCode(64 + q.correct_option)}
+                </span>
+                {reportCounts[q.id] > 0 && (
+                  <span className="px-2 py-0.5 rounded-full bg-orange-50 dark:bg-orange-950/30 text-orange-600">
+                    {reportCounts[q.id]} reports
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedQ(q)}
+                  className="flex-1 h-8 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
+                >
+                  View
+                </button>
+                <button
+                  onClick={() => handleEdit(q)}
+                  className="flex-1 h-8 rounded-lg border text-xs font-medium hover:bg-muted transition-colors"
+                >
+                  Edit
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(q.id)}
+                  className="h-8 px-3 rounded-lg border text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Desktop Table */}
+      <div className="hidden lg:block border rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -358,10 +484,10 @@ export default function AdminQuestionsPage() {
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground w-12">#</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground w-10">Img</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground">Question</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground hidden md:table-cell">Subject</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground hidden sm:table-cell">Year</th>
-                <th className="text-center px-4 py-3 font-medium text-xs text-muted-foreground hidden lg:table-cell">Answer</th>
-                <th className="text-center px-4 py-3 font-medium text-xs text-muted-foreground hidden lg:table-cell">Reports</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground">Subject</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground">Year</th>
+                <th className="text-center px-4 py-3 font-medium text-xs text-muted-foreground">Answer</th>
+                <th className="text-center px-4 py-3 font-medium text-xs text-muted-foreground">Reports</th>
                 <th className="text-right px-4 py-3 font-medium text-xs text-muted-foreground">Actions</th>
               </tr>
             </thead>
@@ -390,14 +516,14 @@ export default function AdminQuestionsPage() {
                     <td className="px-4 py-3 max-w-[280px]">
                       <MathText text={q.question_text} className="line-clamp-1" />
                     </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground hidden md:table-cell">{getSubject(q)}</td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{q.year || "—"}</td>
-                    <td className="px-4 py-3 text-center hidden lg:table-cell">
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{getSubject(q)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">{q.year || "—"}</td>
+                    <td className="px-4 py-3 text-center">
                       <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-xs font-medium">
                         {String.fromCharCode(64 + q.correct_option)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-center hidden lg:table-cell">
+                    <td className="px-4 py-3 text-center">
                       {reportCounts[q.id] ? (
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
                           reportCounts[q.id] > 0 ? "bg-orange-50 dark:bg-orange-950/30 text-orange-600" : ""
