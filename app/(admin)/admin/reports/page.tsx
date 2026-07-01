@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
+import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { isMatchingQuestion } from "@/lib/matching-question-utils";
 import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
 import { QuestionImportExport } from "@/components/admin/QuestionImportExport";
@@ -945,7 +946,11 @@ function ReportDetailPanel({
                   </div>
                 ) : questionData && (
                   <div className="text-sm space-y-2">
-                    <p className="leading-relaxed"><MathText text={questionData.question_text} /></p>
+                    {isMatchingQuestion(questionData.question_text) ? (
+                      <MatchingQuestion text={questionData.question_text} />
+                    ) : (
+                      <p className="leading-relaxed"><MathText text={questionData.question_text} /></p>
+                    )}
                     <div className="space-y-1">
                       {[1, 2, 3, 4].map((n) => {
                         const opt = (questionData as any)[`option_${n}`];
