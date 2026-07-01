@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createCronClient } from "@/lib/supabase/cron";
 
 function getVapidPublicKey(): string {
   return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
@@ -14,7 +14,7 @@ export async function sendPushNotificationToUser(
   body: string,
   url?: string
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createCronClient();
 
   const { data: subscription } = await supabase
     .from("push_subscriptions")
@@ -51,7 +51,7 @@ export async function sendPushToAllUsers(
   body: string,
   url?: string
 ): Promise<{ sent: number; failed: number }> {
-  const supabase = await createClient();
+  const supabase = createCronClient();
 
   const { data: subscriptions } = await supabase
     .from("push_subscriptions")

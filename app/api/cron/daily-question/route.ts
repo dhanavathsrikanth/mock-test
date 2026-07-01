@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createCronClient } from "@/lib/supabase/cron";
 
 export const maxDuration = 60;
 
@@ -12,7 +12,7 @@ async function handleCron(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createClient();
+  const supabase = createCronClient();
   const today = new Date().toISOString().split("T")[0];
 
   const { data: existing } = await supabase
