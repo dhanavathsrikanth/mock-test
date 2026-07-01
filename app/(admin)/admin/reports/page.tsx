@@ -9,6 +9,7 @@ import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
 import { isMatchingQuestion } from "@/lib/matching-question-utils";
 import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
+import { QuestionImportExport } from "@/components/admin/QuestionImportExport";
 import {
   Search,
   ChevronDown,
@@ -189,6 +190,18 @@ export default function AdminReportsPage() {
           value={stats?.total_rejected ?? "—"}
           color="text-red-600 dark:text-red-400"
           bg="bg-red-50 dark:bg-red-950/20"
+        />
+      </div>
+
+      {/* Import/Export */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          {total} total reports
+        </p>
+        <QuestionImportExport
+          reports={reports}
+          subjects={subjects}
+          onImportComplete={fetchReports}
         />
       </div>
 
