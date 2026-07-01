@@ -87,13 +87,19 @@ function parseTableFormat(text: string, list1Label: string, list2Label: string):
     if (trimmed.startsWith('|') && !trimmed.includes('---')) {
       const cells = trimmed.split('|').map(c => c.trim()).filter(c => c);
       if (cells.length >= 2) {
-        const key1 = cells[0].replace(/\*\*/g, '').replace(/[.)]\s*$/, '').trim();
-        const value1 = cells[1].replace(/\*\*/g, '').replace(/^[a-d][.)]\s*/i, '').trim();
+        for (let i = 0; i < cells.length; i++) {
+          const raw = cells[i].replace(/\*\*/g, '').trim();
 
-        if (/^\d+$/.test(key1)) {
-          list1.push({ key: key1, value: value1 });
-        } else if (/^[a-d]$/i.test(key1)) {
-          list2.push({ key: key1, value: value1 });
+          const numMatch = raw.match(/^(\d+)\.\s*(.+)$/);
+          if (numMatch) {
+            list1.push({ key: numMatch[1], value: numMatch[2].trim() });
+            continue;
+          }
+
+          const letterMatch = raw.match(/^([a-d])\.\s*(.+)$/i);
+          if (letterMatch) {
+            list2.push({ key: letterMatch[1].toLowerCase(), value: letterMatch[2].trim() });
+          }
         }
       }
     }
