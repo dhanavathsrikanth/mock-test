@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
 import { isMatchingQuestion } from "@/lib/matching-question-utils";
+import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
 import {
   Search,
   ChevronDown,
@@ -32,6 +33,7 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  ArrowDownUp,
 } from "lucide-react";
 
 const STATUS_TABS = [
@@ -457,7 +459,7 @@ function ReportDetailPanel({
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
   const [editMode, setEditMode] = useState(false);
-  const [mcqMode, setMcqMode] = useState(false);
+  const [questionType, setQuestionType] = useState<"regular" | "matching">("regular");
   const [saving, setSaving] = useState(false);
   const [qText, setQText] = useState(report.questions?.question_text || "");
   const [opt1, setOpt1] = useState("");
@@ -490,6 +492,7 @@ function ReportDetailPanel({
         setOpt4(data.option_4);
         setCorrectOpt(data.correct_option);
         setExplanation(data.explanation || "");
+        setQuestionType(isMatchingQuestion(data.question_text) ? "matching" : "regular");
       }
     }
     load();
@@ -536,35 +539,17 @@ function ReportDetailPanel({
     }
   };
 
-  const handleConvertToMcq = async () => {
-    setSaving(true);
-    try {
-      const res = await fetch(`/api/admin/questions/${report.question_id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          question_text: qText,
-          option_1: opt1,
-          option_2: opt2,
-          option_3: opt3,
-          option_4: opt4,
-          correct_option: correctOpt,
-          explanation,
-          reportId: report.id,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setMcqMode(false);
-        onRefresh();
-        onClose();
-      } else {
-        toast(data.error || "Failed to save", "error");
-      }
-    } finally {
-      setSaving(false);
-    }
+  const handleMatchingQuestionChange = (
+    questionText: string,
+    options: string[],
+    correctOption: number
+  ) => {
+    setQText(questionText);
+    setOpt1(options[0] || "");
+    setOpt2(options[1] || "");
+    setOpt3(options[2] || "");
+    setOpt4(options[3] || "");
+    setCorrectOpt(correctOption);
   };
 
   const handleSaveNote = async () => {
@@ -754,210 +739,193 @@ function ReportDetailPanel({
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Question
                   </h3>
-                  {!editMode && !mcqMode ? (
+                  {!editMode ? (
                     <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setMcqMode(true);
-                          setQText("");
-                          setOpt1("");
-                          setOpt2("");
-                          setOpt3("");
-                          setOpt4("");
-                          setCorrectOpt(1);
-                          setExplanation("");
-                        }}
-                        className="gap-1.5"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Convert to MCQ
-                      </Button>
+                      {questionData && isMatchingQuestion(questionData.question_text) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setQuestionType("regular");
+                            setQText("");
+                            setOpt1("");
+                            setOpt2("");
+                            setOpt3("");
+                            setOpt4("");
+                            setCorrectOpt(1);
+                            setExplanation("");
+                            setEditMode(true);
+                          }}
+                          className="gap-1.5"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Convert to MCQ
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5">
                         <Edit3 className="h-3.5 w-3.5" />
                         Edit & Correct
                       </Button>
                     </div>
                   ) : (
-                    <Button size="sm" variant="ghost" onClick={() => { setEditMode(false); setMcqMode(false); }}>
+                    <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
                       Cancel
                     </Button>
                   )}
                 </div>
 
                 {editMode && questionData ? (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-medium">Question Text</label>
-                      <textarea
-                        value={qText}
-                        onChange={(e) => setQText(e.target.value)}
-                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[1, 2, 3, 4].map((n) => {
-                        const val = [opt1, opt2, opt3, opt4][n - 1];
-                        const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
-                        return (
-                          <div key={n}>
-                            <label className="text-xs font-medium">
-                              Option {String.fromCharCode(64 + n)}
-                            </label>
-                            <input
-                              value={val}
-                              onChange={(e) => setter(e.target.value)}
-                              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium">Correct Option</label>
-                      <div className="flex gap-2 mt-1">
-                        {[1, 2, 3, 4].map((n) => (
-                          <button
-                            key={n}
-                            onClick={() => setCorrectOpt(n)}
-                            className={`h-8 w-8 rounded-lg border text-sm font-medium transition-all ${
-                              correctOpt === n
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border hover:bg-accent"
-                            }`}
-                          >
-                            {n}
-                          </button>
-                        ))}
+                  <div className="space-y-4">
+                    {/* Question Type Toggle */}
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">Question Type</label>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant={questionType === "regular" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setQuestionType("regular")}
+                          className="gap-1.5"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          Regular Question
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={questionType === "matching" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setQuestionType("matching")}
+                          className="gap-1.5"
+                        >
+                          <ArrowDownUp className="h-3.5 w-3.5" />
+                          Matching Question
+                        </Button>
                       </div>
                     </div>
-                    <div>
-                      <label className="text-xs font-medium">Explanation</label>
-                      <textarea
-                        value={explanation}
-                        onChange={(e) => setExplanation(e.target.value)}
-                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
-                      />
-                    </div>
-                    <Button onClick={handleSaveCorrection} disabled={saving} className="w-full">
-                      {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-                      Save Correction
-                    </Button>
-                  </div>
-                ) : mcqMode ? (
-                  <div className="space-y-3">
-                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
-                      <p className="font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
-                        <RefreshCw className="h-3.5 w-3.5" />
-                        Convert to Multiple Choice
-                      </p>
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                        Write a new MCQ below. This will replace the current question entirely.
-                      </p>
-                    </div>
 
-                    {/* Reference: Original Matching Question */}
-                    {questionData && (
-                      <details className="rounded-lg border border-dashed border-muted-foreground/25 overflow-hidden">
-                        <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors select-none">
-                          View Original Question (List 1, List 2 &amp; Options)
-                        </summary>
-                        <div className="px-3 pb-3 space-y-2 text-sm border-t">
-                          <div className="mt-2">
-                            <MathText text={questionData.question_text} />
-                          </div>
-                          <div className="space-y-1 pt-2 border-t">
-                            <p className="text-xs font-medium text-muted-foreground">Options:</p>
-                            {[1, 2, 3, 4].map((n) => {
-                              const opt = questionData[`option_${n}`];
-                              const isCorrect = n === questionData.correct_option;
-                              return (
-                                <div
-                                  key={n}
-                                  className={`rounded-lg px-3 py-1.5 text-xs ${
-                                    isCorrect
-                                      ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                                      : "bg-muted/30 text-muted-foreground"
-                                  }`}
-                                >
-                                  <span className="font-medium">{String.fromCharCode(64 + n)}.</span> {opt}
-                                  {isCorrect && <Check className="h-3 w-3 inline ml-1" />}
-                                </div>
-                              );
-                            })}
-                          </div>
-                          {questionData.explanation && (
-                            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-2 text-xs mt-2">
-                              <span className="font-medium">Explanation:</span> {questionData.explanation}
-                            </div>
-                          )}
+                    {/* Reference: Original Question */}
+                    <details className="rounded-lg border border-dashed border-muted-foreground/25 overflow-hidden">
+                      <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors select-none">
+                        View Original Question
+                      </summary>
+                      <div className="px-3 pb-3 space-y-2 text-sm border-t">
+                        <div className="mt-2">
+                          <MathText text={questionData.question_text} />
                         </div>
-                      </details>
+                        <div className="space-y-1 pt-2 border-t">
+                          <p className="text-xs font-medium text-muted-foreground">Options:</p>
+                          {[1, 2, 3, 4].map((n) => {
+                            const opt = questionData[`option_${n}`];
+                            const isCorrect = n === questionData.correct_option;
+                            return (
+                              <div
+                                key={n}
+                                className={`rounded-lg px-3 py-1.5 text-xs ${
+                                  isCorrect
+                                    ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                    : "bg-muted/30 text-muted-foreground"
+                                }`}
+                              >
+                                <span className="font-medium">{String.fromCharCode(64 + n)}.</span> {opt}
+                                {isCorrect && <Check className="h-3 w-3 inline ml-1" />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {questionData.explanation && (
+                          <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-2 text-xs mt-2">
+                            <span className="font-medium">Explanation:</span> {questionData.explanation}
+                          </div>
+                        )}
+                      </div>
+                    </details>
+
+                    {/* Question Content - Regular or Matching */}
+                    {questionType === "matching" ? (
+                      <MatchingQuestionBuilder
+                        onChange={handleMatchingQuestionChange}
+                        initialData={{
+                          questionText: qText,
+                          options: [opt1, opt2, opt3, opt4],
+                          correctOption: correctOpt,
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Question Text *</label>
+                          <textarea
+                            value={qText}
+                            onChange={(e) => setQText(e.target.value)}
+                            placeholder="Type or paste the question text here..."
+                            className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                            required
+                          />
+                          <p className="text-[10px] text-muted-foreground">
+                            Supports basic text. Use ^ for superscript (e.g., m^3 for m³).
+                          </p>
+                        </div>
+
+                        <div className="grid sm:grid-cols-2 gap-3">
+                          {[1, 2, 3, 4].map((n) => {
+                            const val = [opt1, opt2, opt3, opt4][n - 1];
+                            const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
+                            return (
+                              <div key={n} className="space-y-1.5">
+                                <label className="text-xs font-medium">
+                                  Option {String.fromCharCode(64 + n)} *
+                                </label>
+                                <input
+                                  value={val}
+                                  onChange={(e) => setter(e.target.value)}
+                                  placeholder={`Option ${n}`}
+                                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-sm"
+                                  required
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium">Correct Answer *</label>
+                          <div className="flex gap-2">
+                            {[1, 2, 3, 4].map((n) => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setCorrectOpt(n)}
+                                className={`h-10 w-10 rounded-lg border text-sm font-medium transition-all ${
+                                  correctOpt === n
+                                    ? "border-primary bg-primary text-primary-foreground"
+                                    : "border-border hover:bg-accent"
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
                     )}
 
-                    <div>
-                      <label className="text-xs font-medium">New Question Text</label>
-                      <textarea
-                        value={qText}
-                        onChange={(e) => setQText(e.target.value)}
-                        placeholder="Enter the new multiple choice question..."
-                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {[1, 2, 3, 4].map((n) => {
-                        const val = [opt1, opt2, opt3, opt4][n - 1];
-                        const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
-                        return (
-                          <div key={n}>
-                            <label className="text-xs font-medium">
-                              Option {String.fromCharCode(64 + n)}
-                            </label>
-                            <input
-                              value={val}
-                              onChange={(e) => setter(e.target.value)}
-                              placeholder={`Option ${String.fromCharCode(64 + n)}`}
-                              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium">Correct Option</label>
-                      <div className="flex gap-2 mt-1">
-                        {[1, 2, 3, 4].map((n) => (
-                          <button
-                            key={n}
-                            onClick={() => setCorrectOpt(n)}
-                            className={`h-8 w-8 rounded-lg border text-sm font-medium transition-all ${
-                              correctOpt === n
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "border-border hover:bg-accent"
-                            }`}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium">Explanation</label>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium">Explanation <span className="text-muted-foreground font-normal">(optional)</span></label>
                       <textarea
                         value={explanation}
                         onChange={(e) => setExplanation(e.target.value)}
-                        placeholder="Optional explanation..."
-                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                        placeholder="Explain the correct answer..."
+                        className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
                       />
                     </div>
+
                     <Button
-                      onClick={handleConvertToMcq}
-                      disabled={saving || !qText.trim() || !opt1.trim() || !opt2.trim() || !opt3.trim() || !opt4.trim()}
+                      onClick={handleSaveCorrection}
+                      disabled={saving || !qText.trim() || !opt1.trim()}
                       className="w-full"
                     >
                       {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
-                      {saving ? "Saving..." : "Save as Multiple Choice"}
+                      {saving ? "Saving..." : "Save Correction"}
                     </Button>
                   </div>
                 ) : questionData && (
