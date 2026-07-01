@@ -52,6 +52,7 @@ async function handleCron(req: Request) {
     .select("user_id, subscription");
 
   let sent = 0;
+  let failed = 0;
 
   for (const sub of subscriptions || []) {
     if (!prefUserIds.has(sub.user_id)) continue;
@@ -66,11 +67,11 @@ async function handleCron(req: Request) {
       );
       sent++;
     } catch {
-      // ignore
+      failed++;
     }
   }
 
-  return NextResponse.json({ message: "Daily question alerts sent", sent });
+  return NextResponse.json({ message: "Daily question alerts sent", sent, failed });
 }
 
 export async function GET(req: Request) {

@@ -37,11 +37,12 @@ export async function sendPushNotificationToUser(
       subscription.subscription as any,
       JSON.stringify({ title, body, url: url || "/daily" })
     );
-  } catch {
+  } catch (err) {
     await supabase
       .from("push_subscriptions")
       .delete()
       .eq("user_id", userId);
+    throw err;
   }
 }
 

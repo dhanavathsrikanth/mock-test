@@ -46,6 +46,7 @@ async function handleCron(req: Request) {
   );
 
   let sent = 0;
+  let failed = 0;
 
   for (const streak of streaks) {
     if (streak.last_activity_date === today) continue;
@@ -60,11 +61,11 @@ async function handleCron(req: Request) {
       );
       sent++;
     } catch {
-      // ignore
+      failed++;
     }
   }
 
-  return NextResponse.json({ message: "Streak alerts sent", sent });
+  return NextResponse.json({ message: "Streak alerts sent", sent, failed });
 }
 
 export async function GET(req: Request) {

@@ -18,7 +18,7 @@ async function handleCron(req: Request) {
 
   const { data: users } = await supabase
     .from("notification_preferences")
-    .select("user_id, user_id_for_join")
+    .select("user_id")
     .eq("daily_reminder", true);
 
   if (!users || users.length === 0) {
@@ -44,6 +44,7 @@ async function handleCron(req: Request) {
   );
 
   let sent = 0;
+  let failed = 0;
 
   for (const sub of subscriptions) {
     if (!prefUserIds.has(sub.user_id)) continue;
@@ -64,11 +65,11 @@ async function handleCron(req: Request) {
       );
       sent++;
     } catch {
-      // ignore
+      failed++;
     }
   }
 
-  return NextResponse.json({ message: "Daily reminders sent", sent });
+  return NextResponse.json({ message: "Daily reminders sent", sent, failed });
 }
 
 export async function GET(req: Request) {
