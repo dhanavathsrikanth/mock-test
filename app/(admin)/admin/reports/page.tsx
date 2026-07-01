@@ -521,7 +521,7 @@ function ReportDetailPanel({
           option_3: opt3,
           option_4: opt4,
           correct_option: correctOpt,
-          explanation,
+          explanation: explanation || null,
           reportId: report.id,
         }),
       });
@@ -530,10 +530,12 @@ function ReportDetailPanel({
       if (res.ok) {
         setEditMode(false);
         onRefresh();
-        onClose();
+        setTimeout(() => onClose(), 100);
       } else {
         toast(data.error || "Failed to save", "error");
       }
+    } catch {
+      toast("Network error. Please try again.", "error");
     } finally {
       setSaving(false);
     }

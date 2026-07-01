@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, X, GripVertical, ArrowDownUp } from "lucide-react";
 
@@ -59,6 +59,40 @@ export function MatchingQuestionBuilder({
 
   const list1Keys = format === "numbered" ? ["1", "2", "3", "4"] : ["P", "Q", "R", "S"];
   const list2Keys = format === "numbered" ? ["a", "b", "c", "d"] : ["1", "2", "3", "4"];
+
+  const generateStableOptions = useCallback((): string[] => {
+    const options: string[] = [];
+
+    const correctOption: string[] = [];
+    list1Items.forEach((item) => {
+      const mapped = correctMappings[item.key] || "";
+      correctOption.push(`${item.key}. ${mapped})`);
+    });
+    options.push(correctOption.join(", "));
+
+    const allList2Keys = list2Items.map((item) => item.key);
+    for (let i = 0; i < 3; i++) {
+      const rotated = [...allList2Keys.slice(i + 1), ...allList2Keys.slice(0, i + 1)];
+      const incorrectOption: string[] = [];
+      list1Items.forEach((item, idx) => {
+        incorrectOption.push(`${item.key}. ${rotated[idx % rotated.length]})`);
+      });
+      options.push(incorrectOption.join(", "));
+    }
+
+    return options;
+  }, [list1Items, list2Items, correctMappings]);
+
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    const questionText = generateQuestionText();
+    const options = generateStableOptions();
+    onChange(questionText, options, 1);
+  }, [preamble, list1Items, list2Items, correctMappings, format]);
 
   const addList1Item = () => {
     const newKey = String(list1Items.length + 1);
@@ -136,7 +170,7 @@ export function MatchingQuestionBuilder({
 
   const handleGenerate = () => {
     const questionText = generateQuestionText();
-    const options = generateOptions();
+    const options = generateStableOptions();
     onChange(questionText, options, 1);
   };
 
