@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { SubjectChart } from "./subject-chart";
+import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 
 const StreakCard = dynamic(
   () => import("@/components/streak/StreakCard").then((m) => m.StreakCard)
@@ -176,6 +177,8 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-4 py-4">
+      <AnnouncementBanner />
+
       {/* Welcome Banner */}
       <div className="rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
