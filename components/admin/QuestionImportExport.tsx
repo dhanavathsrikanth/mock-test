@@ -572,7 +572,7 @@ export function QuestionImportExport({
                 <textarea
                   value={currentRow.question_text}
                   onChange={(e) => updateRow(editingIdx!, "question_text", e.target.value)}
-                  className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                  className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                 />
               </div>
 
@@ -625,7 +625,7 @@ export function QuestionImportExport({
                 <textarea
                   value={currentRow.explanation}
                   onChange={(e) => updateRow(editingIdx!, "explanation", e.target.value)}
-                  className="w-full min-h-[60px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                  className="w-full min-h-[60px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                 />
               </div>
 

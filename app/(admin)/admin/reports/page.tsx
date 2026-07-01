@@ -873,7 +873,7 @@ function ReportDetailPanel({
                             value={qText}
                             onChange={(e) => setQText(e.target.value)}
                             placeholder="Type or paste the question text here..."
-                            className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                            className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                             required
                           />
                           <p className="text-[10px] text-muted-foreground">
@@ -930,7 +930,7 @@ function ReportDetailPanel({
                         value={explanation}
                         onChange={(e) => setExplanation(e.target.value)}
                         placeholder="Explain the correct answer..."
-                        className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                        className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                       />
                     </div>
 

@@ -389,7 +389,7 @@ export default function NewQuestionPage() {
                 value={form.question_text}
                 onChange={(e) => set("question_text", e.target.value)}
                 placeholder="Type or paste the question text here..."
-                className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+                className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                 required
               />
               <p className="text-[10px] text-muted-foreground">
@@ -442,7 +442,7 @@ export default function NewQuestionPage() {
             value={form.explanation}
             onChange={(e) => set("explanation", e.target.value)}
             placeholder="Explain the correct answer..."
-            className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none"
+            className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
           />
         </div>
       </div>
