@@ -185,21 +185,25 @@ export default async function DashboardPage() {
       {/* Exam Countdown */}
       <ExamCountdown />
 
-      {/* Welcome + Widgets */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-2">
-          <h1 className="text-2xl font-bold tracking-tight">
-            Welcome back, {userName}!
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Keep practicing for TSPSC AEE Civil
-          </p>
-        </div>
-        <div className="lg:col-span-1">
+      {/* Welcome Header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          Welcome back, {userName}!
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          Keep practicing for TSPSC AEE Civil
+        </p>
+      </div>
+
+      {/* Widgets */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
           <DailyQuestionWidget />
         </div>
-        <div className="lg:col-span-1 flex flex-col gap-2">
+        <div>
           <StreakCard />
+        </div>
+        <div>
           <RevisionWidget />
         </div>
       </div>
