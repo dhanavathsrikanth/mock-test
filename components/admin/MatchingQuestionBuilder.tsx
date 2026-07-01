@@ -168,32 +168,19 @@ export function MatchingQuestionBuilder({
     return options;
   };
 
-  const handleGenerate = () => {
-    const questionText = generateQuestionText();
-    const options = generateStableOptions();
-    onChange(questionText, options, 1);
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Matching Question Builder</h3>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant={showPreview ? "default" : "outline"}
-            size="sm"
-            onClick={() => {
-              if (!showPreview) {
-                handleGenerate();
-              }
-              setShowPreview(!showPreview);
-            }}
-          >
-            <ArrowDownUp className="h-4 w-4 mr-1.5" />
-            {showPreview ? "Edit" : "Preview"}
-          </Button>
-        </div>
+        <Button
+          type="button"
+          variant={showPreview ? "default" : "outline"}
+          size="sm"
+          onClick={() => setShowPreview(!showPreview)}
+        >
+          <ArrowDownUp className="h-4 w-4 mr-1.5" />
+          {showPreview ? "Edit" : "Preview"}
+        </Button>
       </div>
 
       {showPreview ? (
@@ -383,11 +370,6 @@ export function MatchingQuestionBuilder({
               ))}
             </div>
           </div>
-
-          {/* Generate Button */}
-          <Button type="button" onClick={handleGenerate} className="w-full">
-            Generate Question
-          </Button>
         </>
       )}
     </div>
