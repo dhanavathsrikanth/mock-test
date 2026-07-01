@@ -855,21 +855,47 @@ function ReportDetailPanel({
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
                         Write a new MCQ below. This will replace the current question entirely.
                       </p>
-                      {questionData && isMatchingQuestion(questionData.question_text) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2 gap-1.5 text-xs h-7"
-                          onClick={() => {
-                            const preamble = questionData.question_text.split(/\b[P]\s*[.)]/i)[0]?.trim() || "";
-                            setQText(preamble ? preamble + "\n\nWhich of the following is correct?" : "");
-                          }}
-                        >
-                          <FileText className="h-3 w-3" />
-                          Pre-fill question text from preamble
-                        </Button>
-                      )}
                     </div>
+
+                    {/* Reference: Original Matching Question */}
+                    {questionData && (
+                      <details className="rounded-lg border border-dashed border-muted-foreground/25 overflow-hidden">
+                        <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer hover:bg-muted/50 transition-colors select-none">
+                          View Original Question (List 1, List 2 &amp; Options)
+                        </summary>
+                        <div className="px-3 pb-3 space-y-2 text-sm border-t">
+                          <div className="mt-2">
+                            <MathText text={questionData.question_text} />
+                          </div>
+                          <div className="space-y-1 pt-2 border-t">
+                            <p className="text-xs font-medium text-muted-foreground">Options:</p>
+                            {[1, 2, 3, 4].map((n) => {
+                              const opt = questionData[`option_${n}`];
+                              const isCorrect = n === questionData.correct_option;
+                              return (
+                                <div
+                                  key={n}
+                                  className={`rounded-lg px-3 py-1.5 text-xs ${
+                                    isCorrect
+                                      ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                                      : "bg-muted/30 text-muted-foreground"
+                                  }`}
+                                >
+                                  <span className="font-medium">{String.fromCharCode(64 + n)}.</span> {opt}
+                                  {isCorrect && <Check className="h-3 w-3 inline ml-1" />}
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {questionData.explanation && (
+                            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-lg p-2 text-xs mt-2">
+                              <span className="font-medium">Explanation:</span> {questionData.explanation}
+                            </div>
+                          )}
+                        </div>
+                      </details>
+                    )}
+
                     <div>
                       <label className="text-xs font-medium">New Question Text</label>
                       <textarea
