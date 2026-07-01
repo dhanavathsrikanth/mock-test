@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
-import { isMatchingQuestion } from "@/lib/matching-question-utils";
+import { MatchOption } from "@/components/MatchOption";
+import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
 import { QuestionImportExport } from "@/components/admin/QuestionImportExport";
 import { ExpandableTextarea } from "@/components/admin/ExpandableTextarea";
@@ -964,7 +965,12 @@ function ReportDetailPanel({
                                 : "bg-muted/30 text-muted-foreground"
                             }`}
                           >
-                            <span className="font-medium">{String.fromCharCode(64 + n)}.</span> {opt}
+                            <span className="font-medium">{String.fromCharCode(64 + n)}.</span>{" "}
+                            {isMatchingQuestion(questionData.question_text) && isMatchCodeOption(opt) ? (
+                              <MatchOption text={opt} className="text-sm" />
+                            ) : (
+                              <span>{opt}</span>
+                            )}
                             {isCorrect && <Check className="h-3.5 w-3.5 inline ml-1.5" />}
                           </div>
                         );

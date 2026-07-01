@@ -165,8 +165,15 @@ function extractNumberedItems(text: string): MatchingListItem[] {
 export function parseMatchCode(optionText: string): MatchPair[] {
   const pairs: MatchPair[] = [];
 
-  const pqrPattern = /([A-Z])\s*[-–→]\s*(\d+)/g;
+  const arrowPattern = /(\d+|[P-Q-R-S])\s*→\s*([a-d]|\d+)/gi;
   let match;
+  while ((match = arrowPattern.exec(optionText)) !== null) {
+    pairs.push({ from: match[1], to: match[2].toLowerCase() });
+  }
+
+  if (pairs.length >= 2) return pairs;
+
+  const pqrPattern = /([A-Z])\s*[-–→]\s*(\d+)/g;
   while ((match = pqrPattern.exec(optionText)) !== null) {
     pairs.push({ from: match[1], to: match[2] });
   }

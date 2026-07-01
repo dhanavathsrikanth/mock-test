@@ -66,7 +66,7 @@ export function MatchingQuestionBuilder({
     const correctOption: string[] = [];
     list1Items.forEach((item) => {
       const mapped = correctMappings[item.key] || "";
-      correctOption.push(`${item.key}. ${mapped})`);
+      correctOption.push(`${item.key} → ${mapped}`);
     });
     options.push(correctOption.join(", "));
 
@@ -75,10 +75,17 @@ export function MatchingQuestionBuilder({
       const rotated = [...allList2Keys.slice(i + 1), ...allList2Keys.slice(0, i + 1)];
       const incorrectOption: string[] = [];
       list1Items.forEach((item, idx) => {
-        incorrectOption.push(`${item.key}. ${rotated[idx % rotated.length]})`);
+        incorrectOption.push(`${item.key} → ${rotated[idx % rotated.length]}`);
       });
       options.push(incorrectOption.join(", "));
     }
+
+    const correctText = options[0];
+    for (let i = options.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [options[i], options[j]] = [options[j], options[i]];
+    }
+    const correctIdx = options.indexOf(correctText);
 
     return options;
   }, [list1Items, list2Items, correctMappings]);
@@ -91,7 +98,21 @@ export function MatchingQuestionBuilder({
     }
     const questionText = generateQuestionText();
     const options = generateStableOptions();
-    onChange(questionText, options, 1);
+    const correctText = options.find((_, i) => i === 0) || options[0];
+    // Find which position the correct answer ended up at after shuffle
+    let correctIdx = 1;
+    for (let i = 0; i < options.length; i++) {
+      // Check if this option matches what would be the correct one
+      const isCorrect = list1Items.every((item) => {
+        const mapped = correctMappings[item.key] || "";
+        return options[i].includes(`${item.key} → ${mapped}`);
+      });
+      if (isCorrect) {
+        correctIdx = i + 1;
+        break;
+      }
+    }
+    onChange(questionText, options, correctIdx);
   }, [preamble, list1Items, list2Items, correctMappings, format]);
 
   const addList1Item = () => {
@@ -458,10 +479,19 @@ function parseExistingList2(questionText: string): ListItem[] {
 
 function parseExistingMappings(optionText: string): Record<string, string> {
   const mappings: Record<string, string> = {};
-  const regex = /(\d+)\.\s*([a-d])\)/gi;
+
+  const arrowRegex = /(\d+|[P-Q-R-S])\s*→\s*([a-d]|\d+)/gi;
   let match;
-  while ((match = regex.exec(optionText)) !== null) {
+  while ((match = arrowRegex.exec(optionText)) !== null) {
     mappings[match[1]] = match[2].toLowerCase();
   }
+
+  if (Object.keys(mappings).length === 0) {
+    const regex = /(\d+)\.\s*([a-d])\)/gi;
+    while ((match = regex.exec(optionText)) !== null) {
+      mappings[match[1]] = match[2].toLowerCase();
+    }
+  }
+
   return Object.keys(mappings).length > 0 ? mappings : { "1": "a", "2": "b", "3": "c", "4": "d" };
 }
