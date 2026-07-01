@@ -51,7 +51,7 @@ export default function AnnouncementsPage() {
   const fetchAnnouncements = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false });
+      const { data } = await supabase.from("announcements").select("id, title, body, type, is_active, starts_at, expires_at, created_by, created_at").order("created_at", { ascending: false });
       setAnnouncements(data || []);
     } finally { setLoading(false); }
   }, [supabase]);
