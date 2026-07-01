@@ -127,9 +127,10 @@ function renderLatex(latex: string, displayMode: boolean): string {
   }
 }
 
-function convertMarkdownTablesToHtml(text: string): string {
+function convertMarkdownTablesToHtml(text: string): { result: string; tableHtmls: string[] } {
   const lines = text.split('\n');
   const result: string[] = [];
+  const tableHtmls: string[] = [];
   let i = 0;
 
   while (i < lines.length) {
@@ -173,24 +174,26 @@ function convertMarkdownTablesToHtml(text: string): string {
       }
 
       html += '</tbody></table></div>';
-      result.push(html);
+      const idx = tableHtmls.length;
+      tableHtmls.push(html);
+      result.push(`%%TABLE_${idx}%%`);
     } else {
       result.push(lines[i]);
       i++;
     }
   }
 
-  return result.join('\n');
+  return { result: result.join('\n'), tableHtmls };
 }
 
 export function renderMathToHtml(text: string): string {
   if (!text) return "";
 
-  text = convertMarkdownTablesToHtml(text);
-  let decoded = decodeHtmlEntities(text);
+  const { result: textWithPlaceholders, tableHtmls } = convertMarkdownTablesToHtml(text);
+  let decoded = decodeHtmlEntities(textWithPlaceholders);
   const segments = splitSegments(decoded);
 
-  return segments
+  let html = segments
     .map((seg) => {
       if (seg.type === "math-display") {
         let latex = seg.content;
@@ -251,6 +254,12 @@ export function renderMathToHtml(text: string): string {
       return escapeHtml(seg.content);
     })
     .join("");
+
+  for (let idx = 0; idx < tableHtmls.length; idx++) {
+    html = html.replace(`%%TABLE_${idx}%%`, tableHtmls[idx]);
+  }
+
+  return html;
 }
 
 function escapeHtml(text: string): string {
