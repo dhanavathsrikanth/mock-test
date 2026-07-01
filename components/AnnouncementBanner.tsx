@@ -24,17 +24,26 @@ export function AnnouncementBanner() {
 
   useEffect(() => {
     const supabase = createClient();
-    const now = new Date().toISOString();
 
     supabase
       .from("announcements")
       .select("id, title, body, type, starts_at, expires_at, is_active")
       .eq("is_active", true)
-      .or(`starts_at.is.null,starts_at.lte.${now}`)
-      .or(`expires_at.is.null,expires_at.gte.${now}`)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        if (data) setAnnouncements(data);
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Announcement fetch error:", error);
+          return;
+        }
+        if (!data) return;
+
+        const now = new Date();
+        const active = data.filter((a) => {
+          if (a.starts_at && new Date(a.starts_at) > now) return false;
+          if (a.expires_at && new Date(a.expires_at) < now) return false;
+          return true;
+        });
+
+        setAnnouncements(active);
       });
   }, []);
 
