@@ -46,11 +46,19 @@ export default async function BookmarksPage() {
     ),
   ] as string[];
 
+  const { data: reports } = await supabase
+    .from("question_reports")
+    .select("question_id")
+    .eq("reported_by", userId);
+
+  const reportedQuestionIds = (reports || []).map((r) => r.question_id);
+
   return (
     <BookmarksContent
       bookmarks={list}
       subjects={subjects}
       userId={userId}
+      reportedQuestionIds={reportedQuestionIds}
     />
   );
 }

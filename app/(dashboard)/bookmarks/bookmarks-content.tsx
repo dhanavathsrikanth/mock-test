@@ -45,12 +45,14 @@ interface BookmarksContentProps {
   bookmarks: BookmarkItem[];
   subjects: string[];
   userId: string;
+  reportedQuestionIds: string[];
 }
 
 export function BookmarksContent({
   bookmarks: initialBookmarks,
   subjects,
   userId,
+  reportedQuestionIds,
 }: BookmarksContentProps) {
   const router = useRouter();
   const getSupabase = () => createClient();
@@ -59,6 +61,7 @@ export function BookmarksContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set(reportedQuestionIds));
 
   const filtered = useMemo(() => {
     let list = bookmarks;
@@ -304,6 +307,8 @@ export function BookmarksContent({
                       questionText={q.question_text}
                       subjectName={q?.subjects?.name}
                       year={q.year}
+                      isReported={reportedIds.has(q.id)}
+                      onReported={(id) => setReportedIds((prev) => new Set(prev).add(id))}
                       className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted transition-colors"
                     />
                     <button
