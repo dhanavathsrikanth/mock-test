@@ -756,26 +756,24 @@ function ReportDetailPanel({
                   </h3>
                   {!editMode && !mcqMode ? (
                     <div className="flex gap-1.5">
-                      {questionData && isMatchingQuestion(questionData.question_text) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setMcqMode(true);
-                            setQText("");
-                            setOpt1("");
-                            setOpt2("");
-                            setOpt3("");
-                            setOpt4("");
-                            setCorrectOpt(1);
-                            setExplanation("");
-                          }}
-                          className="gap-1.5"
-                        >
-                          <RefreshCw className="h-3.5 w-3.5" />
-                          Convert to MCQ
-                        </Button>
-                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setMcqMode(true);
+                          setQText("");
+                          setOpt1("");
+                          setOpt2("");
+                          setOpt3("");
+                          setOpt4("");
+                          setCorrectOpt(1);
+                          setExplanation("");
+                        }}
+                        className="gap-1.5"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Convert to MCQ
+                      </Button>
                       <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5">
                         <Edit3 className="h-3.5 w-3.5" />
                         Edit & Correct
@@ -852,11 +850,25 @@ function ReportDetailPanel({
                     <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
                       <p className="font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                         <RefreshCw className="h-3.5 w-3.5" />
-                        Converting Matching Question to MCQ
+                        Convert to Multiple Choice
                       </p>
                       <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                        Write a new multiple choice question below. The matching question format will be replaced.
+                        Write a new MCQ below. This will replace the current question entirely.
                       </p>
+                      {questionData && isMatchingQuestion(questionData.question_text) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 gap-1.5 text-xs h-7"
+                          onClick={() => {
+                            const preamble = questionData.question_text.split(/\b[P]\s*[.)]/i)[0]?.trim() || "";
+                            setQText(preamble ? preamble + "\n\nWhich of the following is correct?" : "");
+                          }}
+                        >
+                          <FileText className="h-3 w-3" />
+                          Pre-fill question text from preamble
+                        </Button>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-medium">New Question Text</label>
