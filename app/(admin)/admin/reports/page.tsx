@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ReportStatusBadge } from "@/components/admin/ReportStatusBadge";
 import { MathText } from "@/components/MathText";
+import { isMatchingQuestion } from "@/lib/matching-question-utils";
 import {
   Search,
   ChevronDown,
@@ -30,6 +31,7 @@ import {
   FileText,
   CheckCircle2,
   XCircle,
+  RefreshCw,
 } from "lucide-react";
 
 const STATUS_TABS = [
@@ -455,6 +457,7 @@ function ReportDetailPanel({
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("info");
   const [editMode, setEditMode] = useState(false);
+  const [mcqMode, setMcqMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [qText, setQText] = useState(report.questions?.question_text || "");
   const [opt1, setOpt1] = useState("");
@@ -523,6 +526,37 @@ function ReportDetailPanel({
       const data = await res.json();
       if (res.ok) {
         setEditMode(false);
+        onRefresh();
+        onClose();
+      } else {
+        toast(data.error || "Failed to save", "error");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleConvertToMcq = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/questions/${report.question_id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question_text: qText,
+          option_1: opt1,
+          option_2: opt2,
+          option_3: opt3,
+          option_4: opt4,
+          correct_option: correctOpt,
+          explanation,
+          reportId: report.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setMcqMode(false);
         onRefresh();
         onClose();
       } else {
@@ -720,13 +754,35 @@ function ReportDetailPanel({
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     Question
                   </h3>
-                  {!editMode ? (
-                    <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5">
-                      <Edit3 className="h-3.5 w-3.5" />
-                      Edit & Correct
-                    </Button>
+                  {!editMode && !mcqMode ? (
+                    <div className="flex gap-1.5">
+                      {questionData && isMatchingQuestion(questionData.question_text) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setMcqMode(true);
+                            setQText("");
+                            setOpt1("");
+                            setOpt2("");
+                            setOpt3("");
+                            setOpt4("");
+                            setCorrectOpt(1);
+                            setExplanation("");
+                          }}
+                          className="gap-1.5"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          Convert to MCQ
+                        </Button>
+                      )}
+                      <Button size="sm" variant="outline" onClick={() => setEditMode(true)} className="gap-1.5">
+                        <Edit3 className="h-3.5 w-3.5" />
+                        Edit & Correct
+                      </Button>
+                    </div>
                   ) : (
-                    <Button size="sm" variant="ghost" onClick={() => setEditMode(false)}>
+                    <Button size="sm" variant="ghost" onClick={() => { setEditMode(false); setMcqMode(false); }}>
                       Cancel
                     </Button>
                   )}
@@ -789,6 +845,81 @@ function ReportDetailPanel({
                     <Button onClick={handleSaveCorrection} disabled={saving} className="w-full">
                       {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
                       Save Correction
+                    </Button>
+                  </div>
+                ) : mcqMode ? (
+                  <div className="space-y-3">
+                    <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm">
+                      <p className="font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Converting Matching Question to MCQ
+                      </p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                        Write a new multiple choice question below. The matching question format will be replaced.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">New Question Text</label>
+                      <textarea
+                        value={qText}
+                        onChange={(e) => setQText(e.target.value)}
+                        placeholder="Enter the new multiple choice question..."
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[1, 2, 3, 4].map((n) => {
+                        const val = [opt1, opt2, opt3, opt4][n - 1];
+                        const setter = [setOpt1, setOpt2, setOpt3, setOpt4][n - 1];
+                        return (
+                          <div key={n}>
+                            <label className="text-xs font-medium">
+                              Option {String.fromCharCode(64 + n)}
+                            </label>
+                            <input
+                              value={val}
+                              onChange={(e) => setter(e.target.value)}
+                              placeholder={`Option ${String.fromCharCode(64 + n)}`}
+                              className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Correct Option</label>
+                      <div className="flex gap-2 mt-1">
+                        {[1, 2, 3, 4].map((n) => (
+                          <button
+                            key={n}
+                            onClick={() => setCorrectOpt(n)}
+                            className={`h-8 w-8 rounded-lg border text-sm font-medium transition-all ${
+                              correctOpt === n
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border hover:bg-accent"
+                            }`}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium">Explanation</label>
+                      <textarea
+                        value={explanation}
+                        onChange={(e) => setExplanation(e.target.value)}
+                        placeholder="Optional explanation..."
+                        className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-none"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleConvertToMcq}
+                      disabled={saving || !qText.trim() || !opt1.trim() || !opt2.trim() || !opt3.trim() || !opt4.trim()}
+                      className="w-full"
+                    >
+                      {saving && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}
+                      {saving ? "Saving..." : "Save as Multiple Choice"}
                     </Button>
                   </div>
                 ) : questionData && (
