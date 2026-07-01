@@ -10,6 +10,7 @@ import { MathText } from "@/components/MathText";
 import { isMatchingQuestion } from "@/lib/matching-question-utils";
 import { MatchingQuestionBuilder } from "@/components/admin/MatchingQuestionBuilder";
 import { QuestionImportExport } from "@/components/admin/QuestionImportExport";
+import { ExpandableTextarea } from "@/components/admin/ExpandableTextarea";
 import {
   Search,
   ChevronDown,
@@ -868,16 +869,15 @@ function ReportDetailPanel({
                     ) : (
                       <>
                         <div className="space-y-1.5">
-                          <label className="text-xs font-medium">Question Text *</label>
-                          <textarea
+                          <ExpandableTextarea
+                            label="Question Text"
                             value={qText}
-                            onChange={(e) => setQText(e.target.value)}
+                            onChange={setQText}
                             placeholder="Type or paste the question text here..."
-                            className="w-full min-h-[100px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
                             required
                           />
                           <p className="text-[10px] text-muted-foreground">
-                            Supports basic text. Use ^ for superscript (e.g., m^3 for m³).
+                            Supports basic text. Use ^ for superscript (e.g., m^3 for m³). Click maximize icon to expand.
                           </p>
                         </div>
 
@@ -925,12 +925,12 @@ function ReportDetailPanel({
                     )}
 
                     <div className="space-y-1.5">
-                      <label className="text-xs font-medium">Explanation <span className="text-muted-foreground font-normal">(optional)</span></label>
-                      <textarea
+                      <ExpandableTextarea
+                        label="Explanation"
                         value={explanation}
-                        onChange={(e) => setExplanation(e.target.value)}
+                        onChange={setExplanation}
                         placeholder="Explain the correct answer..."
-                        className="w-full min-h-[80px] rounded-lg border border-input bg-background px-3 py-2.5 text-sm resize-none whitespace-pre-wrap"
+                        minHeight="min-h-[80px]"
                       />
                     </div>
 
