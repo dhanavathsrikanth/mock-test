@@ -127,9 +127,66 @@ function renderLatex(latex: string, displayMode: boolean): string {
   }
 }
 
+function convertMarkdownTablesToHtml(text: string): string {
+  const lines = text.split('\n');
+  const result: string[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i].trim();
+
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const tableLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('|') && lines[i].trim().endsWith('|')) {
+        tableLines.push(lines[i].trim());
+        i++;
+      }
+
+      if (tableLines.length < 2) {
+        result.push(...tableLines);
+        continue;
+      }
+
+      const parseRow = (row: string): string[] =>
+        row.split('|').slice(1, -1).map(c => c.trim());
+
+      const headerCells = parseRow(tableLines[0]);
+      let bodyStart = 1;
+      if (tableLines[1] && /\|.*---.*\|/.test(tableLines[1])) {
+        bodyStart = 2;
+      }
+
+      let html = '<div class="overflow-x-auto my-2"><table class="w-full text-sm border-collapse">';
+      html += '<thead><tr>';
+      for (const cell of headerCells) {
+        html += `<th class="border border-border px-3 py-2 text-left font-medium bg-muted/50">${escapeHtml(cell.replace(/\*\*/g, ''))}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+
+      for (let r = bodyStart; r < tableLines.length; r++) {
+        const cells = parseRow(tableLines[r]);
+        html += '<tr>';
+        for (const cell of cells) {
+          html += `<td class="border border-border px-3 py-2">${escapeHtml(cell.replace(/\*\*/g, ''))}</td>`;
+        }
+        html += '</tr>';
+      }
+
+      html += '</tbody></table></div>';
+      result.push(html);
+    } else {
+      result.push(lines[i]);
+      i++;
+    }
+  }
+
+  return result.join('\n');
+}
+
 export function renderMathToHtml(text: string): string {
   if (!text) return "";
 
+  text = convertMarkdownTablesToHtml(text);
   let decoded = decodeHtmlEntities(text);
   const segments = splitSegments(decoded);
 
