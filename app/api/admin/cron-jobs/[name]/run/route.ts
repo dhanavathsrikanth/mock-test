@@ -37,7 +37,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ na
   });
 
   try {
-    const origin = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+    const origin = process.env.NEXT_PUBLIC_SITE_URL || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
     const response = await fetch(`${origin}${url}`, {
       method: "POST",
       headers: {
