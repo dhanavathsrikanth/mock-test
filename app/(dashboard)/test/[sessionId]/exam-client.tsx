@@ -20,6 +20,7 @@ import { MathText } from "@/components/MathText";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
 import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface Question {
   id: string;
@@ -105,6 +106,7 @@ export function ExamClient({
   initialBookmarks,
 }: ExamClientProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">(
@@ -197,24 +199,30 @@ export function ExamClient({
 
   const submittedRef = useRef(false);
 
+  const redirectToResults = () => {
+    router.push(`/result/${session.id}`);
+  };
+
   const handleSubmit = async () => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     setIsSubmitting(true);
+    setShowConfirm(false);
 
     const { submitTest } = await import("./actions");
     const result = await submitTest(session.id, userId);
 
-    if (result.error) {
+    if (result?.error) {
       submittedRef.current = false;
       setIsSubmitting(false);
+      toast(result.error, "error");
       return;
     }
 
     triggerStreakUpdate();
     await awardTestXP(session.id);
     addWrongToSRS(session.id);
-    router.push(`/result/${session.id}`);
+    redirectToResults();
   };
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -268,10 +276,24 @@ export function ExamClient({
   }, [router, session.id]);
 
   const confirmExit = async () => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setShowExitDialog(false);
     setIsSubmitting(true);
+
     const { submitTest } = await import("./actions");
-    await submitTest(session.id, userId);
+    const result = await submitTest(session.id, userId);
+
+    if (result?.error) {
+      submittedRef.current = false;
+      setIsSubmitting(false);
+      toast(result.error, "error");
+      return;
+    }
+
+    triggerStreakUpdate();
+    await awardTestXP(session.id);
+    addWrongToSRS(session.id);
     pendingExitRef.current?.();
   };
 
