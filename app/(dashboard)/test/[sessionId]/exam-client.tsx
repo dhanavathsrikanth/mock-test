@@ -195,14 +195,18 @@ export function ExamClient({
     setBookmarks(next);
   };
 
+  const submittedRef = useRef(false);
+
   const handleSubmit = async () => {
-    if (isSubmitting) return;
+    if (submittedRef.current) return;
+    submittedRef.current = true;
     setIsSubmitting(true);
 
     const { submitTest } = await import("./actions");
     const result = await submitTest(session.id, userId);
 
     if (result.error) {
+      submittedRef.current = false;
       setIsSubmitting(false);
       return;
     }
@@ -257,18 +261,9 @@ export function ExamClient({
       originalReplace(url, options);
     };
 
-    const handlePopState = () => {
-      setShowExitDialog(true);
-      window.history.pushState(null, "", window.location.href);
-    };
-
-    window.history.pushState(null, "", window.location.href);
-    window.addEventListener("popstate", handlePopState);
-
     return () => {
       router.push = originalPush;
       router.replace = originalReplace;
-      window.removeEventListener("popstate", handlePopState);
     };
   }, [router, session.id]);
 
@@ -285,26 +280,41 @@ export function ExamClient({
     pendingExitRef.current = null;
   };
 
+  // Wall-clock based timer — immune to browser throttling
   useEffect(() => {
     const startTime = new Date(session.started_at).getTime();
-    const end = startTime + session.duration_minutes * 60 * 1000;
-    const remaining = Math.max(
-      0,
-      Math.floor((end - Date.now()) / 1000)
-    );
-    setTimeRemaining(remaining);
+    const endTime = startTime + session.duration_minutes * 60 * 1000;
 
-    let count = remaining;
+    const calcRemaining = () => Math.max(0, Math.floor((endTime - Date.now()) / 1000));
+
+    setTimeRemaining(calcRemaining());
+
     const interval = setInterval(() => {
-      count--;
-      setTimeRemaining(count);
-      if (count <= 0) {
+      const remaining = calcRemaining();
+      setTimeRemaining(remaining);
+      if (remaining <= 0) {
         clearInterval(interval);
         handleSubmitRef.current();
       }
     }, 1000);
 
-    return () => clearInterval(interval);
+    // When user returns to tab, immediately recalculate (catches up after background throttling)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        const remaining = calcRemaining();
+        setTimeRemaining(remaining);
+        if (remaining <= 0) {
+          clearInterval(interval);
+          handleSubmitRef.current();
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [session.id, session.started_at, session.duration_minutes]);
 
   const answeredCount = Object.values(answers).filter(

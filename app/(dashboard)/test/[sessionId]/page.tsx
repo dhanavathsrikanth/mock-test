@@ -42,6 +42,18 @@ async function ExamPageContent({
   if (session.status !== "in_progress")
     redirect(`/result/${sessionId}`);
 
+  // Auto-submit if time expired while user was away
+  if (session.duration_minutes > 0) {
+    const startedAt = new Date(session.started_at).getTime();
+    const endTime = startedAt + session.duration_minutes * 60 * 1000;
+    if (Date.now() > endTime + 5000) {
+      // Time expired — submit server-side and redirect to results
+      const { submitTest } = await import("./actions");
+      await submitTest(session.id, userId);
+      redirect(`/result/${sessionId}`);
+    }
+  }
+
   const questions = await getQuestionsForSession(userId, {
     exam_id: session.exam_id,
     subject_id: session.subject_id,
