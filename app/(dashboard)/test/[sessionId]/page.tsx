@@ -61,6 +61,25 @@ async function ExamPageContent({
     total_questions: session.total_questions,
   });
 
+  // Sync session to actual question count (user may have requested more than available)
+  if (questions.length !== session.total_questions) {
+    await supabase
+      .from("test_sessions")
+      .update({
+        total_questions: questions.length,
+        duration_minutes:
+          session.duration_minutes > 0
+            ? Math.max(1, Math.min(session.duration_minutes, questions.length))
+            : 0,
+      })
+      .eq("id", session.id);
+    session.total_questions = questions.length;
+    session.duration_minutes =
+      session.duration_minutes > 0
+        ? Math.max(1, Math.min(session.duration_minutes, questions.length))
+        : 0;
+  }
+
   // Strip correct_option — never send correct answers to the client
   const safeQuestions = questions.map(({ correct_option, ...rest }) => rest);
 

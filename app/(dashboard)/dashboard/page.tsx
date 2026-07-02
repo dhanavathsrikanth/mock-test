@@ -133,7 +133,7 @@ export default async function DashboardPage() {
     const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
     const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
     const skipped = sessionAnswers.filter((a) => a.is_correct === null).length;
-    const total = s.total_questions;
+    const total = correct + wrong + skipped || s.total_questions;
     const score = total > 0 ? Math.round((correct / total) * 100) : 0;
     return { ...s, correct, wrong, skipped, score };
   });

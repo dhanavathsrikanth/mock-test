@@ -55,11 +55,11 @@ async function ResultPageContent({
     (subjects || []).map((s) => [s.id, s.name])
   );
 
-  const totalQuestions = session.total_questions;
   const answerList = answers || [];
   const correctCount = answerList.filter((a) => a.is_correct === true).length;
   const wrongCount = answerList.filter((a) => a.is_correct === false).length;
-  const skippedCount = totalQuestions - correctCount - wrongCount;
+  const skippedCount = answerList.filter((a) => a.is_correct === null).length;
+  const totalQuestions = answerList.length || session.total_questions;
   const accuracy =
     totalQuestions > 0
       ? Math.round((correctCount / totalQuestions) * 100)
