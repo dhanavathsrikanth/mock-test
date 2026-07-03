@@ -200,7 +200,8 @@ export function ExamClient({
   const submittedRef = useRef(false);
 
   const redirectToResults = () => {
-    router.push(`/result/${session.id}`);
+    // Use window.location to bypass router push override (exit guard blocks navigation away from /test/)
+    window.location.href = `/result/${session.id}`;
   };
 
   const handleSubmit = async () => {
