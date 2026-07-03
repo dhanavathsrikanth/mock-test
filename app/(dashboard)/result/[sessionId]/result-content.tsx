@@ -11,6 +11,8 @@ import {
   Clock,
   ArrowLeft,
   Eye,
+  Play,
+  RotateCcw,
 } from "lucide-react";
 
 interface SubjectBreakdown {
@@ -226,17 +228,23 @@ export function ResultContent({
         </Card>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <Button asChild size="lg" className="flex-1">
           <Link href={`/review/${sessionId}`}>
             <Eye className="h-4 w-4" />
             Review Answers
           </Link>
         </Button>
+        <Button asChild variant="secondary" size="lg" className="flex-1">
+          <Link href="/test/select">
+            <Play className="h-4 w-4" />
+            Take Another Test
+          </Link>
+        </Button>
         <Button asChild variant="outline" size="lg" className="flex-1">
           <Link href="/dashboard">
             <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
+            Dashboard
           </Link>
         </Button>
       </div>

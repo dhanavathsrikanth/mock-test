@@ -38,43 +38,41 @@ export async function submitTest(sessionId: string, userId: string) {
     }
   }
 
-  // 3. Compute is_correct for all answers using a single SQL update
-  //    This avoids sending correct_option to the client at any point
-  const { error: computeError } = await supabase.rpc(
-    "compute_answer_correctness" as any,
-    { p_session_id: sessionId }
-  );
+  // 3. Compute is_correct for all answers server-side
+  const { data: answers } = await supabase
+    .from("test_answers")
+    .select("id, question_id, selected_option")
+    .eq("session_id", sessionId);
 
-  // Fallback: if the RPC doesn't exist, compute via individual queries
-  if (computeError) {
-    const { data: answers } = await supabase
-      .from("test_answers")
-      .select("id, question_id, selected_option")
-      .eq("session_id", sessionId);
+  if (answers && answers.length > 0) {
+    const questionIds = answers.map((a) => a.question_id);
+    const { data: questions } = await supabase
+      .from("questions")
+      .select("id, correct_option")
+      .in("id", questionIds);
 
-    if (answers && answers.length > 0) {
-      const questionIds = answers.map((a) => a.question_id);
-      const { data: questions } = await supabase
-        .from("questions")
-        .select("id, correct_option")
-        .in("id", questionIds);
+    const correctMap = new Map(
+      (questions || []).map((q) => [q.id, q.correct_option])
+    );
 
-      const correctMap = new Map(
-        (questions || []).map((q) => [q.id, q.correct_option])
-      );
+    const updates = answers.map((answer) => {
+      const correctOption = correctMap.get(answer.question_id);
+      const isCorrect =
+        answer.selected_option != null && correctOption != null
+          ? answer.selected_option === correctOption
+          : null;
+      return {
+        id: answer.id,
+        is_correct: isCorrect,
+      };
+    });
 
-      for (const answer of answers) {
-        const correctOption = correctMap.get(answer.question_id);
-        const isCorrect =
-          answer.selected_option != null && correctOption != null
-            ? answer.selected_option === correctOption
-            : null;
-
-        await supabase
-          .from("test_answers")
-          .update({ is_correct: isCorrect })
-          .eq("id", answer.id);
-      }
+    // Batch update all answers at once
+    for (const update of updates) {
+      await supabase
+        .from("test_answers")
+        .update({ is_correct: update.is_correct })
+        .eq("id", update.id);
     }
   }
 

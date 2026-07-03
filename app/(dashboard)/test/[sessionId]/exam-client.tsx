@@ -209,20 +209,26 @@ export function ExamClient({
     setIsSubmitting(true);
     setShowConfirm(false);
 
-    const { submitTest } = await import("./actions");
-    const result = await submitTest(session.id, userId);
+    try {
+      const { submitTest } = await import("./actions");
+      const result = await submitTest(session.id, userId);
 
-    if (result?.error) {
+      if (result?.error) {
+        submittedRef.current = false;
+        setIsSubmitting(false);
+        toast(result.error, "error");
+        return;
+      }
+
+      triggerStreakUpdate();
+      await awardTestXP(session.id);
+      addWrongToSRS(session.id);
+      redirectToResults();
+    } catch (err) {
       submittedRef.current = false;
       setIsSubmitting(false);
-      toast(result.error, "error");
-      return;
+      toast("Failed to submit test. Please try again.", "error");
     }
-
-    triggerStreakUpdate();
-    await awardTestXP(session.id);
-    addWrongToSRS(session.id);
-    redirectToResults();
   };
 
   const handleSubmitRef = useRef(handleSubmit);
@@ -281,20 +287,26 @@ export function ExamClient({
     setShowExitDialog(false);
     setIsSubmitting(true);
 
-    const { submitTest } = await import("./actions");
-    const result = await submitTest(session.id, userId);
+    try {
+      const { submitTest } = await import("./actions");
+      const result = await submitTest(session.id, userId);
 
-    if (result?.error) {
+      if (result?.error) {
+        submittedRef.current = false;
+        setIsSubmitting(false);
+        toast(result.error, "error");
+        return;
+      }
+
+      triggerStreakUpdate();
+      await awardTestXP(session.id);
+      addWrongToSRS(session.id);
+      pendingExitRef.current?.();
+    } catch (err) {
       submittedRef.current = false;
       setIsSubmitting(false);
-      toast(result.error, "error");
-      return;
+      toast("Failed to submit test. Please try again.", "error");
     }
-
-    triggerStreakUpdate();
-    await awardTestXP(session.id);
-    addWrongToSRS(session.id);
-    pendingExitRef.current?.();
   };
 
   const cancelExit = () => {
