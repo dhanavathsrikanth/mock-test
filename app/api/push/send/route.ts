@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendPushNotificationToUser } from "@/lib/push";
+import { getDeliveryService } from "@/lib/notifications";
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
@@ -10,9 +10,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { userId, title, body, url } = await req.json();
+  const { userId, title, body: notifBody, url } = await req.json();
 
-  if (!userId || !title || !body) {
+  if (!userId || !title || !notifBody) {
     return NextResponse.json(
       { error: "userId, title, and body required" },
       { status: 400 }
@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    await sendPushNotificationToUser(userId, title, body, url);
+    const delivery = getDeliveryService();
+    const success = await delivery.sendPushNotification(userId, title, notifBody, url);
+    if (!success) {
+      return NextResponse.json({ error: "Failed to send push" }, { status: 500 });
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     return NextResponse.json(

@@ -1,12 +1,4 @@
-import { createCronClient } from "@/lib/supabase/cron";
-
-function getVapidPublicKey(): string {
-  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-}
-
-function getVapidPrivateKey(): string {
-  return process.env.VAPID_PRIVATE_KEY || "";
-}
+import { getDeliveryService } from "@/lib/notifications";
 
 export async function sendPushNotificationToUser(
   userId: string,
@@ -14,35 +6,10 @@ export async function sendPushNotificationToUser(
   body: string,
   url?: string
 ): Promise<void> {
-  const supabase = createCronClient();
-
-  const { data: subscription } = await supabase
-    .from("push_subscriptions")
-    .select("subscription")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (!subscription) return;
-
-  const webpush = (await import("web-push")).default;
-
-  webpush.setVapidDetails(
-    "mailto:admin@tgpscprep.com",
-    getVapidPublicKey(),
-    getVapidPrivateKey()
-  );
-
-  try {
-    await webpush.sendNotification(
-      subscription.subscription as any,
-      JSON.stringify({ title, body, url: url || "/daily" })
-    );
-  } catch (err) {
-    await supabase
-      .from("push_subscriptions")
-      .delete()
-      .eq("user_id", userId);
-    throw err;
+  const delivery = getDeliveryService();
+  const success = await delivery.sendPushNotification(userId, title, body, url);
+  if (!success) {
+    throw new Error("Failed to send push notification");
   }
 }
 
@@ -51,42 +18,18 @@ export async function sendPushToAllUsers(
   body: string,
   url?: string
 ): Promise<{ sent: number; failed: number }> {
+  const delivery = getDeliveryService();
+  const { createCronClient } = await import("@/lib/supabase/cron");
   const supabase = createCronClient();
 
   const { data: subscriptions } = await supabase
     .from("push_subscriptions")
-    .select("user_id, subscription");
+    .select("user_id");
 
   if (!subscriptions || subscriptions.length === 0) {
     return { sent: 0, failed: 0 };
   }
 
-  const webpush = (await import("web-push")).default;
-
-  webpush.setVapidDetails(
-    "mailto:admin@tgpscprep.com",
-    getVapidPublicKey(),
-    getVapidPrivateKey()
-  );
-
-  let sent = 0;
-  let failed = 0;
-
-  for (const sub of subscriptions) {
-    try {
-      await webpush.sendNotification(
-        sub.subscription as any,
-        JSON.stringify({ title, body, url: url || "/daily" })
-      );
-      sent++;
-    } catch {
-      failed++;
-      await supabase
-        .from("push_subscriptions")
-        .delete()
-        .eq("user_id", sub.user_id);
-    }
-  }
-
-  return { sent, failed };
+  const userIds = subscriptions.map((s) => s.user_id);
+  return delivery.sendBulkPush(userIds, title, body, url);
 }

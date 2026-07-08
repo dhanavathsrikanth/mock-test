@@ -1,81 +1,113 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getNotificationService } from "@/lib/notifications";
+import {
+  NotificationType,
+  NotificationPriority,
+} from "@/types/notifications";
+import { NOTIFICATION_PAGE_SIZE } from "@/lib/notifications/constants";
 
-async function getAdmin(supabase: Awaited<ReturnType<typeof createClient>>) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return null;
-  return user;
-}
-
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { searchParams } = new URL(req.url);
   const targetUserId = searchParams.get("userId");
 
-  // If admin is querying a specific user's notifications
   if (targetUserId) {
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-    const { data, error } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", targetUserId)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-    const { count } = await supabase
-      .from("notifications")
-      .select("*", { count: "exact", head: true })
-      .eq("user_id", targetUserId)
-      .eq("is_read", false);
-
-    return NextResponse.json({ notifications: data || [], unreadCount: count || 0 });
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    if (profile?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
-  // Otherwise return the current user's notifications
-  const { data, error } = await supabase
-    .from("notifications")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const page = parseInt(searchParams.get("page") || "1", 10);
+  const limit = Math.min(
+    parseInt(searchParams.get("limit") || String(NOTIFICATION_PAGE_SIZE), 10),
+    50
+  );
+  const type = searchParams.get("type") as NotificationType | null;
+  const isRead = searchParams.get("is_read");
+  const search = searchParams.get("search");
+  const priority = searchParams.get("priority") as NotificationPriority | null;
+  const groupKey = searchParams.get("group_key");
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const service = getNotificationService();
+  const result = await service.getUserNotifications(targetUserId || user.id, {
+    page,
+    limit,
+    filters: {
+      ...(type && { type }),
+      ...(isRead !== null && isRead !== undefined && { is_read: isRead === "true" }),
+      ...(search && { search }),
+      ...(priority && { priority }),
+      ...(groupKey && { group_key: groupKey }),
+    },
+  });
 
-  const { count } = await supabase
-    .from("notifications")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .eq("is_read", false);
-
-  return NextResponse.json({ notifications: data || [], unreadCount: count || 0 });
+  return NextResponse.json(result);
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const admin = await getAdmin(supabase);
-  if (!admin) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { userId, type, title, message, link } = await req.json();
-
-  if (!userId || !type || !title) {
-    return NextResponse.json({ error: "Missing required fields: userId, type, title" }, { status: 400 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
-    .from("notifications")
-    .insert({ user_id: userId, type, title, message, link })
-    .select()
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
     .single();
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ notification: data });
+  const body = await req.json();
+  const { userId, type, title, message, link, deep_link_url, priority, group_key, metadata, expires_at } =
+    body;
+
+  if (!userId || !type || !title) {
+    return NextResponse.json(
+      { error: "Missing required fields: userId, type, title" },
+      { status: 400 }
+    );
+  }
+
+  const validTypes = Object.values(NotificationType);
+  if (!validTypes.includes(type)) {
+    return NextResponse.json({ error: `Invalid type. Must be one of: ${validTypes.join(", ")}` }, { status: 400 });
+  }
+
+  const service = getNotificationService();
+  const notification = await service.createNotification({
+    user_id: userId,
+    type,
+    title,
+    message,
+    link,
+    deep_link_url,
+    priority: priority || NotificationPriority.Normal,
+    group_key,
+    metadata,
+    expires_at,
+  });
+
+  if (!notification) {
+    return NextResponse.json({ error: "Failed to create notification" }, { status: 500 });
+  }
+
+  return NextResponse.json({ notification }, { status: 201 });
 }

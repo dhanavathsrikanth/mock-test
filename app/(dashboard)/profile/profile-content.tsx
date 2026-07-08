@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BadgeGrid } from "@/components/badges/BadgeGrid";
-import { NotificationToggle } from "@/components/notifications/NotificationToggle";
+import { NotificationPreferencesPanel } from "@/components/notifications/NotificationPreferences";
 import {
   Card,
   CardContent,
@@ -649,7 +649,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
         </CardContent>
       </Card>
 
-      <NotificationToggle />
+      <NotificationPreferencesPanel />
 
       <Card>
         <CardHeader>

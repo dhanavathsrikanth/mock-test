@@ -1,20 +1,38 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getNotificationService, getDeliveryService } from "@/lib/notifications";
+import { NOTIFICATION_BATCH_SIZE } from "@/lib/notifications/constants";
+import { AUDIENCE_TYPES, type AudienceType } from "@/lib/notifications/constants";
+import { NotificationType, NotificationPriority } from "@/types/notifications";
 
 export async function GET() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const [notifRes, subsRes] = await Promise.all([
-    supabase.from("admin_notifications").select("*, profiles:profiles!sent_by(full_name)").order("created_at", { ascending: false }).limit(50),
+    supabase
+      .from("admin_notifications")
+      .select("*, profiles:profiles!sent_by(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(50),
     supabase.from("push_subscriptions").select("user_id"),
   ]);
 
-  const notifications = (notifRes.data || []).map((n) => ({
+  const notifications = (notifRes.data || []).map((n: any) => ({
     ...n,
     sent_by_name: n.profiles?.full_name || "Unknown",
     total_subscribers: subsRes.data?.length || 0,
@@ -23,113 +41,135 @@ export async function GET() {
   return NextResponse.json(notifications);
 }
 
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
-  const body = await request.json();
-  const { title, body: notifBody, url, audience_type, audience_filter, scheduled_at } = body;
+  const body = await req.json();
+  const {
+    title,
+    body: notifBody,
+    url,
+    type,
+    audience_type,
+    audience_filter,
+    scheduled_at,
+    push_enabled,
+  } = body;
 
   if (!title?.trim()) {
     return NextResponse.json({ error: "Title is required" }, { status: 400 });
   }
 
-  const totalCount = await countAudience(supabase, audience_type || "all", audience_filter);
+  const userIds = await getAudienceUserIds(supabase, audience_type || "all", audience_filter);
 
   if (scheduled_at) {
-    const { data, error } = await supabase.from("admin_notifications").insert({
-      title: title.trim(),
-      body: notifBody?.trim() || null,
-      url: url || "/daily",
-      audience_type: audience_type || "all",
-      audience_filter: audience_filter || {},
-      status: "scheduled",
-      scheduled_at,
-      total_count: totalCount,
-      sent_by: user.id,
-    }).select().single();
+    const { data, error } = await supabase
+      .from("admin_notifications")
+      .insert({
+        title: title.trim(),
+        body: notifBody?.trim() || null,
+        url: url || "/dashboard",
+        type: type || "announcement",
+        audience_type: audience_type || "all",
+        audience_filter: audience_filter || {},
+        status: "scheduled",
+        scheduled_at,
+        total_count: userIds.length,
+        sent_by: user.id,
+      })
+      .select()
+      .single();
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json(data);
   }
 
-  const { data, error } = await supabase.from("admin_notifications").insert({
-    title: title.trim(),
-    body: notifBody?.trim() || null,
-    url: url || "/daily",
-    audience_type: audience_type || "all",
-    audience_filter: audience_filter || {},
-    status: "sending",
-    total_count: totalCount,
-    sent_by: user.id,
-  }).select().single();
+  const { data, error } = await supabase
+    .from("admin_notifications")
+    .insert({
+      title: title.trim(),
+      body: notifBody?.trim() || null,
+      url: url || "/dashboard",
+      type: type || "announcement",
+      audience_type: audience_type || "all",
+      audience_filter: audience_filter || {},
+      status: "sending",
+      total_count: userIds.length,
+      sent_by: user.id,
+    })
+    .select()
+    .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   try {
-    const result = await sendPushToAudience(supabase, title.trim(), notifBody?.trim() || "", url || "/daily", audience_type || "all", audience_filter);
-    const { error: updateError } = await supabase.from("admin_notifications").update({
-      status: "sent",
-      sent_at: new Date().toISOString(),
-      sent_count: result.sent,
-    }).eq("id", data.id);
+    let pushResult = { sent: 0, failed: 0 };
 
-    if (updateError) console.error("Failed to update notification status:", updateError);
-
-    // Also save to notifications table so they appear in the bell icon dropdown
-    const userIds = await getAudienceUserIds(supabase, audience_type || "all", audience_filter);
-    const batchSize = 100;
-    for (let i = 0; i < userIds.length; i += batchSize) {
-      const batch = userIds.slice(i, i + batchSize);
-      const rows = batch.map((uid: string) => ({
-        user_id: uid,
-        type: "admin",
-        title: title.trim(),
-        message: notifBody?.trim() || null,
-        link: url || "/daily",
-      }));
-      await supabase.from("notifications").insert(rows);
+    if (push_enabled) {
+      const delivery = getDeliveryService();
+      pushResult = await delivery.sendBulkPush(
+        userIds,
+        title.trim(),
+        notifBody?.trim() || "",
+        url || "/dashboard"
+      );
     }
 
-    return NextResponse.json({ ...data, status: "sent", sent_count: result.sent, failed_count: result.failed });
+    const service = getNotificationService();
+    const created = await service.createBulkNotifications(
+      userIds,
+      (type as NotificationType) || NotificationType.Announcement,
+      title.trim(),
+      notifBody?.trim() || undefined,
+      url || "/dashboard"
+    );
+
+    await supabase
+      .from("admin_notifications")
+      .update({
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        sent_count: created,
+      })
+      .eq("id", data.id);
+
+    return NextResponse.json({
+      ...data,
+      status: "sent",
+      sent_count: created,
+      push_sent: pushResult.sent,
+      push_failed: pushResult.failed,
+    });
   } catch (err) {
     await supabase.from("admin_notifications").update({ status: "failed" }).eq("id", data.id);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to send" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Failed to send" },
+      { status: 500 }
+    );
   }
 }
 
-async function sendPushToAudience(supabase: any, title: string, body: string, url: string, audienceType: string, filter: any): Promise<{ sent: number; failed: number }> {
-  const userIds = await getAudienceUserIds(supabase, audienceType, filter);
-  const { data: subscriptions } = await supabase
-    .from("push_subscriptions")
-    .select("user_id, subscription")
-    .in("user_id", userIds);
-
-  if (!subscriptions || subscriptions.length === 0) return { sent: 0, failed: 0 };
-
-  const webpush = (await import("web-push")).default;
-  webpush.setVapidDetails("mailto:admin@tgpscprep.com", process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "", process.env.VAPID_PRIVATE_KEY || "");
-
-  let sent = 0;
-  let failed = 0;
-  for (const sub of subscriptions) {
-    try {
-      await webpush.sendNotification(sub.subscription as any, JSON.stringify({ title, body, url }));
-      sent++;
-    } catch {
-      failed++;
-      await supabase.from("push_subscriptions").delete().eq("user_id", sub.user_id);
-    }
-  }
-  return { sent, failed };
-}
-
-async function getAudienceUserIds(supabase: any, type: string, filter: any): Promise<string[]> {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+async function getAudienceUserIds(
+  supabase: any,
+  type: AudienceType,
+  filter?: any
+): Promise<string[]> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
   const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
 
   switch (type) {
@@ -138,60 +178,39 @@ async function getAudienceUserIds(supabase: any, type: string, filter: any): Pro
       return (data || []).map((u: any) => u.id);
     }
     case "active_7d": {
-      const { data } = await supabase.from("streaks").select("user_id").gte("last_activity_date", sevenDaysAgo);
+      const { data } = await supabase
+        .from("streaks")
+        .select("user_id")
+        .gte("last_activity_date", sevenDaysAgo);
       return (data || []).map((s: any) => s.user_id);
     }
     case "streak_gt_7": {
-      const { data } = await supabase.from("streaks").select("user_id").gt("current_streak", 7);
+      const { data } = await supabase
+        .from("streaks")
+        .select("user_id")
+        .gt("current_streak", 7);
       return (data || []).map((s: any) => s.user_id);
     }
     case "inactive_3d": {
-      const { data } = await supabase.from("streaks").select("user_id").lt("last_activity_date", threeDaysAgo).or("last_activity_date.is.null");
+      const { data } = await supabase
+        .from("streaks")
+        .select("user_id")
+        .lt("last_activity_date", threeDaysAgo)
+        .or("last_activity_date.is.null");
       return (data || []).map((s: any) => s.user_id);
     }
     case "custom": {
-      if (filter.minLevel !== undefined) {
-        const { data } = await supabase.from("user_levels").select("user_id").gte("current_level", filter.minLevel);
+      if (filter?.minLevel !== undefined) {
+        const { data } = await supabase
+          .from("user_levels")
+          .select("user_id")
+          .gte("current_level", filter.minLevel);
         return (data || []).map((u: any) => u.user_id);
       }
       const { data } = await supabase.from("profiles").select("id");
       return (data || []).map((u: any) => u.id);
     }
-    default: return [];
-  }
-}
-
-async function countAudience(supabase: any, type: string, filter: any): Promise<number> {
-  const today = new Date().toISOString().split("T")[0];
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString();
-
-  switch (type) {
-    case "all": {
-      const { count } = await supabase.from("profiles").select("*", { count: "exact", head: true });
-      return count || 0;
-    }
-    case "active_7d": {
-      const { data } = await supabase.from("streaks").select("user_id").gte("last_activity_date", sevenDaysAgo.split("T")[0]);
-      return data?.length || 0;
-    }
-    case "streak_gt_7": {
-      const { data } = await supabase.from("streaks").select("user_id").gt("current_streak", 7);
-      return data?.length || 0;
-    }
-    case "inactive_3d": {
-      const threeDaysAgo = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
-      const { data } = await supabase.from("streaks").select("user_id").lt("last_activity_date", threeDaysAgo).or("last_activity_date.is.null");
-      return data?.length || 0;
-    }
-    case "custom": {
-      let count = 0;
-      if (filter.minLevel !== undefined) {
-        const { data } = await supabase.from("user_levels").select("user_id").gte("current_level", filter.minLevel);
-        count = data?.length || 0;
-      }
-      return count || 0;
-    }
     default:
-      return 0;
+      return [];
   }
 }

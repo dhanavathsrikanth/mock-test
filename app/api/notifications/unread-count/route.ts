@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getNotificationService } from "@/lib/notifications";
 
-export async function PATCH() {
+export async function GET() {
   const supabase = await createClient();
   const {
     data: { user },
@@ -12,7 +12,7 @@ export async function PATCH() {
   }
 
   const service = getNotificationService();
-  const count = await service.markAllAsRead(user.id);
+  const counts = await service.getCounts(user.id);
 
-  return NextResponse.json({ success: true, updated: count });
+  return NextResponse.json(counts);
 }
