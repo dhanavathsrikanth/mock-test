@@ -73,6 +73,14 @@ async function awardTestXP(sessionId: string) {
             xpGained: data.xpAwarded,
           });
         }
+        if (data.newBadges && data.newBadges.length > 0) {
+          for (const badge of data.newBadges) {
+            useXPStore.getState().addToast(
+              badge.xp_reward,
+              `${badge.icon_emoji} Badge Earned: ${badge.name}`
+            );
+          }
+        }
       }
     }
   } catch {}

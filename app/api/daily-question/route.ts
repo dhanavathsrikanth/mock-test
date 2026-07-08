@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateStreak } from "@/lib/streak";
 import { XP_REWARDS, awardXP } from "@/lib/xp";
+import { checkAndAwardBadges } from "@/lib/badges";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -185,6 +186,20 @@ export async function POST(req: Request) {
 
   await updateStreak(user.id);
 
+  let newBadges: { slug: string; name: string; icon_emoji: string }[] = [];
+  try {
+    const badgeResults = await checkAndAwardBadges(user.id);
+    newBadges = badgeResults
+      .filter((r) => r.awarded)
+      .map((r) => ({
+        slug: r.badge.slug,
+        name: r.badge.name,
+        icon_emoji: r.badge.icon_emoji,
+      }));
+  } catch {
+    // Badge check failure should not block daily question response
+  }
+
   return NextResponse.json({
     isCorrect,
     correctOption,
@@ -193,5 +208,6 @@ export async function POST(req: Request) {
     leveledUp: xpResult.leveledUp,
     newLevelName: xpResult.newLevelName,
     newLevelNumber: xpResult.newLevelNumber,
+    newBadges,
   });
 }

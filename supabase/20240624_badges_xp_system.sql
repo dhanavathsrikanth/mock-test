@@ -124,7 +124,8 @@ create policy "Admins can insert XP rules"
 -- Seed badge definitions (matching existing hardcoded badges)
 insert into public.badge_definitions (name, description, icon_emoji, condition_type, condition_value, xp_reward, slug, is_active) values
   ('Week Warrior', 'Maintained a 7-day practice streak', '🔥', 'streak_days', 7, 150, 'week_warrior', true),
-  ('Iron Will', 'Maintained a 30-day practice streak', '💪', 'streak_days', 30, 500, 'iron_will', true)
+  ('Iron Will', 'Maintained a 30-day practice streak', '💪', 'streak_days', 30, 500, 'iron_will', true),
+  ('Subject Master', 'Achieved 80%+ accuracy in all subjects', '🎓', 'all_subjects_mastered', 80, 1000, 'subject_master', true)
 on conflict (slug) do nothing;
 
 -- Seed level thresholds (matching XP_THRESHOLDS in lib/xp.ts)

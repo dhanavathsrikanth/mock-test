@@ -67,6 +67,7 @@ const CONDITION_LABELS: Record<string, string> = {
   tests_completed: "Tests Completed",
   daily_questions: "Daily Questions",
   perfect_scores: "Perfect Scores",
+  all_subjects_mastered: "All Subjects Mastered",
 };
 
 // ─── Emoji Picker Data ───────────────────────────────────────────
