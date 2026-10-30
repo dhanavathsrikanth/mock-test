@@ -6,14 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Bookmark, ArrowLeft, Check, X, Minus, Eye, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import Image from "next/image";
+import { QuestionFigure, type QuestionImage } from "@/components/QuestionFigure";
+import { QuestionTypeTag } from "@/components/QuestionTypeTag";
+import { numericAnswerLabel, multipleAnswerLabel } from "@/lib/question-response";
 import { ReportButton } from "@/components/report/ReportButton";
 import { MathText } from "@/components/MathText";
+import { QuestionExplanation } from "@/components/QuestionExplanation";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
 import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
 interface AnswerData {
+  numeric_answer?: string | null;
+  selected_options?: number[] | null;
   question_id: string;
   selected_option: number | null;
   is_correct: boolean | null;
@@ -24,9 +29,19 @@ interface AnswerData {
     option_2: string;
     option_3: string;
     option_4: string;
-    correct_option: number;
+    correct_option: number | null;
+    marks_to_all?: boolean;
+    question_type?: "MCQ" | "MSQ" | "NAT";
+    correct_options?: number[] | null;
+    correct_option_sets?: number[][] | null;
+    answer_min?: string | number | null;
+    answer_max?: number | string | null;
+    answer_ranges?: { min: number; max: number }[] | null;
     explanation: string | null;
     image_url?: string | null;
+    image_width?: number;
+    image_height?: number;
+    option_images?: QuestionImage[];
   };
 }
 
@@ -58,10 +73,10 @@ export function ReviewContent({
   const filtered = useMemo(() => {
     let list = answers;
     if (filter === "wrong") {
-      list = list.filter(a => a.selected_option != null && a.is_correct === false);
+      list = list.filter(a => (a.numeric_answer != null || a.selected_option != null || !!a.selected_options?.length) && a.is_correct === false);
     }
     if (filter === "skipped") {
-      list = list.filter(a => a.selected_option == null);
+      list = list.filter(a => !a.questions.marks_to_all && (a.numeric_answer == null && a.selected_option == null && !a.selected_options?.length));
     }
     if (filter === "bookmarked") {
       list = list.filter(a => bookmarks.has(a.question_id));
@@ -98,8 +113,8 @@ export function ReviewContent({
     setExpandedExplanations(next);
   };
 
-  const wrongCount = answers.filter(a => a.selected_option != null && a.is_correct === false).length;
-  const skippedCount = answers.filter(a => a.selected_option == null).length;
+  const wrongCount = answers.filter(a => (a.numeric_answer != null || a.selected_option != null || !!a.selected_options?.length) && a.is_correct === false).length;
+  const skippedCount = answers.filter(a => !a.questions.marks_to_all && (a.numeric_answer == null && a.selected_option == null && !a.selected_options?.length)).length;
   const correctCount = answers.filter(a => a.is_correct === true).length;
   const allCount = answers.length;
 
@@ -220,11 +235,12 @@ export function ReviewContent({
                       <span className="h-7 min-w-[1.75rem] px-2 rounded-lg bg-primary/10 text-primary text-sm font-bold inline-flex items-center justify-center">
                         {currentIndex + 1}
                       </span>
-                      {current.selected_option == null && (
+                      <QuestionTypeTag type={currentQ.question_type} />
+                      {!currentQ.marks_to_all && (current.numeric_answer == null && current.selected_option == null && !current.selected_options?.length) && (
                         <Badge variant="secondary" className="text-xs">Skipped</Badge>
                       )}
                       {current.is_correct === true && (
-                        <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-green-500/20 text-xs">Correct</Badge>
+                        <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 hover:bg-green-500/20 border-green-500/20 text-xs">{currentQ.marks_to_all ? 'Marks to all' : 'Correct'}</Badge>
                       )}
                       {current.is_correct === false && (
                         <Badge variant="destructive" className="text-xs">Incorrect</Badge>
@@ -257,30 +273,29 @@ export function ReviewContent({
                     {isMatchingQuestion(currentQ.question_text) ? (
                       <MatchingQuestion text={currentQ.question_text} />
                     ) : (
-                      <MathText text={currentQ.question_text} />
+                      <MathText text={currentQ.question_text} as="div" className="question-content" />
                     )}
                   </div>
 
                   {/* Image */}
-                  {currentQ.image_url && (
-                    <div className="relative w-full max-h-80 overflow-hidden rounded-xl border bg-muted/30">
-                      <Image
-                        src={currentQ.image_url}
-                        alt="Question image"
-                        width={800}
-                        height={400}
-                        className="object-contain w-full h-auto"
-                        unoptimized
-                      />
-                    </div>
-                  )}
+                  {currentQ.image_url && <QuestionFigure image={{ url: currentQ.image_url, width: currentQ.image_width, height: currentQ.image_height }} />}
 
                   {/* Options */}
+                  {currentQ.question_type === "NAT" ? (
+                    <div className="rounded-xl border bg-muted/30 p-4 space-y-2 text-sm">
+                      <p>Your numerical answer: <strong>{current.numeric_answer ?? "Unattempted"}</strong></p>
+                      <p><strong>{numericAnswerLabel(currentQ.answer_min, currentQ.answer_max, currentQ.answer_ranges)}</strong></p>
+                      <p className="text-xs text-muted-foreground">No negative marking or partial credit.</p>
+                    </div>
+                  ) : (
+                  <>
+                  {currentQ.question_type === "MSQ" && <p className="text-xs text-muted-foreground">Multiple select: the complete correct set is required. No partial credit or negative marking.</p>}
+                  {currentQ.correct_option_sets && <p className="text-sm font-medium text-green-700 dark:text-green-300">{multipleAnswerLabel(currentQ.correct_option_sets)}</p>}
                   <div className="space-y-2.5">
                     {([1, 2, 3, 4] as const).map((idx) => {
-                      const isSelected = current.selected_option === idx;
-                      const isCorrect = currentQ.correct_option === idx;
-                      const showCorrect = isCorrect && (!isSelected || current.is_correct === false);
+                      const isSelected = current.selected_options?.includes(idx) || current.selected_option === idx;
+                      const isCorrect = !!currentQ.marks_to_all || (currentQ.question_type === "MSQ" ? !!currentQ.correct_options?.includes(idx) : currentQ.correct_option_sets ? currentQ.correct_option_sets.some(set => set.length === 1 && set[0] === idx) : currentQ.correct_option === idx);
+                      const showCorrect = !currentQ.marks_to_all && isCorrect && (!isSelected || current.is_correct === false);
 
                       return (
                         <div
@@ -309,15 +324,18 @@ export function ReviewContent({
                             >
                               {optionLabels[idx - 1]}
                             </span>
-                            <span className="flex-1 leading-relaxed break-words">
+                            <div className="min-w-0 flex-1 leading-relaxed break-words">
                               {(() => {
                                 const optionText = currentQ[`option_${idx}` as keyof typeof currentQ] as string;
                                 if (isMatchCodeOption(optionText || "")) {
                                   return <MatchOption text={optionText || ""} className="text-xs" />;
                                 }
-                                return optionText;
+                                return <>
+                                  <MathText text={optionText || ""} />
+                                  {currentQ.option_images?.[idx - 1] && <QuestionFigure image={currentQ.option_images[idx - 1]} inline />}
+                                </>;
                               })()}
-                            </span>
+                            </div>
                             {isSelected && isCorrect && (
                               <Check className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
                             )}
@@ -344,6 +362,8 @@ export function ReviewContent({
                       );
                     })}
                   </div>
+                  </>
+                  )}
                 </div>
               </div>
 
@@ -368,7 +388,7 @@ export function ReviewContent({
                   {expandedExplanations.has(current.question_id) && (
                     <div className="px-4 pb-4 pt-0">
                       <div className="border-t pt-3 text-sm text-muted-foreground leading-relaxed">
-                        {currentQ.explanation}
+                        <QuestionExplanation text={currentQ.explanation} />
                       </div>
                     </div>
                   )}

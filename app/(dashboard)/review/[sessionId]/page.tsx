@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { ReviewContent } from "./review-content";
 
@@ -10,7 +11,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { sessionId } = await params;
   return {
-    title: `Review ${sessionId.slice(0, 8)}... | TGPSC AEE Civil Prep`,
+    title: `Review ${sessionId.slice(0, 8)}... | Exam Prep`,
   };
 }
 
@@ -20,17 +21,16 @@ async function ReviewPageContent({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
+  const { user, exam, stream } = await requireExamContext();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    notFound();
-  }
 
   const userId = user.id;
 
   const { data: session } = await supabase
     .from("test_sessions")
     .select("*")
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("id", sessionId)
     .eq("user_id", userId)
     .single();
@@ -53,7 +53,14 @@ async function ReviewPageContent({
     (bookmarks || []).map((b) => b.question_id)
   );
 
-  return <ReviewContent answers={answers || []} bookmarkedIds={bookmarkedIds} userId={userId} sessionId={sessionId} />;
+  const questionOrder = new Map<string, number>(
+    (session.question_ids || []).map((id: string, index: number) => [id, index])
+  );
+  const orderedAnswers = [...(answers || [])].sort(
+    (a, b) => (questionOrder.get(a.question_id) ?? Infinity) - (questionOrder.get(b.question_id) ?? Infinity)
+  );
+
+  return <ReviewContent answers={orderedAnswers} bookmarkedIds={bookmarkedIds} userId={userId} sessionId={sessionId} />;
 }
 
 export default function ReviewPage({

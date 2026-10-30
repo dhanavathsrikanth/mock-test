@@ -1,9 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { DailyClient } from "./daily-client";
 
-export default async function AdminDailyPage() {
+export default async function AdminDailyPage({ searchParams }: { searchParams: Promise<{ exam?: string }> }) {
   const supabase = await createClient();
 
+  const params = await searchParams;
+  const { data: exams } = await supabase.from("exams").select("id, name").eq("is_active", true).order("name");
+  const examId = exams?.find(exam => exam.id === params.exam)?.id || exams?.[0]?.id;
+  if (!examId) return <p>No active exams available.</p>;
   const today = new Date().toISOString().split("T")[0];
 
   const [dqRes, questionsCountRes, answersRes] = await Promise.all([
@@ -13,13 +17,15 @@ export default async function AdminDailyPage() {
         id, assigned_date, question_id, created_at,
         questions ( id, question_text, subject_id, year, difficulty, subjects ( name ) )
       `)
+      .eq("exam_id", examId)
       .order("assigned_date", { ascending: false }),
-    supabase.from("questions").select("*", { count: "exact", head: true }),
+    supabase.from("questions").select("*", { count: "exact", head: true }).eq("exam_id", examId),
     supabase.from("daily_question_answers").select("id, daily_question_id, is_correct, created_at"),
   ]);
 
   const allDaily = dqRes.data || [];
-  const allAnswers = answersRes.data || [];
+  const dailyIds = new Set(allDaily.map(d => d.id));
+  const allAnswers = (answersRes.data || []).filter(answer => dailyIds.has(answer.daily_question_id));
   const totalQuestions = questionsCountRes.count || 0;
 
   const usedQuestionIds = new Set(allDaily.map((d) => d.question_id));
@@ -90,6 +96,9 @@ export default async function AdminDailyPage() {
 
   return (
     <DailyClient
+      key={examId}
+      examId={examId}
+      exams={exams || []}
       today={today}
       stats={{
         scheduledAhead: upcoming.length,

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { NavigationLink as Link } from "@/components/navigation-link";
+import { usePathname } from "next/navigation";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
@@ -12,6 +12,7 @@ import {
   Calendar,
   Settings,
   LogOut,
+  Loader2,
   ChevronLeft,
   BookOpen,
   Network,
@@ -67,7 +68,7 @@ interface AdminSidebarProps {
 
 export function AdminSidebar({ userName, isOpen, onClose }: AdminSidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { signOut: handleLogout, signingOut, signOutError } = useSignOut();
   const [expandedItems, setExpandedItems] = useState<string[]>([]);
 
   useEffect(() => {
@@ -89,11 +90,6 @@ export function AdminSidebar({ userName, isOpen, onClose }: AdminSidebarProps) {
     );
   };
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
 
   const handleNavClick = () => {
     if (window.innerWidth < 1024) {
@@ -226,10 +222,13 @@ export function AdminSidebar({ userName, isOpen, onClose }: AdminSidebarProps) {
           variant="ghost"
           size="sm"
           onClick={handleLogout}
+          disabled={signingOut}
+          aria-label={signingOut ? "Signing out" : "Sign out"}
+          aria-busy={signingOut}
           className="w-full justify-start gap-2 text-muted-foreground text-xs"
         >
-          <LogOut className="h-3.5 w-3.5" />
-          Sign Out
+          {signingOut ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogOut className="h-3.5 w-3.5" />}
+          {signingOut ? "Signing out…" : "Sign Out"}
         </Button>
       </div>
     </>
@@ -237,6 +236,7 @@ export function AdminSidebar({ userName, isOpen, onClose }: AdminSidebarProps) {
 
   return (
     <>
+      {signOutError && <p role="alert" className="fixed top-4 left-1/2 z-[60] -translate-x-1/2 rounded-lg border bg-background p-3 text-sm text-destructive shadow">{signOutError}</p>}
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:border-r lg:bg-card h-screen sticky top-0">
         {sidebarContent}

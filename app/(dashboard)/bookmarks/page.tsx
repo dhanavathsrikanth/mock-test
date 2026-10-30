@@ -1,13 +1,12 @@
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { BookmarksContent } from "./bookmarks-content";
+import { BookmarksContent, type BookmarkItem } from "./bookmarks-content";
 
-export const metadata = { title: "Bookmarks | TGPSC AEE Civil Prep" };
+export const metadata = { title: "Bookmarks | Exam Prep" };
 
 export default async function BookmarksPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { user, exam, stream } = await requireExamContext();
 
   const userId = user.id;
 
@@ -17,7 +16,7 @@ export default async function BookmarksPage() {
       `
       question_id,
       created_at,
-      questions (
+      questions!inner (
         id,
         question_text,
         option_1,
@@ -25,23 +24,33 @@ export default async function BookmarksPage() {
         option_3,
         option_4,
         correct_option,
+        correct_options,
+        correct_option_sets,
+        question_type,
+        marks_to_all,
+        answer_min,
+        answer_max,
+        answer_ranges,
         year,
         subject_id,
         exam_id,
+        stream_id,
         explanation,
         subjects ( name )
       )
     `
     )
     .eq("user_id", userId)
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
     .order("created_at", { ascending: false });
 
-  const list = (bookmarks || []) as any[];
+  const list = (bookmarks || []) as unknown as BookmarkItem[];
 
   const subjects = [
     ...new Set(
       list.map(
-        (b) => (b.questions as any)?.subjects?.name
+        (b) => b.questions.subjects?.name
       ).filter(Boolean)
     ),
   ] as string[];

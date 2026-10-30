@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { BadgeGrid } from "@/components/badges/BadgeGrid";
@@ -45,6 +47,7 @@ interface Profile {
   role: string;
   xp: number;
   target_exam_id?: string | null;
+  target_stream_id?: string | null;
   avatar_url?: string | null;
   created_at?: string | null;
 }
@@ -66,12 +69,12 @@ interface ProfileContentProps {
 
 const XP_LEVELS = [
   { level: 0, name: "Trainee", xp: 0, icon: "🎓" },
-  { level: 1, name: "Junior AEE", xp: 500, icon: "📘" },
-  { level: 2, name: "AEE", xp: 1500, icon: "🔧" },
-  { level: 3, name: "Senior AEE", xp: 3500, icon: "🏛️" },
-  { level: 4, name: "Assistant Executive", xp: 7000, icon: "⚡" },
-  { level: 5, name: "Executive Engineer", xp: 12000, icon: "🌟" },
-  { level: 6, name: "Chief Engineer", xp: 20000, icon: "👑" },
+  { level: 1, name: "Explorer", xp: 500, icon: "📘" },
+  { level: 2, name: "Practitioner", xp: 1500, icon: "🔧" },
+  { level: 3, name: "Achiever", xp: 3500, icon: "🏛️" },
+  { level: 4, name: "Advanced Learner", xp: 7000, icon: "⚡" },
+  { level: 5, name: "Expert", xp: 12000, icon: "🌟" },
+  { level: 6, name: "Master", xp: 20000, icon: "👑" },
 ];
 
 const BADGE_DEFS: Record<string, { label: string; icon: string; description: string }> = {
@@ -104,10 +107,10 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
 
 export function ProfileContent({ profile: serverProfile, exams, levelData, xpTransactions, badges, totalTests, totalBookmarks }: ProfileContentProps) {
   const router = useRouter();
+  const { signOut: handleLogout, signingOut, signOutError } = useSignOut();
   const getSupabase = () => createClient();
   const [profile, setProfile] = useState(serverProfile);
   const [fullName, setFullName] = useState(serverProfile?.full_name || "");
-  const [targetExamId, setTargetExamId] = useState(serverProfile?.target_exam_id || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -138,7 +141,6 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           if (data) {
             setProfile(data);
             setFullName(data.full_name || "");
-            setTargetExamId(data.target_exam_id || "");
           }
         });
       });
@@ -152,49 +154,41 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
       .from("profiles")
       .update({
         full_name: fullName,
-        target_exam_id: targetExamId || null,
       })
       .eq("id", userId);
 
     if (!error) {
+      router.refresh();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     }
     setSaving(false);
   };
 
-  const handleLogout = async () => {
-    const supabase = getSupabase();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
 
   const handleClearHistory = async () => {
+    if (!userId || !profile?.target_exam_id) return;
     setClearing(true);
     const supabase = getSupabase();
-    await supabase
-      .from("test_answers")
-      .delete()
-      .in(
-        "session_id",
-        (
-          await supabase
-            .from("test_sessions")
-            .select("id")
-            .eq("user_id", userId)
-        ).data?.map((s) => s.id) || []
-      );
-
-    await supabase
-      .from("test_sessions")
-      .delete()
-      .eq("user_id", userId);
-
-    await supabase
-      .from("bookmarks")
-      .delete()
-      .eq("user_id", userId);
-
+    const examId = profile.target_exam_id;
+    const { data: sessions, error: sessionsError } = await supabase.from("test_sessions")
+      .select("id").eq("user_id", userId).eq("exam_id", examId).or(profile.target_stream_id ? `stream_id.eq.${profile.target_stream_id}` : "stream_id.is.null");
+    const { data: bookmarks, error: bookmarksError } = await supabase.from("bookmarks")
+      .select("question_id, questions!inner(exam_id)").eq("user_id", userId).eq("questions.exam_id", examId).or(profile.target_stream_id ? `stream_id.eq.${profile.target_stream_id}` : "stream_id.is.null", {referencedTable:"questions"});
+    if (sessionsError || bookmarksError) { setClearing(false); return; }
+    const sessionIds = (sessions || []).map(session => session.id);
+    if (sessionIds.length) {
+      const { error } = await supabase.from("test_answers").delete().in("session_id", sessionIds);
+      if (error) { setClearing(false); return; }
+      const { error: deleteError } = await supabase.from("test_sessions").delete()
+        .eq("user_id", userId).eq("exam_id", examId).in("id",sessionIds);
+      if (deleteError) { setClearing(false); return; }
+    }
+    const questionIds = (bookmarks || []).map(bookmark => bookmark.question_id);
+    if (questionIds.length) {
+      const { error } = await supabase.from("bookmarks").delete().eq("user_id", userId).in("question_id", questionIds);
+      if (error) { setClearing(false); return; }
+    }
     setClearing(false);
     setShowConfirm(false);
     router.refresh();
@@ -425,21 +419,9 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="target-exam">Target Exam</Label>
-            <select
-              id="target-exam"
-              suppressHydrationWarning
-              value={targetExamId}
-              onChange={(e) => setTargetExamId(e.target.value)}
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <option value="">Select an exam</option>
-              {exams.map((exam) => (
-                <option key={exam.id} value={exam.id}>
-                  {exam.name}
-                </option>
-              ))}
-            </select>
+            <p className="text-sm font-medium">Target Exam</p>
+            <p className="text-sm">{exams.find(exam => exam.id === profile.target_exam_id)?.name || "Choose your exam"}</p>
+            <Link href="/onboarding" className="text-sm text-primary underline">Change exam</Link>
           </div>
           <Button
             onClick={saveProfile}
@@ -459,7 +441,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
             <div className="text-5xl">{XP_LEVELS[levelData?.current_level || 0].icon}</div>
             <div className="flex-1">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Current Level</p>
-              <h2 className="text-2xl font-bold">{levelData?.level_name || "Trainee"}</h2>
+              <h2 className="text-2xl font-bold">{XP_LEVELS.find(level => level.level === (levelData?.current_level || 0))?.name || "Trainee"}</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 {levelData?.total_xp || 0} XP earned
               </p>
@@ -665,11 +647,14 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           <Button
             variant="outline"
             onClick={handleLogout}
+            disabled={signingOut}
+            aria-busy={signingOut}
             className="w-full sm:w-auto"
           >
             <LogOut className="h-4 w-4" />
-            Sign Out
+            {signingOut ? "Signing out…" : "Sign Out"}
           </Button>
+          {signOutError && <p role="alert" className="text-sm text-destructive">{signOutError}</p>}
         </CardContent>
       </Card>
 
@@ -686,7 +671,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Clear all test history</p>
+              <p className="text-sm font-medium">Clear history for this exam</p>
             </div>
             <Button
               variant="destructive"
@@ -706,10 +691,10 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <Card className="w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Clear all test history?</h3>
+            <h3 className="text-lg font-semibold">Clear history for this exam?</h3>
             <p className="text-sm text-muted-foreground">
-              This will permanently delete all your test sessions, answers, and
-              bookmarks. This action cannot be undone.
+              This will permanently delete your test sessions, answers, and
+              bookmarks for the selected exam. This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <Button
@@ -724,7 +709,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
                 onClick={handleClearHistory}
                 disabled={clearing}
               >
-                {clearing ? "Deleting..." : "Delete everything"}
+                {clearing ? "Deleting..." : "Delete exam history"}
               </Button>
             </div>
           </Card>

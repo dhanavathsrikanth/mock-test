@@ -13,8 +13,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "TGPSC Prep - Mock Tests for AEE Civil Engineering",
-  description: "Practice with previous year questions, track your performance, and ace the TGPSC AEE Civil exam.",
+  title: "Exam Prep - Mock Tests and Practice",
+  description: "Practice for your selected exam with previous year questions and track your performance.",
 };
 
 const geistSans = Geist({

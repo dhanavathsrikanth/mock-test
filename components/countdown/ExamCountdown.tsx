@@ -4,7 +4,6 @@ import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { CalendarDays, Settings, RotateCcw } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -12,7 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 interface CountdownData {
   id: string;
   label: string;
-  examDate: string;
+  examDate: string | null;
   isOfficial: boolean;
 }
 
@@ -22,9 +21,6 @@ interface TimeLeft {
   minutes: number;
   seconds: number;
 }
-
-const CUSTOM_DATE_KEY = "tgpsc_custom_exam_date";
-const PREP_START_DATE = new Date("2025-07-01");
 
 function getMotivation(daysLeft: number): string {
   if (daysLeft > 90) return "Great! You have plenty of time. Build your foundation.";
@@ -45,14 +41,8 @@ function calcTimeLeft(target: Date): TimeLeft {
   };
 }
 
-function getPrepProgress(target: Date): number {
-  const total = target.getTime() - PREP_START_DATE.getTime();
-  const elapsed = Date.now() - PREP_START_DATE.getTime();
-  if (total <= 0) return 100;
-  return Math.min(100, Math.round((elapsed / total) * 100));
-}
-
-export function ExamCountdown() {
+export function ExamCountdown({ examId, examName, userId }: { examId: string; examName: string; userId: string }) {
+  const customDateKey = `exam-prep:countdown:${userId}:${examId}`;
   const [data, setData] = useState<CountdownData | null>(null);
   const [customDate, setCustomDate] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
@@ -60,9 +50,9 @@ export function ExamCountdown() {
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
-    const stored = localStorage.getItem(CUSTOM_DATE_KEY);
-    if (stored) setCustomDate(stored);
-  }, []);
+    const stored = localStorage.getItem(customDateKey);
+    setCustomDate(stored && !Number.isNaN(Date.parse(stored)) ? stored : null);
+  }, [customDateKey]);
 
   useEffect(() => {
     async function fetchData() {
@@ -77,16 +67,16 @@ export function ExamCountdown() {
       }
     }
     fetchData();
-  }, []);
+  }, [customDateKey]);
 
   const targetDate = useCallback(() => {
     if (customDate) return new Date(customDate);
-    if (data) return new Date(data.examDate);
-    return new Date("2026-11-15");
+    if (data?.examDate) return new Date(data.examDate);
+    return null;
   }, [customDate, data]);
 
   useEffect(() => {
-    const update = () => setTimeLeft(calcTimeLeft(targetDate()));
+    const update = () => { const target = targetDate(); if (target) setTimeLeft(calcTimeLeft(target)); };
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
@@ -95,23 +85,22 @@ export function ExamCountdown() {
   const handleSetCustomDate = (date: Date | undefined) => {
     if (date) {
       const dateStr = format(date, "yyyy-MM-dd");
-      localStorage.setItem(CUSTOM_DATE_KEY, dateStr);
+      localStorage.setItem(customDateKey, dateStr);
       setCustomDate(dateStr);
       setShowPicker(false);
     }
   };
 
   const handleReset = () => {
-    localStorage.removeItem(CUSTOM_DATE_KEY);
+    localStorage.removeItem(customDateKey);
     setCustomDate(null);
   };
 
   const isPast = timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0;
   const daysLeft = timeLeft.days;
-  const progress = targetDate() ? getPrepProgress(targetDate()) : 0;
-  const motivation = isPast ? "Exam has passed. Set a new target date!" : getMotivation(daysLeft);
-  const label = data?.label || "TGPSC AEE 2026 Exam";
-  const tag = customDate ? "Custom Date" : data?.isOfficial ? "Official Date" : "Expected Date";
+  const motivation = !targetDate() ? "Keep building a consistent practice routine." : isPast ? "Exam has passed. Set a new target date!" : getMotivation(daysLeft);
+  const label = data?.label || examName;
+  const tag = customDate ? "Custom Date" : !data?.examDate ? "Date not announced" : data.isOfficial ? "Official Date" : "Expected Date";
 
   const box = (value: number, label: string) => (
     <div className="flex flex-col items-center">
@@ -167,7 +156,7 @@ export function ExamCountdown() {
           </span>
         </div>
 
-        {isPast ? (
+        {!targetDate() ? (<p className="text-center text-sm text-muted-foreground py-3">No exam date announced. Set your own target date below.</p>) : isPast ? (
           <p className="text-center text-sm text-muted-foreground py-3">
             The exam date has passed. Set a new target date below.
           </p>
@@ -181,27 +170,6 @@ export function ExamCountdown() {
               {box(timeLeft.seconds, "SECONDS")}
             </div>
 
-            {/* Progress bar */}
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span>Jul 2025</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(progress, 100)}%` }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className={`h-full rounded-full ${
-                    progress > 90
-                      ? "bg-red-500"
-                      : progress > 70
-                      ? "bg-amber-500"
-                      : "bg-blue-500"
-                  }`}
-                />
-              </div>
-            </div>
           </>
         )}
 

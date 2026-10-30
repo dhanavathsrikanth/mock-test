@@ -11,7 +11,7 @@ export async function PATCH() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
   const count = await service.markAllAsRead(user.id);
 
   return NextResponse.json({ success: true, updated: count });

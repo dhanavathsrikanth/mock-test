@@ -1,417 +1,89 @@
 "use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import {
-  ClipboardList,
-  BookOpen,
-  SlidersHorizontal,
-  Play,
-  Clock,
-} from "lucide-react";
-
-interface Subject {
-  id: string;
-  name: string;
-}
-
-interface TestSelectFormProps {
-  userId: string;
-  examId: string;
-  subjects: Subject[];
-  years: number[];
-}
-
-type Mode = "full_mock" | "topic_wise" | "custom";
-
-const QUESTION_COUNTS = [10, 25, 50, 100, 150];
-
-const MODE_INFO: Record<
-  Mode,
-  { title: string; desc: string; icon: typeof ClipboardList }
-> = {
-  full_mock: {
-    title: "Full Mock Test",
-    desc: "150 Questions · 150 min",
-    icon: ClipboardList,
-  },
-  topic_wise: {
-    title: "Subject-wise Test",
-    desc: "Pick a subject to practice",
-    icon: BookOpen,
-  },
-  custom: {
-    title: "Custom Test",
-    desc: "Flexible — pick year, subject & count",
-    icon: SlidersHorizontal,
-  },
+import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import type { ExamStream } from '@/lib/stream-scope';
+import { filterTestPool, type PoolQuestion, type TestTopic, type TestMode } from '@/lib/test-pool';
+import { createTest } from './actions';
+type Props = {
+    examId: string;
+    examName: string;
+    stream: ExamStream | null;
+    requiresStream: boolean;
+    subjects: {
+        id: string;
+        name: string;
+    }[];
+    topics: TestTopic[];
+    pool: PoolQuestion[];
 };
-
-export function TestSelectForm({
-  userId,
-  examId,
-  subjects,
-  years,
-}: TestSelectFormProps) {
-  const router = useRouter();
-  const getSupabase = () => createClient();
-
-  const [mode, setMode] = useState<Mode>("full_mock");
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [selectedSubjects, setSelectedSubjects] = useState<Set<string>>(
-    new Set()
-  );
-  const [questionCount, setQuestionCount] = useState(50);
-  const [timerEnabled, setTimerEnabled] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const isAllSubjects = selectedSubjects.size === 0;
-
-  const toggleSubject = (id: string) => {
-    const next = new Set(selectedSubjects);
-    if (mode === "topic_wise") {
-      if (next.has(id)) {
-        next.clear();
-      } else {
-        next.clear();
-        next.add(id);
-      }
-    } else if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    setSelectedSubjects(next);
-  };
-
-  const canStart = (): boolean => {
-    if (mode === "full_mock") return true;
-    if (mode === "topic_wise") return selectedSubjects.size === 1;
-    return selectedSubjects.size > 0 || selectedYear !== null;
-  };
-
-  const handleStart = async () => {
-    if (!canStart()) return;
-    setLoading(true);
-    setError(null);
-
-    if (mode === "full_mock") {
-      const { data: session, error: err } = await getSupabase()
-        .from("test_sessions")
-        .insert({
-          user_id: userId,
-          exam_id: examId,
-          subject_id: null,
-          year: null,
-          mode: "full_mock",
-          total_questions: 150,
-          duration_minutes: 150,
-          status: "in_progress",
-        })
-        .select()
-        .single();
-
-      if (err) {
-        setError(err.message);
-        setLoading(false);
-        return;
-      }
-      router.push(`/test/${session.id}`);
-      return;
-    }
-
-    if (mode === "topic_wise") {
-      const subjectId = Array.from(selectedSubjects)[0];
-      const { data: session, error: err } = await getSupabase()
-        .from("test_sessions")
-        .insert({
-          user_id: userId,
-          exam_id: examId,
-          subject_id: subjectId,
-          year: selectedYear,
-          mode: "topic_wise",
-          total_questions: questionCount,
-          duration_minutes: timerEnabled ? questionCount : 0,
-          status: "in_progress",
-        })
-        .select()
-        .single();
-
-      if (err) {
-        setError(err.message);
-        setLoading(false);
-        return;
-      }
-      router.push(`/test/${session.id}`);
-      return;
-    }
-
-    const subjectId =
-      selectedSubjects.size === 1 ? Array.from(selectedSubjects)[0] : null;
-
-    const { data: session, error: err } = await getSupabase()
-      .from("test_sessions")
-      .insert({
-        user_id: userId,
-        exam_id: examId,
-        subject_id: subjectId,
-        year: selectedYear,
-        mode: "custom",
-        total_questions: questionCount,
-        duration_minutes: timerEnabled ? questionCount : 0,
-        status: "in_progress",
-      })
-      .select()
-      .single();
-
-    if (err) {
-      setError(err.message);
-      setLoading(false);
-      return;
-    }
-    router.push(`/test/${session.id}`);
-  };
-
-  return (
-    <div className="space-y-4 max-w-2xl mx-auto">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">New Test</h1>
-        <p className="text-muted-foreground mt-1">
-          Configure your test settings and start practicing
-        </p>
-      </div>
-
-      <div>
-        <h2 className="text-lg font-semibold mb-3">Test Mode</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {(Object.entries(MODE_INFO) as [Mode, (typeof MODE_INFO)[Mode]][]).map(
-            ([key, info]) => {
-              const Icon = info.icon;
-              const selected = mode === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    setMode(key);
-                    setError(null);
-                    if (key !== "custom") {
-                      setQuestionCount(50);
-                      setTimerEnabled(true);
-                    }
-                    if (key === "topic_wise") {
-                      setSelectedSubjects(new Set());
-                    }
-                    if (key === "full_mock") {
-                      setSelectedSubjects(new Set());
-                      setSelectedYear(null);
-                    }
-                  }}
-                  className={`relative rounded-xl border p-4 text-left transition-all ${
-                    selected
-                      ? "border-primary ring-1 ring-primary bg-primary/5"
-                      : "border-border hover:border-muted-foreground/30"
-                  }`}
-                >
-                  <div
-                    className={`p-2 rounded-lg w-fit mb-3 ${
-                      selected
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="font-semibold text-sm">{info.title}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {info.desc}
-                  </p>
-                </button>
-              );
+const styles = 'h-11 w-full rounded-lg border bg-background px-3 text-sm disabled:opacity-50';
+export function TestSelectForm({ examId, examName, stream, requiresStream, subjects, topics, pool }: Props) {
+    const router = useRouter();
+    const [mode, setMode] = useState<TestMode>(requiresStream ? 'full_paper' : 'full_mock');
+    const [year, setYear] = useState('');
+    const [paper, setPaper] = useState('');
+    const [subjectId, setSubject] = useState('');
+    const [topicId, setTopic] = useState('');
+    const [count, setCount] = useState(10);
+    const [timed, setTimed] = useState(true);
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState('');
+    const full = mode === 'full_paper' || mode === 'full_mock';
+    const years = [...new Set(pool.flatMap(q => q.year ? [q.year] : []))].sort((a, b) => b - a);
+    const papers = [...new Set(pool.filter(q => !year || q.year === Number(year)).flatMap(q => q.paper ? [q.paper] : []))].sort();
+    const sourcePool = filterTestPool(pool, { year: year ? Number(year) : null, paper: paper || null, subjectId: null, topicId: null }, topics);
+    const matching = filterTestPool(sourcePool, { year: null, paper: null, subjectId: full ? null : subjectId || null, topicId: full ? null : topicId || null }, topics);
+    const availableSubjects = subjects.filter(s => sourcePool.some(q => q.subject_id === s.id));
+    const availableTopics = topics.filter(t => t.subject_id === subjectId && filterTestPool(sourcePool, { year: null, paper: null, subjectId, topicId: t.id }, topics).length);
+    const total = mode === 'full_paper' ? matching.length : Math.min(count, matching.length);
+    const minutes = mode === 'full_paper' ? 180 : total;
+    const ready = matching.length > 0 && (!requiresStream || (!!year && !!paper)) && (!(mode === 'subject_wise' || mode === 'topic_wise') || !!subjectId) && (mode !== 'topic_wise' || !!topicId);
+    const modes: [
+        TestMode,
+        string,
+        string
+    ][] = [requiresStream ? ['full_paper', 'Full paper', 'Every question from one year and paper / shift'] : ['full_mock', 'Full mock', 'Questions from your exam'], ['subject_wise', 'Subject-wise', 'Choose one subject'], ['topic_wise', 'Topic-wise', 'Choose a topic or subtopic'], ['custom', 'Custom practice', 'Choose your filters and question count']];
+    async function start() {
+        if (!ready || pending)
+            return;
+        setPending(true);
+        setError('');
+        try {
+            const result = await createTest({ examId, streamId: stream?.id || null, mode, year: year ? Number(year) : null, paper: paper || null, subjectId: full ? null : subjectId || null, topicId: full ? null : topicId || null, count, timed });
+            if ('error' in result) {
+                setError(result.error);
+                setPending(false);
             }
-          )}
-        </div>
+            else
+                router.push(`/test/${result.sessionId}`);
+        }
+        catch {
+            setError('Unable to start your test. Please try again.');
+            setPending(false);
+        }
+    }
+    if (!pool.length)
+        return <div className="mx-auto max-w-2xl space-y-4 py-6"><h1 className="text-2xl font-bold">{stream?.name || examName}</h1><p>No questions have been added for this {stream ? 'stream' : 'exam'} yet. Papers and subjects will appear here after questions are added.</p><Button asChild variant="outline"><Link href="/onboarding">Change exam or stream</Link></Button></div>;
+    return <div className="mx-auto max-w-2xl space-y-6 py-4">
+    <header><p className="text-sm text-muted-foreground">{examName}{stream ? ` · ${stream.name} (${stream.code})` : ''}</p><h1 className="mt-1 text-2xl font-bold">Create your test</h1><p className="mt-2 text-sm text-muted-foreground">Choose a source paper, then take the full paper or focus your practice.</p></header>
+    <fieldset disabled={pending} className="space-y-6">
+      <div className="grid grid-cols-2 gap-3">{modes.map(([value, title, desc]) => <button type="button" key={value} aria-pressed={mode === value} onClick={() => { setMode(value); setSubject(''); setTopic(''); setError(''); }} className={`rounded-xl border p-4 text-left ${mode === value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted'}`}><span className="block font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{desc}</span></button>)}</div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className="space-y-2 text-sm font-medium">Source year<select aria-label="Source year" className={styles} value={year} onChange={e => { setYear(e.target.value); setPaper(''); setSubject(''); setTopic(''); }}><option value="">{requiresStream ? 'Select year' : 'All years'}</option>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
+        <label className="space-y-2 text-sm font-medium">Paper / shift<select aria-label="Paper / shift" className={styles} value={paper} disabled={requiresStream && !year} onChange={e => { setPaper(e.target.value); setSubject(''); setTopic(''); }}><option value="">{requiresStream ? 'Select paper / shift' : 'All papers'}</option>{papers.map(p => <option key={p} value={p}>{p}</option>)}</select></label>
       </div>
-
-      <div>
-        <Label htmlFor="year" className="text-base font-semibold mb-2 block">
-          Year
-        </Label>
-        <select
-          id="year"
-          value={selectedYear ?? ""}
-          onChange={(e) => {
-            setSelectedYear(e.target.value ? Number(e.target.value) : null);
-            setError(null);
-          }}
-          className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <Label className="text-base font-semibold mb-2 block">
-          {mode === "topic_wise" ? "Subject" : "Subjects"}
-        </Label>
-        <div className="flex flex-wrap gap-2">
-          {subjects.map((subject) => {
-            const active = selectedSubjects.has(subject.id);
-            const isDisabled = mode === "full_mock";
-            return (
-              <button
-                key={subject.id}
-                type="button"
-                onClick={() => {
-                  if (isDisabled) return;
-                  toggleSubject(subject.id);
-                  setError(null);
-                }}
-                disabled={isDisabled}
-                className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : isDisabled
-                    ? "opacity-40 cursor-not-allowed bg-muted"
-                    : "bg-background text-foreground border-input hover:bg-accent hover:text-accent-foreground"
-                }`}
-              >
-                {subject.name}
-              </button>
-            );
-          })}
-          {isAllSubjects && mode !== "full_mock" && (
-            <span className="text-xs text-muted-foreground self-center ml-1">
-              (all subjects)
-            </span>
-          )}
-          {mode === "full_mock" && (
-            <span className="text-xs text-muted-foreground self-center ml-1">
-              (all subjects included)
-            </span>
-          )}
-        </div>
-      </div>
-
-      {mode === "custom" && (
-        <div>
-          <Label className="text-base font-semibold mb-2 block">
-            Number of Questions
-          </Label>
-          <div className="flex flex-wrap gap-2">
-            {QUESTION_COUNTS.map((count) => (
-              <button
-                key={count}
-                type="button"
-                onClick={() => setQuestionCount(count)}
-                className={`inline-flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
-                  questionCount === count
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-foreground border-input hover:bg-accent"
-                }`}
-              >
-                {count}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {mode === "custom" && (
-        <div>
-          <Label className="text-base font-semibold mb-2 block">Timer</Label>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setTimerEnabled(true)}
-              className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
-                timerEnabled
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-foreground border-input hover:bg-accent"
-              }`}
-            >
-              <Clock className="h-4 w-4" />
-              On ({questionCount} min)
-            </button>
-            <button
-              type="button"
-              onClick={() => setTimerEnabled(false)}
-              className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors ${
-                !timerEnabled
-                  ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background text-foreground border-input hover:bg-accent"
-              }`}
-            >
-              <Clock className="h-4 w-4" />
-              Off (Practice Mode)
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="rounded-xl border bg-card p-5">
-        <div className="text-sm space-y-1 text-muted-foreground mb-4">
-          <p>
-            <span className="font-medium text-foreground">Mode:</span>{" "}
-            {MODE_INFO[mode].title}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Questions:</span>{" "}
-            {mode === "full_mock" ? 150 : questionCount}
-          </p>
-          <p>
-            <span className="font-medium text-foreground">Duration:</span>{" "}
-            {mode === "full_mock"
-              ? "150 min"
-              : timerEnabled
-              ? `${questionCount} min`
-              : "Untimed"}
-          </p>
-          {selectedYear && (
-            <p>
-              <span className="font-medium text-foreground">Year:</span>{" "}
-              {selectedYear}
-            </p>
-          )}
-          {!isAllSubjects && (
-            <p>
-              <span className="font-medium text-foreground">Subjects:</span>{" "}
-              {subjects
-                .filter((s) => selectedSubjects.has(s.id))
-                .map((s) => s.name)
-                .join(", ")}
-            </p>
-          )}
-          {isAllSubjects && (
-            <p>
-              <span className="font-medium text-foreground">Subjects:</span> All
-            </p>
-          )}
-        </div>
-
-        {error && (
-          <p className="text-sm text-destructive mb-3">{error}</p>
-        )}
-
-        <Button
-          onClick={handleStart}
-          disabled={loading || !canStart()}
-          size="lg"
-          className="w-full sm:w-auto"
-        >
-          <Play className="h-4 w-4" />
-          {loading ? "Creating..." : "Start Test"}
-        </Button>
-      </div>
+      {!full && <label className="block space-y-2 text-sm font-medium">Subject<select aria-label="Subject" value={subjectId} className={styles} onChange={e => { setSubject(e.target.value); setTopic(''); }}><option value="">{mode === 'custom' ? 'All subjects' : 'Select subject'}</option>{availableSubjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>}
+      {!full && mode !== 'subject_wise' && <label className="block space-y-2 text-sm font-medium">Topic / subtopic<select aria-label="Topic / subtopic" className={styles} value={topicId} disabled={!subjectId} onChange={e => setTopic(e.target.value)}><option value="">{mode === 'custom' ? 'All topics' : 'Select topic / subtopic'}</option>{availableTopics.map(t => <option key={t.id} value={t.id}>{t.parent_id ? `${topics.find(p => p.id === t.parent_id)?.name || ''} → ` : ''}{t.name}</option>)}</select></label>}
+      {mode !== 'full_paper' && <label className="block space-y-2 text-sm font-medium">Number of questions<select aria-label="Number of questions" className={styles} value={count} onChange={e => setCount(Number(e.target.value))}>{[10, 25, 50, 65, 100, 150].map(n => <option key={n} value={n}>{n}</option>)}</select></label>}
+      <label className="block space-y-2 text-sm font-medium">Timing<select aria-label="Timing" className={styles} value={timed ? 'timed' : 'practice'} onChange={e => setTimed(e.target.value === 'timed')}><option value="timed">Timed test{total ? ` · ${minutes} minutes` : ''}</option><option value="practice">Untimed practice</option></select></label>
+    </fieldset>
+    <div className="space-y-3 rounded-xl border bg-card p-5">
+      <p className="text-sm">{ready ? <><strong>{total} questions</strong>{mode === 'full_paper' ? ` · ${matching.reduce((n, q) => n + Number(q.marks || 0), 0)} marks` : ''} · {timed ? `${minutes} minutes` : 'Untimed practice'}{paper ? ` · ${year} / ${paper}` : ''}</> : requiresStream && (!year || !paper) ? 'Select a year and paper / shift to continue.' : 'Select your subject or topic to continue.'}</p>
+      {mode !== 'full_paper' && matching.length < count && ready && <p className="text-xs text-muted-foreground">This selection has {matching.length} questions. All available questions will be included.</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+      <Button onClick={start} disabled={!ready || pending} className="w-full">{pending ? 'Creating…' : timed ? 'Start test' : 'Start practice'}</Button>
     </div>
-  );
+  </div>;
 }

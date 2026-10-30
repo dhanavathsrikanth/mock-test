@@ -11,7 +11,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
   const counts = await service.getCounts(user.id);
 
   return NextResponse.json(counts);

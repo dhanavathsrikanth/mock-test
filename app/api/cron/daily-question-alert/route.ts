@@ -17,13 +17,12 @@ async function handleCron(req: Request) {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { data: dailyQ } = await supabase
+  const { data: dailyQuestions } = await supabase
     .from("daily_questions")
-    .select("id, questions(id, option_1)")
-    .eq("assigned_date", today)
-    .maybeSingle();
+    .select("id, questions!inner(exam_id,stream_id)")
+    .eq("assigned_date", today);
 
-  if (!dailyQ) {
+  if (!dailyQuestions?.length) {
     return NextResponse.json({ message: "No daily question for today yet" });
   }
 
@@ -37,14 +36,17 @@ async function handleCron(req: Request) {
   }
 
   const prefUserIds = new Set(prefUsers.map((u) => u.user_id));
+  const { data: profiles } = await supabase.from("profiles").select("id, target_exam_id, target_stream_id").in("id", [...prefUserIds]);
+  const selectedExams = new Map((profiles || []).map(profile => [profile.id, `${profile.target_exam_id}:${profile.target_stream_id || ""}`]));
+  const questionByExam = new Map(dailyQuestions.map(daily => { const q=daily.questions as unknown as {exam_id:string;stream_id:string|null}; return [`${q.exam_id}:${q.stream_id || ""}`,daily.id]; }));
 
   const { data: alreadyAnswered } = await supabase
     .from("daily_question_answers")
-    .select("user_id")
-    .eq("daily_question_id", dailyQ.id);
+    .select("user_id, daily_question_id")
+    .in("daily_question_id", dailyQuestions.map(daily => daily.id));
 
   const answeredUsers = new Set(
-    (alreadyAnswered || []).map((a) => a.user_id)
+    (alreadyAnswered || []).map((a) => `${a.user_id}:${a.daily_question_id}`)
   );
 
   const { data: subscriptions } = await supabase
@@ -56,13 +58,14 @@ async function handleCron(req: Request) {
 
   for (const sub of subscriptions || []) {
     if (!prefUserIds.has(sub.user_id)) continue;
-    if (answeredUsers.has(sub.user_id)) continue;
+    const dailyId = questionByExam.get(selectedExams.get(sub.user_id) || '');
+    if (!dailyId || answeredUsers.has(`${sub.user_id}:${dailyId}`)) continue;
 
     try {
       await sendPushNotificationToUser(
         sub.user_id,
         "Daily Question is live!",
-        "Answer today's TSPSC AEE question and earn +15 XP.",
+        "Answer today's practice question for your selected exam and earn XP.",
         "/daily"
       );
       sent++;

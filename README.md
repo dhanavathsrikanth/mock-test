@@ -1,3 +1,11 @@
+## Exam selection
+
+The student app uses `profiles.target_exam_id` as its saved exam selection. Students without an active selection are sent to `/onboarding`; switching exams uses the same page. There is no fallback exam. Tests, results, analytics, bookmarks, revision, and countdowns follow the selected exam. XP and streaks are account-wide.
+
+Before deploying these changes, apply `supabase/migrations/20261027143423_exam_scoped_daily_questions.sql` to the intended database. It preserves existing assignments, backfills their exam, and changes the daily-question uniqueness rule to `(exam_id, assigned_date)`. The scheduler and admin daily calendar require this migration. It has not been applied automatically.
+
+Run `node --test tests/exam-context.test.cjs` and `npx tsc --noEmit` for the selection checks. A production build also requires valid Supabase environment variables.
+
 <a href="https://demo-nextjs-with-supabase.vercel.app/">
   <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
   <h1 align="center">Next.js and Supabase Starter Kit</h1>
@@ -107,3 +115,7 @@ Please file feedback and issues over on the [Supabase GitHub org](https://github
 - [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
 - [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
 - [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+
+## GATE source organisation
+
+GATE question sources and imports use the [stream → year → paper structure](data/gate-2027/README.md). Existing Civil Engineering papers are under `data/gate-2027/streams/CE-civil-engineering/papers/2026/CE1/` and `CE2/`.

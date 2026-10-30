@@ -1,4 +1,5 @@
 import { createCronClient } from "@/lib/supabase/cron";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   Notification,
   NotificationType,
@@ -18,7 +19,9 @@ import { getQueue } from "./queue";
 import { isNotificationExpired } from "./utils";
 
 export class NotificationService {
-  private supabase = createCronClient();
+  // User routes supply their cookie-authenticated client so RLS applies and
+  // reading/managing an inbox does not require a service-role credential.
+  constructor(private supabase: SupabaseClient = createCronClient()) {}
 
   async createNotification(payload: CreateNotificationPayload): Promise<Notification | null> {
     const { data, error } = await this.supabase
@@ -329,7 +332,9 @@ export class NotificationService {
 
 let serviceInstance: NotificationService | null = null;
 
-export function getNotificationService(): NotificationService {
+export function getNotificationService(supabase?: SupabaseClient): NotificationService {
+  // Never cache a request's authenticated client across users.
+  if (supabase) return new NotificationService(supabase);
   if (!serviceInstance) {
     serviceInstance = new NotificationService();
   }

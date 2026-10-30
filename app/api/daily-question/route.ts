@@ -1,3 +1,4 @@
+import { getExamContext } from "@/lib/exam-context";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { updateStreak } from "@/lib/streak";
@@ -10,6 +11,9 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const { exam, stream } = await getExamContext();
+  if (!exam || (exam.requires_stream && !stream)) return NextResponse.json({ error: "Choose an exam first" }, { status: 409 });
 
   const url = new URL(req.url);
   const isHistory = url.searchParams.get("history") === "true";
@@ -24,8 +28,10 @@ export async function GET(req: NextRequest) {
         id,
         assigned_date,
         question_id,
-        questions ( subject_id, subjects ( name ) )
+        questions!inner ( subject_id, subjects ( name ) )
       `)
+      .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
       .order("assigned_date", { ascending: false });
 
     const { data: answers } = await supabase
@@ -63,7 +69,7 @@ export async function GET(req: NextRequest) {
       id,
       assigned_date,
       question_id,
-      questions (
+      questions!inner (
         id,
         question_text,
         option_1,
@@ -77,6 +83,8 @@ export async function GET(req: NextRequest) {
         subjects ( name )
       )
     `)
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
     .eq("assigned_date", today)
     .maybeSingle();
 
@@ -123,6 +131,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { exam, stream } = await getExamContext();
+  if (!exam || (exam.requires_stream && !stream)) return NextResponse.json({ error: "Choose an exam first" }, { status: 409 });
+
   const body = await req.json();
   const { dailyQuestionId, selectedOption } = body;
 
@@ -136,7 +147,10 @@ export async function POST(req: Request) {
 
   const { data: daily } = await supabase
     .from("daily_questions")
-    .select("id, question_id, questions(correct_option, explanation)")
+    .select("id, question_id, questions!inner(correct_option, explanation)")
+    .eq("questions.question_type", "MCQ")
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
     .eq("id", dailyQuestionId)
     .single();
 

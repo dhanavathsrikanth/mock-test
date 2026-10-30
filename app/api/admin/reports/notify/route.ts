@@ -60,10 +60,10 @@ export async function POST(req: Request) {
     }
 
     await resend.emails.send({
-      from: "TGPSC Prep <noreply@tgpscprep.com>",
+      from: "Exam Prep <noreply@tgpscprep.com>",
       to: reporterEmail,
       subject: "Your Question Report Has Been Reviewed",
-      text: `Hi ${reporterName},\n\nYour report for "${questionPreview}..." has been reviewed and the question has been corrected. Thank you for helping improve our question bank!\n\nBest,\nThe TGPSC Prep Team`,
+      text: `Hi ${reporterName},\n\nYour report for "${questionPreview}..." has been reviewed and the question has been corrected. Thank you for helping improve our question bank!\n\nBest,\nThe Exam Prep Team`,
     });
 
     return NextResponse.json({ success: true, notified: reporterEmail });

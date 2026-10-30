@@ -1,4 +1,5 @@
-import { redirect } from "next/navigation";
+import Link from "next/link";
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import dynamic from "next/dynamic";
 import { Sidebar } from "./sidebar";
@@ -22,21 +23,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { exam, profile, stream } = await requireExamContext();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) redirect("/auth/login");
-
-  const [profileRes, configRes] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, role, avatar_url")
-      .eq("id", user.id)
-      .single(),
-    supabase.from("app_config").select("*").eq("key", "general").maybeSingle(),
-  ]);
-
-  const profile = profileRes.data;
+  const configRes = await supabase.from("app_config").select("*").eq("key", "general").maybeSingle();
   const generalConfig = configRes.data?.value as Record<string, any> | undefined;
   const maintenanceMode = generalConfig?.maintenanceMode === true;
   const userRole = profile?.role || "user";
@@ -50,7 +39,8 @@ export default async function DashboardLayout({
         <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
           <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={userRole === "admin"} />
           <XPBar />
-          <div className="px-3 py-2 flex-1">{children}</div>
+          <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm"><span className="font-medium">{exam.name}{stream ? ` · ${stream.name} (${stream.code})` : ""}</span><Link href="/onboarding" className="text-primary underline">Switch exam / stream</Link></div>
+          <div key={`${exam.id}:${stream?.id || ""}`} className="px-3 py-2 flex-1">{children}</div>
         </main>
       </TestLayoutWrapper>
       <XPToast />

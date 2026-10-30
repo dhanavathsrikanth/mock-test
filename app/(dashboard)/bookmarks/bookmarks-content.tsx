@@ -1,5 +1,6 @@
 "use client";
 
+import { createBookmarkTest } from "../test/select/actions";
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -18,11 +19,13 @@ import {
 import Link from "next/link";
 import { ReportButton } from "@/components/report/ReportButton";
 import { MathText } from "@/components/MathText";
+import { QuestionExplanation } from "@/components/QuestionExplanation";
+import { numericAnswerLabel, multipleAnswerLabel } from "@/lib/question-response";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
 import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 
-interface BookmarkItem {
+export interface BookmarkItem {
   question_id: string;
   created_at: string;
   questions: {
@@ -32,7 +35,14 @@ interface BookmarkItem {
     option_2: string;
     option_3: string;
     option_4: string;
-    correct_option: number;
+    correct_option: number | null;
+    marks_to_all?: boolean;
+    correct_options?: number[] | null;
+    correct_option_sets?: number[][] | null;
+    question_type?: string;
+    answer_min?: number | string | null;
+    answer_max?: number | string | null;
+    answer_ranges?: { min: number; max: number }[] | null;
     year: number | null;
     subject_id: string;
     exam_id: string;
@@ -61,13 +71,14 @@ export function BookmarksContent({
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
+  const [startError, setStartError] = useState("");
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set(reportedQuestionIds));
 
   const filtered = useMemo(() => {
     let list = bookmarks;
     if (subjectFilter) {
       list = list.filter(
-        (b) => (b.questions as any)?.subjects?.name === subjectFilter
+        (b) => b.questions.subjects?.name === subjectFilter
       );
     }
     if (searchQuery.trim()) {
@@ -96,33 +107,19 @@ export function BookmarksContent({
   };
 
   const startTest = async () => {
-    if (bookmarks.length === 0) return;
-    setCreating(true);
-
-    const examId = (bookmarks[0].questions as any).exam_id;
-    const totalQ = bookmarks.length;
-
-    const { data: session, error } = await getSupabase()
-      .from("test_sessions")
-      .insert({
-        user_id: userId,
-        exam_id: examId,
-        mode: "custom",
-        total_questions: totalQ,
-        duration_minutes: totalQ,
-        status: "in_progress",
-      })
-      .select()
-      .single();
-
-    setCreating(false);
-
-    if (error) return;
-    router.push(`/test/${session.id}`);
+    if (!bookmarks.length || creating) return;
+    setCreating(true); setStartError("");
+    try {
+      const result=await createBookmarkTest();
+      if ('error' in result) setStartError(result.error);
+      else router.push('/test/'+result.sessionId);
+    } catch { setStartError('Unable to start bookmark practice. Please try again.'); }
+    finally { setCreating(false); }
   };
 
   return (
     <div className="space-y-4">
+      {startError && <p role="alert" className="text-sm text-destructive">{startError}</p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
@@ -217,7 +214,7 @@ export function BookmarksContent({
       {/* Question cards */}
       <div className="space-y-3">
         {filtered.map((b) => {
-          const q = b.questions as any;
+          const q = b.questions;
           const subjectName = q?.subjects?.name || "General";
           const isExpanded = expandedIds.has(b.question_id);
 
@@ -254,7 +251,9 @@ export function BookmarksContent({
                     {/* Expanded answer */}
                     {isExpanded && (
                       <div className="mt-4 space-y-2 border-t pt-4">
-                        {(
+                        {q.marks_to_all && <p className="text-sm text-green-700 dark:text-green-300">Official key: Marks to all. Full marks apply even when skipped; no option is designated correct.</p>}
+                        {q.correct_option_sets && <p className="text-sm text-green-700 dark:text-green-300">{multipleAnswerLabel(q.correct_option_sets)}</p>}
+                        {q.question_type === "NAT" ? <p className="text-sm text-green-700 dark:text-green-300">{numericAnswerLabel(q.answer_min, q.answer_max, q.answer_ranges)}</p> : (
                           [
                             [1, q.option_1],
                             [2, q.option_2],
@@ -262,7 +261,7 @@ export function BookmarksContent({
                             [4, q.option_4],
                           ] as const
                         ).map(([idx, text]) => {
-                          const isCorrect = idx === q.correct_option;
+                          const isCorrect = q.question_type === "MSQ" ? !!q.correct_options?.includes(idx) : q.correct_option_sets ? q.correct_option_sets.some(set => set.length === 1 && set[0] === idx) : idx === q.correct_option;
                           return (
                             <div
                               key={idx}
@@ -289,12 +288,12 @@ export function BookmarksContent({
                           );
                         })}
                         {q.explanation && (
-                          <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                          <div className="mt-3 space-y-2">
                             <span className="font-medium text-foreground">
                               Explanation:
                             </span>{" "}
-                            {q.explanation}
-                          </p>
+                            <QuestionExplanation text={q.explanation} />
+                          </div>
                         )}
                       </div>
                     )}
@@ -306,7 +305,7 @@ export function BookmarksContent({
                       questionId={q.id}
                       questionText={q.question_text}
                       subjectName={q?.subjects?.name}
-                      year={q.year}
+                      year={q.year ?? undefined}
                       isReported={reportedIds.has(q.id)}
                       onReported={(id) => setReportedIds((prev) => new Set(prev).add(id))}
                       className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted transition-colors"

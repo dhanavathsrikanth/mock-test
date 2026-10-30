@@ -15,7 +15,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { ReportButton } from "@/components/report/ReportButton";
-import Image from "next/image";
+import { QuestionFigure, type QuestionImage } from "@/components/QuestionFigure";
+import { NumericAnswerInput } from "@/components/NumericAnswerInput";
+import { QuestionTypeTag } from "@/components/QuestionTypeTag";
+import { formatMarks, negativeMarkLabel, questionMarks } from "@/lib/marking";
+import { hasResponse, numericResponse, selection, toggleResponse, type QuestionResponse } from "@/lib/question-response";
 import { MathText } from "@/components/MathText";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
@@ -30,6 +34,16 @@ interface Question {
   option_3: string;
   option_4: string;
   image_url?: string;
+  image_width?: number;
+  image_height?: number;
+  option_images?: QuestionImage[];
+  source_question_number?: number;
+  year?: number;
+  paper?: string;
+  question_type?: "MCQ" | "MSQ" | "NAT";
+  answer_decimal_places?: number | null;
+  marks?: number;
+  negative_marks?: number;
 }
 
 interface SessionData {
@@ -44,7 +58,7 @@ interface ExamClientProps {
   userId: string;
   session: SessionData;
   questions: Question[];
-  initialAnswers: Record<string, number>;
+  initialAnswers: Record<string, QuestionResponse>;
   initialBookmarks: Set<string>;
 }
 
@@ -121,8 +135,8 @@ export function ExamClient({
     "saved"
   );
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswer] = useState<Record<string, number | null>>({});
-  const [bookmarks, setBookmarks] = useState(new Set<string>());
+  const [answers, setAnswer] = useState<Record<string, QuestionResponse>>(() => ({ ...initialAnswers }));
+  const [bookmarks, setBookmarks] = useState(() => new Set(initialBookmarks));
   const [reportedQuestions, setReportedQuestions] = useState(new Set<string>());
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -137,26 +151,34 @@ export function ExamClient({
       ),
       bookmarks: new Set(initialBookmarks),
     });
-  }, []);
+  }, [initialAnswers, initialBookmarks]);
 
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
+  const pendingSaves = useRef(new Set<Promise<unknown>>());
+  const saveQueues = useRef(new Map<string, Promise<unknown>>());
 
   const saveAnswer = useCallback(
-    async (questionId: string, option: number | null) => {
+    async (questionId: string, option: QuestionResponse) => {
       setSaveStatus("saving");
 
       // is_correct is computed server-side on submission — never sent to client
-      const { error } = await createClient()
+      const previous = saveQueues.current.get(questionId) || Promise.resolve();
+      const request = previous.catch(() => undefined).then(() => createClient()
         .from("test_answers")
         .upsert(
           {
             session_id: session.id,
             question_id: questionId,
-            selected_option: option,
+            selected_option: typeof option === "number" ? option : null,
+            selected_options: Array.isArray(option) ? option : null,
+            numeric_answer: numericResponse(option),
           },
           { onConflict: "session_id, question_id" }
-        );
+        ));
+      saveQueues.current.set(questionId, request);
+      pendingSaves.current.add(request);
+      const { error } = await request.finally(() => pendingSaves.current.delete(request));
 
       setSaveStatus(error ? "error" : "saved");
       if (!error) {
@@ -171,15 +193,13 @@ export function ExamClient({
 
   const handleOptionClick = (optionIndex: number) => {
     if (!currentQuestion) return;
-    const newValue =
-      answers[currentQuestion.id] === optionIndex ? null : optionIndex;
+    const newValue = toggleResponse(answers[currentQuestion.id], optionIndex, currentQuestion.question_type === "MSQ");
     setAnswer({ ...answers, [currentQuestion.id]: newValue });
     saveAnswer(currentQuestion.id, newValue);
   };
 
   const handleBookmarkToggle = async () => {
     if (!currentQuestion) return;
-    const isBookmarked = bookmarks.has(currentQuestion.id);
     const next = new Set(bookmarks);
     if (next.has(currentQuestion.id)) {
       next.delete(currentQuestion.id);
@@ -220,7 +240,8 @@ export function ExamClient({
 
     try {
       const { submitTest } = await import("./actions");
-      const result = await submitTest(session.id, userId);
+      await Promise.all([...pendingSaves.current]);
+      const result = await submitTest(session.id, userId, answers);
 
       if (result?.error) {
         submittedRef.current = false;
@@ -233,7 +254,7 @@ export function ExamClient({
       await awardTestXP(session.id);
       addWrongToSRS(session.id);
       redirectToResults();
-    } catch (err) {
+    } catch {
       submittedRef.current = false;
       setIsSubmitting(false);
       toast("Failed to submit test. Please try again.", "error");
@@ -266,7 +287,7 @@ export function ExamClient({
       return true;
     };
 
-    router.push = (url: string, options?: any) => {
+    router.push = (url: string, options?: { scroll?: boolean }) => {
       if (shouldBlock(url)) {
         pendingExitRef.current = () => originalPush(url, options);
         setShowExitDialog(true);
@@ -275,7 +296,7 @@ export function ExamClient({
       originalPush(url, options);
     };
 
-    router.replace = (url: string, options?: any) => {
+    router.replace = (url: string, options?: { scroll?: boolean }) => {
       if (shouldBlock(url)) {
         pendingExitRef.current = () => originalReplace(url, options);
         setShowExitDialog(true);
@@ -298,7 +319,8 @@ export function ExamClient({
 
     try {
       const { submitTest } = await import("./actions");
-      const result = await submitTest(session.id, userId);
+      await Promise.all([...pendingSaves.current]);
+      const result = await submitTest(session.id, userId, answers);
 
       if (result?.error) {
         submittedRef.current = false;
@@ -311,7 +333,7 @@ export function ExamClient({
       await awardTestXP(session.id);
       addWrongToSRS(session.id);
       pendingExitRef.current?.();
-    } catch (err) {
+    } catch {
       submittedRef.current = false;
       setIsSubmitting(false);
       toast("Failed to submit test. Please try again.", "error");
@@ -325,6 +347,7 @@ export function ExamClient({
 
   // Wall-clock based timer — immune to browser throttling
   useEffect(() => {
+    if (session.duration_minutes <= 0) return;
     const startTime = new Date(session.started_at).getTime();
     const endTime = startTime + session.duration_minutes * 60 * 1000;
 
@@ -361,7 +384,7 @@ export function ExamClient({
   }, [session.id, session.started_at, session.duration_minutes]);
 
   const answeredCount = Object.values(answers).filter(
-    (v) => v != null
+    (v) => hasResponse(v)
   ).length;
   const isCurrentBookmarked = bookmarks.has(currentQuestion?.id || "");
   const isLowTime = timeRemaining > 0 && timeRemaining <= 300;
@@ -427,7 +450,7 @@ export function ExamClient({
               }`}
             >
               <Clock className="h-3.5 w-3.5" />
-              {formatTime(timeRemaining)}
+              {session.duration_minutes > 0 ? formatTime(timeRemaining) : "Untimed"}
             </div>
 
             <div className="h-5 w-px bg-border" />
@@ -490,11 +513,12 @@ export function ExamClient({
               }`}
             >
               <Clock className="h-3 w-3" />
-              {formatTime(timeRemaining)}
+              {session.duration_minutes > 0 ? formatTime(timeRemaining) : "Untimed"}
             </div>
           </div>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
+            aria-label={sidebarOpen ? "Close question palette" : "Open question palette"}
             className="p-1.5 rounded-md hover:bg-muted"
           >
             {sidebarOpen ? (
@@ -551,45 +575,53 @@ export function ExamClient({
                   </div>
                 </div>
 
+                <QuestionTypeTag type={currentQuestion.question_type} />
+
+                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  {currentQuestion.source_question_number && <span>{currentQuestion.year} {currentQuestion.paper} · Original Q{currentQuestion.source_question_number}</span>}
+                  <span>Correct: +{formatMarks(questionMarks(currentQuestion).positive)}</span>
+                  <span>Wrong: {questionMarks(currentQuestion).negative > 0 ? `−${negativeMarkLabel(currentQuestion)}` : "0"}</span>
+                  <span>Unattempted: 0</span>
+                </div>
+
+                {currentQuestion.question_type === "MSQ" && <p className="text-sm font-medium text-primary">Multiple select: choose all correct options. Full marks only for the exact set; no partial credit or negative marking.</p>}
+
                 {/* Question text */}
                 {isMatchingQuestion(currentQuestion.question_text) ? (
                   <MatchingQuestion text={currentQuestion.question_text} />
                 ) : (
-                  <MathText text={currentQuestion.question_text} className="text-base lg:text-lg leading-relaxed font-medium" as="p" />
+                  <MathText text={currentQuestion.question_text} className="question-content text-base lg:text-lg leading-relaxed font-medium" as="div" />
                 )}
 
-                {/* Image */}
-                {currentQuestion.image_url && (
-                  <div className="relative w-full max-h-96 overflow-hidden rounded-xl border bg-muted/30">
-                    <Image
-                      src={currentQuestion.image_url}
-                      alt="Question image"
-                      width={800}
-                      height={400}
-                      className="object-contain w-full h-auto"
-                      unoptimized
-                    />
-                  </div>
-                )}
+                {currentQuestion.image_url && <QuestionFigure image={{ url: currentQuestion.image_url, width: currentQuestion.image_width, height: currentQuestion.image_height, alt: `Original diagram for question ${currentQuestion.source_question_number || currentIndex + 1}` }} />}
 
-                {/* Options */}
+                {/* NAT questions have no answer choices. */}
+                {currentQuestion.question_type === "NAT" ? (
+                  <NumericAnswerInput
+                    value={typeof answers[currentQuestion.id] === "string" ? answers[currentQuestion.id] as string : ""}
+                    decimalPlaces={currentQuestion.answer_decimal_places}
+                    onChange={(value) => {
+                      setAnswer(previous => ({ ...previous, [currentQuestion.id]: value }));
+                      saveAnswer(currentQuestion.id, value);
+                    }}
+                  />
+                ) : (
                 <div className="space-y-3">
                   {[1, 2, 3, 4].map((n) => {
-                    const isSelected = answers[currentQuestion.id] === n;
+                    const isSelected = selection(answers[currentQuestion.id]).includes(n);
                     const optionLabel = String.fromCharCode(64 + n);
                     const optionText = currentQuestion[`option_${n}` as keyof Question] as string;
                     const isMatchingCode = isMatchCodeOption(optionText || "");
                     return (
-                      <button
+                      <div
                         key={n}
-                        type="button"
-                        onClick={() => handleOptionClick(n)}
-                        className={`w-full text-left rounded-xl border-2 px-5 py-4 transition-all ${
+                        className={`w-full rounded-xl border-2 transition-all ${
                           isSelected
                             ? "border-primary bg-primary/5 shadow-sm"
                             : "border-border hover:border-muted-foreground/30 hover:bg-accent/50"
                         }`}
                       >
+                      <button type="button" onClick={() => handleOptionClick(n)} aria-pressed={isSelected} className="w-full rounded-xl px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
                         <div className="flex items-center gap-4">
                           <span
                             className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold ${
@@ -603,15 +635,18 @@ export function ExamClient({
                           {isMatchingCode ? (
                             <MatchOption text={optionText || ""} className="text-sm" />
                           ) : (
-                            <span className="text-sm leading-relaxed">
-                              {optionText}
-                            </span>
+                            <div className="min-w-0 flex-1 space-y-2">
+                              <MathText text={optionText || ""} className="text-base leading-relaxed" />
+                              {currentQuestion.option_images?.[n - 1] && <QuestionFigure image={currentQuestion.option_images[n - 1]} inline />}
+                            </div>
                           )}
                         </div>
                       </button>
+                      </div>
                     );
                   })}
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -628,7 +663,7 @@ export function ExamClient({
           <div className="flex-1 overflow-y-auto p-4">
             <div className="grid grid-cols-5 gap-2">
               {questions.map((q, idx) => {
-                const isAnswered = answers[q.id] != null;
+                const isAnswered = hasResponse(answers[q.id]);
                 const isBookmarked = bookmarks.has(q.id);
                 const isCurrent = idx === currentIndex;
 
@@ -734,7 +769,7 @@ export function ExamClient({
                   className={`h-2 rounded-full transition-all ${
                     idx === currentIndex
                       ? "w-6 bg-primary"
-                      : answers[questions[idx].id] != null
+                      : hasResponse(answers[questions[idx].id])
                       ? "w-2 bg-green-500"
                       : "w-2 bg-muted"
                   }`}
@@ -776,7 +811,7 @@ export function ExamClient({
             <div className="flex-1 overflow-y-auto p-4">
               <div className="grid grid-cols-5 gap-2">
                 {questions.map((q, idx) => {
-                  const isAnswered = answers[q.id] != null;
+                  const isAnswered = hasResponse(answers[q.id]);
                   const isBookmarked = bookmarks.has(q.id);
                   const isCurrent = idx === currentIndex;
 

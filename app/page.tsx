@@ -28,7 +28,7 @@ export default async function Home() {
         <div className="max-w-6xl mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             <GraduationCap className="h-6 w-6 text-primary" />
-            TGPSC Prep
+            Exam Prep
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" asChild>
@@ -45,10 +45,10 @@ export default async function Home() {
       <section className="max-w-6xl mx-auto px-4 pt-20 pb-16 text-center">
         <div className="inline-flex items-center gap-2 rounded-full border bg-muted px-4 py-1.5 text-sm text-muted-foreground mb-6">
           <GraduationCap className="h-4 w-4" />
-          TSPSC Assistant Executive Engineer (Civil)
+          Preparation built around your exam
         </div>
         <h1 className="text-4xl font-bold tracking-tight sm:text-5xl max-w-3xl mx-auto leading-tight">
-          Crack TSPSC AEE Civil with{" "}
+          Prepare for your exam with{" "}
           <span className="text-primary">Real PYQs</span>
         </h1>
         <p className="text-lg text-muted-foreground mt-4 max-w-xl mx-auto">
@@ -109,7 +109,7 @@ export default async function Home() {
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>TGPSC Prep — Built for TSPSC AEE Civil Engineering aspirants</p>
+          <p>Exam Prep — Built for your exam preparation</p>
         </div>
       </footer>
     </main>

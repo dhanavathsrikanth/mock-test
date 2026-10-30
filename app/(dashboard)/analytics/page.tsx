@@ -1,8 +1,8 @@
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { AnalyticsContent } from "./analytics-content";
 
-export const metadata = { title: "Analytics | TGPSC AEE Civil Prep" };
+export const metadata = { title: "Analytics | Exam Prep" };
 
 function getStreak(dates: string[]): number {
   const unique = [...new Set(dates)].sort((a, b) => b.localeCompare(a));
@@ -41,8 +41,7 @@ function formatDateShort(d: Date): string {
 
 export default async function AnalyticsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { user, exam, stream } = await requireExamContext();
 
   const userId = user.id;
 
@@ -50,6 +49,8 @@ export default async function AnalyticsPage() {
     .from("test_sessions")
     .select("*")
     .eq("user_id", userId)
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("status", "completed")
     .order("completed_at", { ascending: false });
 
@@ -69,11 +70,11 @@ export default async function AnalyticsPage() {
     .select("is_correct, questions(subject_id)")
     .in("session_id", sessionIds);
 
-  const examId = sessions[0].exam_id;
+  const examId = exam.id;
   const { data: subjects } = await supabase
     .from("subjects")
     .select("id, name")
-    .eq("exam_id", examId);
+    .eq("exam_id", examId).or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null");
 
   const subjectNameMap = new Map(
     (subjects || []).map((s) => [s.id, s.name])

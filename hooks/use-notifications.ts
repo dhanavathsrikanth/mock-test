@@ -34,6 +34,14 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   const [counts, setCounts] = useState<NotificationCounts | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Depend on filter values, not the caller's object identity. Inline/default
+  // objects otherwise restart the initial-fetch effect after every response.
+  const filterType = Array.isArray(filters.type) ? filters.type.join(",") : filters.type;
+  const filterIsRead = filters.is_read;
+  const filterSearch = filters.search;
+  const filterPriority = filters.priority;
+  const filterGroupKey = filters.group_key;
+
   const fetchNotifications = useCallback(
     async (pageNum: number = 1, append: boolean = false) => {
       if (pageNum === 1) setLoading(true);
@@ -44,17 +52,11 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         params.set("page", String(pageNum));
         params.set("limit", String(pageSize));
 
-        if (filters.type) {
-          if (Array.isArray(filters.type)) {
-            params.set("type", filters.type.join(","));
-          } else {
-            params.set("type", filters.type);
-          }
-        }
-        if (filters.is_read !== undefined) params.set("is_read", String(filters.is_read));
-        if (filters.search) params.set("search", filters.search);
-        if (filters.priority) params.set("priority", filters.priority);
-        if (filters.group_key) params.set("group_key", filters.group_key);
+        if (filterType) params.set("type", filterType);
+        if (filterIsRead !== undefined) params.set("is_read", String(filterIsRead));
+        if (filterSearch) params.set("search", filterSearch);
+        if (filterPriority) params.set("priority", filterPriority);
+        if (filterGroupKey) params.set("group_key", filterGroupKey);
 
         const res = await fetch(`/api/notifications?${params.toString()}`);
         if (!res.ok) throw new Error("Failed to fetch");
@@ -77,7 +79,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         setLoadingMore(false);
       }
     },
-    [pageSize, filters]
+    [pageSize, filterType, filterIsRead, filterSearch, filterPriority, filterGroupKey]
   );
 
   const fetchCounts = useCallback(async () => {

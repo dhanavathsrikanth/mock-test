@@ -1,3 +1,4 @@
+import { getExamContext } from "@/lib/exam-context";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -39,8 +40,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { exam, stream } = await getExamContext();
+  if (!exam || (exam.requires_stream && !stream)) return NextResponse.json({ error: "Choose an exam first" }, { status: 409 });
   const body = await req.json();
   const { action } = body;
+  if (action === "answer" || action === "add") {
+    const { data: question } = await supabase.from("questions").select("id")
+      .eq("id", body.questionId).eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null").maybeSingle();
+    if (!question) return NextResponse.json({ error: "Question not found for your exam" }, { status: 404 });
+  }
+  if (action === "process-session") {
+    const { data: session } = await supabase.from("test_sessions").select("id")
+      .eq("id", body.sessionId).eq("user_id", user.id).eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null").maybeSingle();
+    if (!session) return NextResponse.json({ error: "Session not found for your exam" }, { status: 404 });
+  }
 
   if (action === "answer") {
     const { questionId, result } = body;

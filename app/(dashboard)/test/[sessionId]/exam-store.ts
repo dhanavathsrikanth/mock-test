@@ -1,15 +1,16 @@
+import type { QuestionResponse } from "@/lib/question-response";
 import { create } from "zustand";
 
 interface ExamState {
   currentIndex: number;
-  answers: Record<string, number | null>;
+  answers: Record<string, QuestionResponse>;
   bookmarks: Set<string>;
   reportedQuestions: Set<string>;
   timeRemaining: number;
   isSubmitting: boolean;
 
   setCurrentIndex: (index: number) => void;
-  setAnswer: (questionId: string, option: number | null) => void;
+  setAnswer: (questionId: string, option: QuestionResponse) => void;
   toggleBookmark: (questionId: string) => void;
   initBookmarks: (ids: string[]) => void;
   markReported: (questionId: string) => void;

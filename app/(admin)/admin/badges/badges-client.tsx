@@ -205,7 +205,7 @@ export function BadgesClient({ initialBadges, initialThresholds, initialXpRules 
         const avgXpPerUser = 0;
         if (thresholds.length > 2) {
           const l2 = thresholds[2]; // Level 2 (index 2 = AEE)
-          const l3 = thresholds[3]; // Level 3 (Senior AEE)
+          const l3 = thresholds[3]; // Level 3 (Achiever)
           if (l2 && l3) {
             const gap = l3.xp_required - l2.xp_required;
             // Rough estimate: if avg user earns ~25 XP/day (1 daily question + some tests)

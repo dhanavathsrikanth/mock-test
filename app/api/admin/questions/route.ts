@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
+  const examId = searchParams.get("exam_id");
   const search = searchParams.get("search") || "";
   const subjectId = searchParams.get("subject_id") || "";
   const topicId = searchParams.get("topic_id") || "";
@@ -26,6 +27,8 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from("questions")
     .select("id, question_text, year, difficulty, subject_id, topic_id, subjects(name), topics(name)", { count: "exact" });
+
+  if (examId) query = query.eq("exam_id", examId);
 
   if (search) {
     query = query.ilike("question_text", `%${search}%`);

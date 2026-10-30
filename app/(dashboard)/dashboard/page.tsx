@@ -1,5 +1,5 @@
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import dynamic from "next/dynamic";
 import {
   Card,
@@ -53,16 +53,20 @@ const ExamCountdown = dynamic(
     )
 );
 
-export const metadata = { title: "Dashboard | TGPSC AEE Civil Prep" };
+export const metadata = { title: "Dashboard | Exam Prep" };
 
 const modeLabels: Record<string, string> = {
   full_mock: "Full Mock",
-  topic_wise: "Subject-wise",
+  full_paper: "Full paper",
+  subject_wise: "Subject-wise",
+  topic_wise: "Topic-wise",
   custom: "Custom",
 };
 
 const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
   full_mock: "default",
+  full_paper: "default",
+  subject_wise: "secondary",
   topic_wise: "secondary",
   custom: "outline",
 };
@@ -75,35 +79,27 @@ function getScoreColor(score: number) {
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { user, exam, stream, profile } = await requireExamContext();
 
   const userId = user.id;
 
-  const [profileResult, sessionsResult] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", userId)
-      .single(),
-    supabase
-      .from("test_sessions")
-      .select(
-        `
-        id,
-        total_questions,
-        mode,
-        completed_at,
-        subject_id,
-        subjects ( name )
+  const sessionsResult = await supabase
+    .from("test_sessions")
+    .select(
       `
-      )
-      .eq("user_id", userId)
-      .eq("status", "completed")
-      .order("completed_at", { ascending: false }),
-  ]);
-
-  const profile = profileResult.data;
+      id,
+      total_questions,
+      mode,
+      completed_at,
+      subject_id,
+      subjects ( name )
+    `
+    )
+    .eq("user_id", userId)
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
+    .eq("status", "completed")
+    .order("completed_at", { ascending: false });
   const sessions = sessionsResult.data;
   const userName = profile?.full_name || "User";
 
@@ -187,7 +183,7 @@ export default async function DashboardPage() {
               Welcome back, {userName}!
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Keep practicing for TSPSC AEE Civil
+              Keep practicing for {exam.name}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -268,7 +264,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Countdown */}
-      <ExamCountdown />
+      <ExamCountdown key={`${userId}:${exam.id}`} examId={exam.id} examName={exam.name} userId={userId} />
 
       {/* Widgets Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -296,7 +292,7 @@ export default async function DashboardPage() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold leading-tight">Full Mock Test</p>
-                <p className="text-[11px] text-muted-foreground">150 Qs · 150 min</p>
+                <p className="text-[11px] text-muted-foreground">Choose count and timer</p>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </Link>

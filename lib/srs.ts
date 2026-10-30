@@ -1,3 +1,4 @@
+import { getExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 
 const MIN_EASE = 1.3;
@@ -140,6 +141,8 @@ export async function updateSRSAfterAnswer(
 }
 
 export async function getTodaysSRSQuestions(userId: string, limit = 20) {
+  const { user, exam, stream } = await getExamContext();
+  if (!exam || (exam.requires_stream && !stream) || user?.id !== userId) return [];
   const supabase = await createClient();
   const today = getToday();
 
@@ -153,7 +156,7 @@ export async function getTodaysSRSQuestions(userId: string, limit = 20) {
       next_review_date,
       last_reviewed_at,
       question_id,
-      questions (
+      questions!inner (
         id,
         question_text,
         option_1,
@@ -168,6 +171,10 @@ export async function getTodaysSRSQuestions(userId: string, limit = 20) {
       )
     `)
     .eq("user_id", userId)
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
+    .eq("questions.question_type", "MCQ")
+    .eq("questions.marks_to_all", false)
     .lte("next_review_date", today)
     .order("next_review_date", { ascending: true })
     .limit(limit);
@@ -240,13 +247,19 @@ export async function addWrongAnswersFromSession(
 }
 
 export async function getSRSSummary(userId: string) {
+  const { user, exam, stream } = await getExamContext();
+  if (!exam || (exam.requires_stream && !stream) || user?.id !== userId) return { dueCount: 0, overdueCount: 0 };
   const supabase = await createClient();
   const today = getToday();
 
   const { data: due } = await supabase
     .from("spaced_repetition")
-    .select("id, next_review_date, last_reviewed_at")
+    .select("id, next_review_date, last_reviewed_at, questions!inner(exam_id)")
     .eq("user_id", userId)
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
+    .eq("questions.question_type", "MCQ")
+    .eq("questions.marks_to_all", false)
     .lte("next_review_date", today);
 
   const dueCount = due?.length || 0;

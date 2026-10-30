@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMarks } from "@/lib/marking";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +13,6 @@ import {
   ArrowLeft,
   Eye,
   Play,
-  RotateCcw,
 } from "lucide-react";
 
 interface SubjectBreakdown {
@@ -23,6 +23,7 @@ interface SubjectBreakdown {
 }
 
 interface ResultContentProps {
+  marks?: { earned: number; deducted: number; maximum: number; net: number };
   correctCount: number;
   wrongCount: number;
   skippedCount: number;
@@ -106,6 +107,7 @@ function formatTime(seconds: number): string {
 }
 
 export function ResultContent({
+  marks,
   correctCount,
   wrongCount,
   skippedCount,
@@ -122,6 +124,11 @@ export function ResultContent({
         <h1 className="text-2xl font-bold tracking-tight">Your Results</h1>
       </div>
 
+      {marks && <Card><CardContent className="pt-5 text-center space-y-2">
+        <p className="text-sm text-muted-foreground">Marks scored</p>
+        <p className="text-3xl font-bold tabular-nums">{formatMarks(marks.net)} <span className="text-lg text-muted-foreground">/ {formatMarks(marks.maximum)}</span></p>
+        <p className="text-xs text-muted-foreground">Earned: +{formatMarks(marks.earned)} · Deductions: −{formatMarks(marks.deducted)} · Unattempted: 0</p>
+      </CardContent></Card>}
       <AnimatedScore value={correctCount} total={totalQuestions} />
 
       <p className="text-center text-lg">

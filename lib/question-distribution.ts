@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { topicDescendants } from "@/lib/stream-scope";
 
 interface Question {
   id: string;
@@ -11,10 +12,18 @@ interface Question {
   option_2: string;
   option_3: string;
   option_4: string;
-  correct_option: number;
+  correct_option: number | null;
+  question_type?: "MCQ" | "MSQ" | "NAT";
   explanation: string | null;
   difficulty: string | null;
   created_at: string;
+  source_question_number?: number | null;
+  image_url?: string | null;
+  image_width?: number | null;
+  image_height?: number | null;
+  option_images?: import("@/components/QuestionFigure").QuestionImage[];
+  marks?: number;
+  negative_marks?: number;
 }
 
 /**
@@ -44,6 +53,9 @@ export async function getQuestionsForSession(
     subject_id: string | null;
     year: number | null;
     total_questions: number;
+    stream_id?: string | null;
+    paper?: string | null;
+    topic_id?: string | null;
   }
 ): Promise<Question[]> {
   const supabase = await createClient();
@@ -52,7 +64,14 @@ export async function getQuestionsForSession(
   let poolQuery = supabase
     .from("questions")
     .select("id")
-    .eq("exam_id", session.exam_id);
+    .eq("exam_id", session.exam_id)
+    .or(session.stream_id ? `stream_id.eq.${session.stream_id}` : "stream_id.is.null");
+  if (session.paper) poolQuery = poolQuery.eq("paper", session.paper);
+  if (session.topic_id) {
+    const { data: topics, error } = await supabase.from("topics").select("id,parent_id").eq("subject_id",session.subject_id);
+    if (error) throw error;
+    poolQuery = poolQuery.in("topic_id", topicDescendants(topics || [],session.topic_id));
+  }
 
   if (session.subject_id) {
     poolQuery = poolQuery.eq("subject_id", session.subject_id);
@@ -127,7 +146,9 @@ export async function getQuestionsForSession(
     (questions || []).map((q) => [q.id, q])
   );
 
-  return selected
-    .map((id) => questionMap.get(id))
-    .filter(Boolean) as Question[];
+  const result = selected.map((id) => questionMap.get(id)).filter(Boolean) as Question[];
+  if (result.length && result.every(question => question.source_question_number && question.paper === result[0].paper && question.year === result[0].year)) {
+    result.sort((a, b) => a.source_question_number! - b.source_question_number!);
+  }
+  return result;
 }

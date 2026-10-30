@@ -17,15 +17,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { questions } = await req.json();
+  const { questions, examId, streamId } = await req.json();
+  if (typeof examId !== "string" || !examId) return NextResponse.json({ error: "Choose an exam for this import" }, { status: 400 });
 
   if (!Array.isArray(questions) || questions.length === 0) {
     return NextResponse.json({ error: "No questions provided" }, { status: 400 });
   }
+  const {data:exam,error:examError}=await supabase.from('exams').select('id,requires_stream').eq('id',examId).eq('is_active',true).maybeSingle();
+  if(examError || !exam) return NextResponse.json({error:'Choose an active exam'},{status:400});
+  let selectedStreamId: string | null=null;
+  if(exam.requires_stream){
+    if(typeof streamId!=='string') return NextResponse.json({error:'Choose a stream for this import'},{status:400});
+    const {data:stream}=await supabase.from('exam_streams').select('id').eq('id',streamId).eq('exam_id',examId).eq('is_active',true).maybeSingle();
+    if(!stream)return NextResponse.json({error:'Choose an available stream for this exam'},{status:400});
+    selectedStreamId=stream.id;
+  }
 
   const { data: subjects } = await supabase
     .from("subjects")
-    .select("id, slug");
+    .select("id, slug")
+    .eq("exam_id", examId)
+    .or(selectedStreamId ? `stream_id.eq.${selectedStreamId},stream_id.is.null` : 'stream_id.is.null');
 
   const SLUG_ALIASES: Record<string, string> = {
     "som": "solid-mechanics",
@@ -47,10 +59,11 @@ export async function POST(req: NextRequest) {
   const { data: exams } = await supabase
     .from("exams")
     .select("id, name")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .eq("id", examId);
 
-  const defaultExamId = exams?.[0]?.id;
-  if (!defaultExamId) {
+  const selectedExamId = exams?.[0]?.id;
+  if (!selectedExamId) {
     return NextResponse.json({ error: "No active exam found" }, { status: 500 });
   }
 
@@ -91,7 +104,8 @@ export async function POST(req: NextRequest) {
       : null;
 
     imported.push({
-      exam_id: defaultExamId,
+      exam_id: selectedExamId,
+      stream_id: selectedStreamId,
       subject_id: subjectId,
       year: q.year ? parseInt(q.year) || null : null,
       paper: q.paper?.trim() || null,

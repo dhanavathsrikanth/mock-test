@@ -12,3 +12,9 @@ mock-test/
 scripts/
 questions_dataset.backup.csv
 deepseek_csv_*.txt
+.vercel
+.env*
+
+# scraped/generated artifacts
+output/
+data/

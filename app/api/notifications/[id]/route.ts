@@ -16,7 +16,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await req.json();
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
 
   if (body.is_read === true) {
     const success = await service.markAsRead(id, user.id);
@@ -66,7 +66,7 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
   const success = await service.deleteNotification(id, user.id);
 
   if (!success) {

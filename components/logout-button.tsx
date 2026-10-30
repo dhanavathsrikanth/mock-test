@@ -1,17 +1,12 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { Button } from "@/components/ui/button";
-import { useRouter } from "next/navigation";
 
 export function LogoutButton() {
-  const router = useRouter();
-
-  const logout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
-
-  return <Button onClick={logout}>Logout</Button>;
+  const { signOut, signingOut, signOutError } = useSignOut();
+  return <div>
+    <Button onClick={signOut} disabled={signingOut} aria-busy={signingOut}>{signingOut ? "Signing out…" : "Logout"}</Button>
+    {signOutError && <p role="alert" className="text-sm text-destructive">{signOutError}</p>}
+  </div>;
 }

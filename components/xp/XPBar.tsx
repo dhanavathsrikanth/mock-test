@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
-import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 
 interface XPBarData {
@@ -19,25 +18,33 @@ export function XPBar() {
   const pathname = usePathname();
   const [data, setData] = useState<XPBarData | null>(null);
   const [prevXP, setPrevXP] = useState(0);
-  const supabase = createClient();
 
   useEffect(() => {
+    let cancelled = false;
+    let inFlight = false;
     async function fetchLevel() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const res = await fetch("/api/xp/level");
-      if (!res.ok) return;
-      const json = await res.json();
-      setData(json);
-      setPrevXP(json.totalXP);
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const res = await fetch("/api/xp/level");
+        if (!res.ok || cancelled) return;
+        const json = await res.json();
+        if (!cancelled) {
+          setData(json);
+          setPrevXP(json.totalXP);
+        }
+      } catch {
+        // A temporary connection failure should not interrupt navigation.
+      } finally {
+        inFlight = false;
+      }
     }
 
     fetchLevel();
 
     const interval = setInterval(fetchLevel, 10000);
-    return () => clearInterval(interval);
-  }, [supabase]);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   useEffect(() => {
     if (data && data.totalXP !== prevXP) {

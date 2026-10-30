@@ -91,12 +91,16 @@ function loadSettings(): DailySettings {
 }
 
 export function DailyClient({
+  examId,
+  exams,
   today,
   stats,
   upcoming,
   past,
   subjectAccuracy,
 }: {
+  examId: string;
+  exams: { id: string; name: string }[];
   today: string;
   stats: Stats;
   upcoming: DQItem[];
@@ -128,13 +132,13 @@ export function DailyClient({
   useEffect(() => {
     const fetchSubjectsAndTopics = async () => {
       const supabase = (await import("@/lib/supabase/client")).createClient();
-      const { data: subjs } = await supabase.from("subjects").select("id, name").order("name");
+      const { data: subjs } = await supabase.from("subjects").select("id, name").eq("exam_id", examId).order("name");
       setSubjects(subjs || []);
       const { data: tpcs } = await supabase.from("topics").select("id, name, subject_id").order("name");
       setTopics(tpcs || []);
     };
     fetchSubjectsAndTopics();
-  }, []);
+  }, [examId]);
 
   const scheduleByDate = useMemo(() => {
     const map: Record<string, DQItem> = {};
@@ -162,7 +166,7 @@ export function DailyClient({
   const searchQuestions = useCallback(async (q: string, subjectId: string, topicId: string) => {
     setSearching(true);
     try {
-      const params = new URLSearchParams();
+      const params = new URLSearchParams({ exam_id: examId });
       if (q.trim()) params.set("search", q);
       if (subjectId) params.set("subject_id", subjectId);
       if (topicId) params.set("topic_id", topicId);
@@ -174,7 +178,7 @@ export function DailyClient({
         setSearchResults(data.questions || []);
       }
     } finally { setSearching(false); }
-  }, []);
+  }, [examId]);
 
   const handleSearchChange = (value: string) => {
     setQuestionSearch(value);
@@ -225,6 +229,7 @@ export function DailyClient({
     const { data: existing } = await supabase
       .from("daily_questions")
       .select("id")
+      .eq("exam_id", examId)
       .eq("assigned_date", selectedDate)
       .maybeSingle();
 
@@ -235,6 +240,7 @@ export function DailyClient({
     }
 
     const { error } = await supabase.from("daily_questions").insert({
+      exam_id: examId,
       assigned_date: selectedDate,
       question_id: selectedQId,
     });
@@ -272,6 +278,7 @@ export function DailyClient({
 
   return (
     <div className="space-y-6">
+      <label className="block text-sm font-medium">Exam<select aria-label="Daily questions exam" value={examId} onChange={event => { window.location.href = `/admin/daily?exam=${encodeURIComponent(event.target.value)}`; }} className="mt-2 block w-full rounded-md border bg-background p-2">{exams.map(exam => <option key={exam.id} value={exam.id}>{exam.name}</option>)}</select></label>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Daily Questions</h1>

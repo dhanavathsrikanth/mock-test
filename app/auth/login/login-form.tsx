@@ -27,11 +27,11 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ initialError = null }: { initialError?: string | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [showEmailForm, setShowEmailForm] = useState(false);
@@ -84,6 +84,7 @@ export function LoginForm() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
         <Button
           type="button"
           variant="outline"
@@ -138,7 +139,6 @@ export function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            {error && <p className="text-sm text-red-500">{error}</p>}
             <Button type="submit" className="w-full h-11" disabled={isLoading}>
               {isLoading ? "Logging in..." : "Login"}
             </Button>

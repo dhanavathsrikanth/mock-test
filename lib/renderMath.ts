@@ -150,6 +150,11 @@ function convertMarkdownTablesToHtml(text: string): { result: string; tableHtmls
 
       const parseRow = (row: string): string[] =>
         row.split('|').slice(1, -1).map(c => c.trim());
+      const renderCell = (cell: string) => splitSegments(decodeHtmlEntities(cell.replace(/\*\*/g, '')))
+        .map(segment => segment.type === 'text'
+          ? escapeHtml(segment.content)
+          : renderLatex(segment.content, segment.type === 'math-display'))
+        .join('');
 
       const headerCells = parseRow(tableLines[0]);
       let bodyStart = 1;
@@ -160,7 +165,7 @@ function convertMarkdownTablesToHtml(text: string): { result: string; tableHtmls
       let html = '<div class="overflow-x-auto my-2"><table class="w-full text-sm border-collapse">';
       html += '<thead><tr>';
       for (const cell of headerCells) {
-        html += `<th class="border border-border px-3 py-2 text-left font-medium bg-muted/50">${escapeHtml(cell.replace(/\*\*/g, ''))}</th>`;
+        html += `<th class="border border-border px-3 py-2 text-left font-medium bg-muted/50">${renderCell(cell)}</th>`;
       }
       html += '</tr></thead><tbody>';
 
@@ -168,7 +173,7 @@ function convertMarkdownTablesToHtml(text: string): { result: string; tableHtmls
         const cells = parseRow(tableLines[r]);
         html += '<tr>';
         for (const cell of cells) {
-          html += `<td class="border border-border px-3 py-2">${escapeHtml(cell.replace(/\*\*/g, ''))}</td>`;
+          html += `<td class="border border-border px-3 py-2">${renderCell(cell)}</td>`;
         }
         html += '</tr>';
       }
@@ -176,7 +181,7 @@ function convertMarkdownTablesToHtml(text: string): { result: string; tableHtmls
       html += '</tbody></table></div>';
       const idx = tableHtmls.length;
       tableHtmls.push(html);
-      result.push(`%%TABLE_${idx}%%`);
+      result.push(`%%TABLE${idx}%%`);
     } else {
       result.push(lines[i]);
       i++;
@@ -190,7 +195,7 @@ export function renderMathToHtml(text: string): string {
   if (!text) return "";
 
   const { result: textWithPlaceholders, tableHtmls } = convertMarkdownTablesToHtml(text);
-  let decoded = decodeHtmlEntities(textWithPlaceholders);
+  const decoded = decodeHtmlEntities(textWithPlaceholders);
   const segments = splitSegments(decoded);
 
   let html = segments
@@ -256,7 +261,7 @@ export function renderMathToHtml(text: string): string {
     .join("");
 
   for (let idx = 0; idx < tableHtmls.length; idx++) {
-    html = html.replace(`%%TABLE_${idx}%%`, tableHtmls[idx]);
+    html = html.replace(`%%TABLE${idx}%%`, tableHtmls[idx]);
   }
 
   return html;

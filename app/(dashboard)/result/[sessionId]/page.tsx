@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
+import { calculateMarks } from "@/lib/marking";
 import { ResultContent } from "./result-content";
 
 export async function generateMetadata({
@@ -10,7 +12,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { sessionId } = await params;
   return {
-    title: `Results ${sessionId.slice(0, 8)}... | TGPSC AEE Civil Prep`,
+    title: `Results ${sessionId.slice(0, 8)}... | Exam Prep`,
   };
 }
 
@@ -20,17 +22,16 @@ async function ResultPageContent({
   params: Promise<{ sessionId: string }>;
 }) {
   const { sessionId } = await params;
+  const { user, exam, stream } = await requireExamContext();
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    notFound();
-  }
 
   const userId = user.id;
 
   const { data: session } = await supabase
     .from("test_sessions")
     .select("*")
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("id", sessionId)
     .eq("user_id", userId)
     .single();
@@ -49,7 +50,8 @@ async function ResultPageContent({
   const { data: subjects } = await supabase
     .from("subjects")
     .select("id, name")
-    .eq("exam_id", session.exam_id);
+    .eq("exam_id", session.exam_id)
+    .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null");
 
   const subjectNameMap = new Map(
     (subjects || []).map((s) => [s.id, s.name])
@@ -58,8 +60,12 @@ async function ResultPageContent({
   const answerList = answers || [];
   const correctCount = answerList.filter((a) => a.is_correct === true).length;
   const wrongCount = answerList.filter((a) => a.is_correct === false).length;
-  const skippedCount = answerList.filter((a) => a.is_correct === null).length;
-  const totalQuestions = answerList.length || session.total_questions;
+  const skippedCount = Math.max(0, (session.question_ids?.length || session.total_questions) - correctCount - wrongCount);
+  const totalQuestions = session.question_ids?.length || session.total_questions;
+  const questionIds: string[] = session.question_ids || answerList.map(answer => answer.question_id);
+  const { data: markedQuestions } = await supabase.from("questions").select("id, marks, negative_marks, marks_to_all")
+    .eq("exam_id", session.exam_id).in("id", questionIds);
+  const marks = calculateMarks(markedQuestions || [], answerList);
   const accuracy =
     totalQuestions > 0
       ? Math.round((correctCount / totalQuestions) * 100)
@@ -69,8 +75,8 @@ async function ResultPageContent({
     string,
     { name: string; total: number; correct: number; wrong: number }
   >();
-  answerList.forEach((a: any) => {
-    const subjectId = a.questions?.subject_id;
+  answerList.forEach((a: { questions?: { subject_id: string }; is_correct: boolean | null }) => {
+    const subjectId = a.questions?.subject_id || "unknown";
     const subjectName = subjectNameMap.get(subjectId) || "Unknown";
     const entry = subjectMap.get(subjectId) || {
       name: subjectName,
@@ -115,6 +121,7 @@ async function ResultPageContent({
 
   return (
     <ResultContent
+      marks={marks}
       correctCount={correctCount}
       wrongCount={wrongCount}
       skippedCount={skippedCount}

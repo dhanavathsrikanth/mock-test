@@ -1,13 +1,12 @@
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { ProfileContent } from "./profile-content";
 
-export const metadata = { title: "Profile | TGPSC AEE Civil Prep" };
+export const metadata = { title: "Profile | Exam Prep" };
 
 export default async function ProfilePage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { user, exam, stream } = await requireExamContext();
 
   const userId = user.id;
 
@@ -29,6 +28,7 @@ export default async function ProfilePage() {
   const { data: exams } = await supabase
     .from("exams")
     .select("id, name")
+    .eq("is_active", true)
     .order("name");
 
   // Fetch XP level data
@@ -57,11 +57,15 @@ export default async function ProfilePage() {
     .from("test_sessions")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("status", "completed");
 
   const { count: totalBookmarks } = await supabase
     .from("bookmarks")
-    .select("id", { count: "exact", head: true })
+    .select("id, questions!inner(exam_id)", { count: "exact", head: true })
+    .eq("questions.exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
     .eq("user_id", userId);
 
   return (

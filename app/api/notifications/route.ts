@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const priority = searchParams.get("priority") as NotificationPriority | null;
   const groupKey = searchParams.get("group_key");
 
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
   const result = await service.getUserNotifications(targetUserId || user.id, {
     page,
     limit,
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Invalid type. Must be one of: ${validTypes.join(", ")}` }, { status: 400 });
   }
 
-  const service = getNotificationService();
+  const service = getNotificationService(supabase);
   const notification = await service.createNotification({
     user_id: userId,
     type,

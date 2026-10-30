@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { NavigationLink as Link } from "@/components/navigation-link";
+import { usePathname } from "next/navigation";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import NotificationBell from "@/components/NotificationBell";
@@ -15,8 +15,8 @@ import {
   Bookmark,
   User,
   LogOut,
+  Loader2,
   GraduationCap,
-  Users,
   CalendarCheck,
   BookOpen,
   Menu,
@@ -70,7 +70,7 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
 
 export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
+  const { signOut: handleLogout, signingOut, signOutError } = useSignOut();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const isActive = (href: string) => {
@@ -78,11 +78,6 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
     return pathname.startsWith(href);
   };
 
-  const handleLogout = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/auth/login");
-  };
 
   const drawerItems = NAV_ITEMS.filter(
     (item) => !TAB_ITEMS.some((tab) => tab.href === item.href)
@@ -90,6 +85,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
 
   return (
     <>
+      {signOutError && <p role="alert" className="fixed top-4 left-1/2 z-[60] -translate-x-1/2 rounded-lg border bg-background p-3 text-sm text-destructive shadow">{signOutError}</p>}
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:border-r lg:bg-card h-screen sticky top-0">
         <div className="p-3 border-b">
@@ -98,7 +94,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
             className="flex items-center gap-2 font-bold text-lg"
           >
             <GraduationCap className="h-6 w-6 text-primary" />
-            TGPSC Prep
+            Exam Prep
           </Link>
         </div>
 
@@ -155,9 +151,12 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               variant="ghost"
               size="sm"
               onClick={handleLogout}
+              disabled={signingOut}
+              aria-label={signingOut ? "Signing out" : "Sign out"}
+              aria-busy={signingOut}
               className="text-muted-foreground"
             >
-              <LogOut className="h-4 w-4" />
+              {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
             </Button>
           </div>
         </div>
@@ -185,7 +184,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               onClick={() => setDrawerOpen(false)}
             >
               <GraduationCap className="h-6 w-6 text-primary" />
-              TGPSC Prep
+              Exam Prep
             </Link>
             <Button
               variant="ghost"
@@ -205,7 +204,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
                   {userRole}
                 </p>
               </div>
-              <NotificationBell />
+              {drawerOpen && <NotificationBell />}
             </div>
           </div>
 
@@ -262,9 +261,12 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               className="w-full gap-2 text-muted-foreground"
               size="sm"
               onClick={handleLogout}
+              disabled={signingOut}
+              aria-label={signingOut ? "Signing out" : "Sign out"}
+              aria-busy={signingOut}
             >
-              <LogOut className="h-4 w-4" />
-              Sign Out
+              {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+              {signingOut ? "Signing out…" : "Sign Out"}
             </Button>
           </div>
         </div>

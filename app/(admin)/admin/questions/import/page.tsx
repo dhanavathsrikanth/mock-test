@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Upload,
@@ -49,6 +49,18 @@ const TEMPLATE_HEADER = [
 
 export default function ImportQuestionsPage() {
   const { toast } = useToast();
+  const [exams, setExams] = useState<{ id: string; name: string; requires_stream: boolean }[]>([]);
+  const [streams,setStreams]=useState<{id:string;exam_id:string;name:string;code:string}[]>([]);
+  const [streamId,setStreamId]=useState('');
+  const [examId, setExamId] = useState("");
+  useEffect(() => {
+    import("@/lib/supabase/client").then(async ({ createClient }) => {
+      const { data } = await createClient().from("exams").select("id, name, requires_stream").eq("is_active", true).order("name");
+      setExams(data || []);
+      const {data:streamRows}=await createClient().from('exam_streams').select('id,exam_id,name,code').eq('is_active',true).order('name');
+      setStreams(streamRows || []);
+    });
+  }, []);
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -143,6 +155,7 @@ export default function ImportQuestionsPage() {
   };
 
   const handleImport = async () => {
+    if (!examId) { toast("Choose an exam before importing", "error"); return; }
     const valid = rows.filter((r) => !r.error);
     if (valid.length === 0) return;
 
@@ -157,7 +170,7 @@ export default function ImportQuestionsPage() {
       const res = await fetch("/api/admin/questions/bulk-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ questions: valid }),
+        body: JSON.stringify({ questions: valid, examId, streamId }),
       });
       const data = await res.json();
       setProgress(100);
@@ -177,6 +190,8 @@ export default function ImportQuestionsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      <label className="block space-y-2"><span className="text-sm font-medium">Import into exam</span><select aria-label="Import into exam" value={examId} disabled={importing} onChange={event => {setExamId(event.target.value);setStreamId('');}} className="block w-full rounded-md border bg-background p-2"><option value="">Choose an exam</option>{exams.map(exam => <option key={exam.id} value={exam.id}>{exam.name}</option>)}</select></label>
+      {exams.find(exam=>exam.id===examId)?.requires_stream && <label className="block space-y-2"><span className="text-sm font-medium">Import into stream</span><select aria-label="Import into stream" value={streamId} disabled={importing} onChange={event=>setStreamId(event.target.value)} className="block w-full rounded-md border bg-background p-2"><option value="">Choose a stream</option>{streams.filter(stream=>stream.exam_id===examId).map(stream=><option key={stream.id} value={stream.id}>{stream.name} ({stream.code})</option>)}</select></label>}
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="sm" asChild>
           <Link href="/admin/questions">

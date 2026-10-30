@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { fromName, fromEmail } = await req.json();
-  const sender = fromName || "TGPSC Prep";
+  const sender = fromName || "Exam Prep";
 
   if (!process.env.RESEND_API_KEY) {
     return NextResponse.json({ error: "Resend not configured. Set RESEND_API_KEY." }, { status: 500 });
@@ -25,8 +25,8 @@ export async function POST(req: Request) {
     await resend.emails.send({
       from: `${sender} <${fromEmail || "noreply"}@tgpscprep.com>`,
       to: profile.email,
-      subject: "Test Email from TGPSC Prep Settings",
-      text: `Hi ${profile.full_name || "Admin"},\n\nThis is a test email from your TGPSC Prep admin settings.\n\nIf you received this, your email configuration is working correctly.\n\nFrom: ${sender}\nFrom Email: ${fromEmail || "not set"}\n\nBest,\nThe TGPSC Prep Team`,
+      subject: "Test Email from Exam Prep Settings",
+      text: `Hi ${profile.full_name || "Admin"},\n\nThis is a test email from your Exam Prep admin settings.\n\nIf you received this, your email configuration is working correctly.\n\nFrom: ${sender}\nFrom Email: ${fromEmail || "not set"}\n\nBest,\nThe Exam Prep Team`,
     });
     return NextResponse.json({ success: true });
   } catch (err: any) {

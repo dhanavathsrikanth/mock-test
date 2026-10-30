@@ -19,12 +19,12 @@ export interface AwardXPResult {
 
 const XP_THRESHOLDS = [
   { level: 0, name: "Trainee", xp: 0 },
-  { level: 1, name: "Junior AEE", xp: 500 },
-  { level: 2, name: "AEE", xp: 1500 },
-  { level: 3, name: "Senior AEE", xp: 3500 },
-  { level: 4, name: "Assistant Executive", xp: 7000 },
-  { level: 5, name: "Executive Engineer", xp: 12000 },
-  { level: 6, name: "Chief Engineer", xp: 20000 },
+  { level: 1, name: "Explorer", xp: 500 },
+  { level: 2, name: "Practitioner", xp: 1500 },
+  { level: 3, name: "Achiever", xp: 3500 },
+  { level: 4, name: "Advanced Learner", xp: 7000 },
+  { level: 5, name: "Expert", xp: 12000 },
+  { level: 6, name: "Master", xp: 20000 },
 ];
 
 export const XP_REWARDS = {

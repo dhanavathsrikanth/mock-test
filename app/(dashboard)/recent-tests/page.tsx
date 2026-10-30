@@ -1,5 +1,5 @@
+import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,16 +7,20 @@ import { format } from "date-fns";
 import { ClipboardList, Check, X, Minus, ArrowRight, TrendingUp, Target, BarChart3 } from "lucide-react";
 import Link from "next/link";
 
-export const metadata = { title: "Recent Tests | TGPSC AEE Civil Prep" };
+export const metadata = { title: "Recent Tests | Exam Prep" };
 
 const modeLabels: Record<string, string> = {
   full_mock: "Full Mock",
-  topic_wise: "Subject-wise",
+  full_paper: "Full paper",
+  subject_wise: "Subject-wise",
+  topic_wise: "Topic-wise",
   custom: "Custom",
 };
 
 const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
   full_mock: "default",
+  full_paper: "default",
+  subject_wise: "secondary",
   topic_wise: "secondary",
   custom: "outline",
 };
@@ -35,8 +39,7 @@ function getScoreBg(score: number) {
 
 export default async function RecentTestsPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/auth/login");
+  const { user, exam, stream } = await requireExamContext();
 
   const userId = user.id;
 
@@ -46,6 +49,8 @@ export default async function RecentTestsPage() {
       `id, total_questions, mode, completed_at, subject_id, subjects ( name )`
     )
     .eq("user_id", userId)
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("status", "completed")
     .order("completed_at", { ascending: false });
 

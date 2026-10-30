@@ -96,7 +96,7 @@ export function SettingsClient({
   const [grantRole, setGrantRole] = useState("admin");
   const [granting, setGranting] = useState(false);
 
-  const [notifConfig, setNotifConfig] = useState(initialConfig.notifications || { pushEnabled: true, emailFromName: "TGPSC Prep", emailFromAddr: "" });
+  const [notifConfig, setNotifConfig] = useState(initialConfig.notifications || { pushEnabled: true, emailFromName: "Exam Prep", emailFromAddr: "" });
   const [cronStatus, setCronStatus] = useState<any[]>([]);
 
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -552,7 +552,7 @@ export function SettingsClient({
               <p>Hi {`{{user_name}}`},</p>
               <p className="text-muted-foreground">Your daily question for today is ready. Click below to answer.</p>
               <p className="text-primary text-xs">[View Daily Question]</p>
-              <p className="text-xs text-muted-foreground pt-1">— {notifConfig.emailFromName || "TGPSC Prep"} Team</p>
+              <p className="text-xs text-muted-foreground pt-1">— {notifConfig.emailFromName || "Exam Prep"} Team</p>
             </div>
           </div>
         </div>
