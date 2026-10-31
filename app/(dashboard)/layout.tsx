@@ -34,14 +34,18 @@ export default async function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-background flex">
-      <Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />
-      <TestLayoutWrapper>
-        <main className="flex-1 min-w-0 pb-16 lg:pb-0 flex flex-col">
+      <TestLayoutWrapper
+        sidebar={<Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />}
+        header={
+          <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm">
+            <span className="font-medium">{exam.name}{stream ? ` · ${stream.name} (${stream.code})` : ""}</span>
+            <Link href="/onboarding" className="text-primary underline">Switch exam / stream</Link>
+          </div>
+        }
+      >
           <MaintenanceBanner isMaintenanceMode={maintenanceMode} isAdmin={userRole === "admin"} />
           <XPBar />
-          <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm"><span className="font-medium">{exam.name}{stream ? ` · ${stream.name} (${stream.code})` : ""}</span><Link href="/onboarding" className="text-primary underline">Switch exam / stream</Link></div>
-          <div key={`${exam.id}:${stream?.id || ""}`} className="px-3 py-2 flex-1">{children}</div>
-        </main>
+          <div key={`${exam.id}:${stream?.id || ""}`} className="px-3 py-2 flex-1 min-h-0 flex flex-col">{children}</div>
       </TestLayoutWrapper>
       <XPToast />
       <LevelUpModal />

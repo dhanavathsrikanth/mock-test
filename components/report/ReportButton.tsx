@@ -48,6 +48,7 @@ export function ReportButton({
       <button
         type="button"
         onClick={() => setIsOpen(true)}
+        aria-label={isReported ? "Question already reported" : "Report an issue with this question"}
         className={`inline-flex items-center gap-1 text-xs font-medium transition-colors ${
           isReported
             ? "text-orange-500"
