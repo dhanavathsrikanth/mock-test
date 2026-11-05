@@ -13,9 +13,14 @@ import {
   PanelRightOpen,
   PanelRightClose,
   AlertTriangle,
+  Calculator,
 } from "lucide-react";
+import { GateCalculator } from "@/components/calculator/GateCalculator";
+import { ExamCalculatorPanel } from "@/components/calculator/ExamCalculatorPanel";
+import examTools from "./exam-tools.module.css";
 import { ReportButton } from "@/components/report/ReportButton";
-import { QuestionFigure, type QuestionImage } from "@/components/QuestionFigure";
+import { QuestionFigure } from "@/components/QuestionFigure";
+import { QuestionPrompt } from "@/components/QuestionPrompt";
 import { NumericAnswerInput } from "@/components/NumericAnswerInput";
 import { QuestionTypeTag } from "@/components/QuestionTypeTag";
 import { formatMarks, negativeMarkLabel, questionMarks } from "@/lib/marking";
@@ -25,26 +30,9 @@ import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
 import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
 import { useToast } from "@/components/ui/toast-provider";
+import type { QuestionPresentation } from "@/lib/question-contract";
 
-interface Question {
-  id: string;
-  question_text: string;
-  option_1: string;
-  option_2: string;
-  option_3: string;
-  option_4: string;
-  image_url?: string;
-  image_width?: number;
-  image_height?: number;
-  option_images?: QuestionImage[];
-  source_question_number?: number;
-  year?: number;
-  paper?: string;
-  question_type?: "MCQ" | "MSQ" | "NAT";
-  answer_decimal_places?: number | null;
-  marks?: number;
-  negative_marks?: number;
-}
+type Question = QuestionPresentation;
 
 interface SessionData {
   id: string;
@@ -101,17 +89,6 @@ async function awardTestXP(sessionId: string) {
   } catch {}
 }
 
-async function addWrongToSRS(sessionId: string) {
-  try {
-    await fetch("/api/srs", {
-      method: "POST",
-      keepalive: true,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "process-session", sessionId }),
-    });
-  } catch {}
-}
-
 function formatTime(seconds: number) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -132,6 +109,27 @@ export function ExamClient({
   const router = useRouter();
   const { toast } = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const calculatorToggleRef = useRef<HTMLButtonElement>(null);
+  const closeCalculatorRef = useRef<HTMLButtonElement>(null);
+
+  const closeCalculator = useCallback(() => {
+    setCalculatorOpen(false);
+    calculatorToggleRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!calculatorOpen) return;
+    closeCalculatorRef.current?.focus({ preventScroll: true });
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeCalculator();
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [calculatorOpen, closeCalculator]);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const advancingRef = useRef(false);
@@ -297,7 +295,6 @@ export function ExamClient({
 
       triggerStreakUpdate();
       void awardTestXP(session.id);
-      addWrongToSRS(session.id);
       redirectToResults();
     } catch {
       submittedRef.current = false;
@@ -379,7 +376,6 @@ export function ExamClient({
 
       triggerStreakUpdate();
       void awardTestXP(session.id);
-      addWrongToSRS(session.id);
       pendingExitRef.current?.();
     } catch {
       submittedRef.current = false;
@@ -443,9 +439,9 @@ export function ExamClient({
   return (
     <div className="h-full min-h-0 flex flex-col bg-background overflow-hidden">
       {/* ===== MAIN CONTENT ===== */}
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
         {/* Question area */}
-        <div className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain">
+        <div className="flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
           <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90">
             <div className="max-w-2xl mx-auto flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 sm:px-6">
               <div className="min-w-0">
@@ -490,7 +486,10 @@ export function ExamClient({
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setSidebarOpen(!sidebarOpen)}
+                    onClick={() => {
+                      setCalculatorOpen(false);
+                      setSidebarOpen(!sidebarOpen);
+                    }}
                     aria-label={sidebarOpen ? "Close question palette" : "Open question palette"}
                     aria-expanded={sidebarOpen}
                     className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary lg:hidden"
@@ -514,6 +513,24 @@ export function ExamClient({
                     }`}
                   >
                     <Bookmark className={`h-4 w-4 ${isCurrentBookmarked ? "fill-current" : ""}`} />
+                  </button>
+                  <button
+                    ref={calculatorToggleRef}
+                    type="button"
+                    onClick={() => {
+                      if (calculatorOpen) closeCalculator();
+                      else {
+                        setSidebarOpen(false);
+                        setCalculatorOpen(true);
+                      }
+                    }}
+                    aria-label={calculatorOpen ? "Close calculator" : "Open calculator"}
+                    aria-expanded={calculatorOpen}
+                    aria-controls="exam-calculator"
+                    title="Scientific calculator"
+                    className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border border-border transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${calculatorOpen ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}
+                  >
+                    <Calculator className="h-4 w-4" />
                   </button>
                   <ReportButton
                     questionId={currentQuestion?.id || ""}
@@ -539,35 +556,59 @@ export function ExamClient({
             </div>
           </div>
 
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 py-5 lg:py-7">
             {currentQuestion && (
               <div className="space-y-6">
-                <QuestionTypeTag type={currentQuestion.question_type} />
-
-                <div className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  <span>Correct: +{formatMarks(questionMarks(currentQuestion).positive)}</span>
-                  <span>Wrong: {questionMarks(currentQuestion).negative > 0 ? `−${negativeMarkLabel(currentQuestion)}` : "0"}</span>
-                  <span>Unattempted: 0</span>
+                <div className="flex min-h-8 flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                  <QuestionTypeTag type={currentQuestion.question_type} />
+                  {currentQuestion.marks_to_all ? (
+                    <span>Marks to all: +{formatMarks(questionMarks(currentQuestion).positive)}, including unattempted</span>
+                  ) : <>
+                    <span>Correct: +{formatMarks(questionMarks(currentQuestion).positive)}</span>
+                    <span>Wrong: {questionMarks(currentQuestion).negative > 0 ? `−${negativeMarkLabel(currentQuestion)}` : "0"}</span>
+                    <span>Unattempted: 0</span>
+                  </>}
                   {currentSourceLabel && <span className="ml-auto font-medium">{currentSourceLabel}</span>}
                 </div>
 
-                {currentQuestion.question_type === "MSQ" && <p className="text-sm font-medium text-primary">Multiple select: choose all correct options. Full marks only for the exact set; no partial credit or negative marking.</p>}
+                {!currentQuestion.marks_to_all && currentQuestion.question_type === "MSQ" && <p className="text-sm font-medium text-primary">Multiple select: choose all correct options. Full marks only for the exact set; no partial credit or negative marking.</p>}
 
                 {/* Question text */}
                 {isMatchingQuestion(currentQuestion.question_text) ? (
                   <MatchingQuestion text={currentQuestion.question_text} />
                 ) : (
-                  <MathText
+                  <QuestionPrompt
                     text={currentQuestion.question_text}
-                    className="question-content text-base lg:text-lg leading-relaxed font-medium"
-                    as="div"
+                    compact={currentQuestion.source_metadata?.presentation?.compact_prompt === true}
+                    image={currentQuestion.image_url ? { url: currentQuestion.image_url, width: currentQuestion.image_width, height: currentQuestion.image_height, alt: `Original diagram for question ${currentQuestion.source_question_number || currentIndex + 1}` } : undefined}
                   />
                 )}
 
-                {currentQuestion.image_url && <QuestionFigure image={{ url: currentQuestion.image_url, width: currentQuestion.image_width, height: currentQuestion.image_height, alt: `Original diagram for question ${currentQuestion.source_question_number || currentIndex + 1}` }} />}
+                {isMatchingQuestion(currentQuestion.question_text) && currentQuestion.image_url && <QuestionFigure image={{ url: currentQuestion.image_url, width: currentQuestion.image_width, height: currentQuestion.image_height, alt: `Original diagram for question ${currentQuestion.source_question_number || currentIndex + 1}` }} />}
 
                 {/* NAT questions have no answer choices. */}
-                {currentQuestion.question_type === "NAT" ? (
+                {currentQuestion.marks_to_all ? (
+                  <div className="space-y-3">
+                  <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-100">
+                    The official answer key awards {formatMarks(questionMarks(currentQuestion).positive)} marks to all candidates for this question. No answer is required and no marks will be deducted.
+                  </p>
+                  {currentQuestion.question_type !== "NAT" && [1, 2, 3, 4].map((n) => {
+                    const text = currentQuestion[`option_${n}` as keyof Question] as string;
+                    const image = currentQuestion.option_images?.[n - 1];
+                    if (!text && !image) return null;
+                    return (
+                      <div key={n} className="flex items-center gap-4 rounded-xl border-2 border-border px-5 py-4">
+                        <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg bg-muted px-2 text-sm font-bold text-muted-foreground">{String.fromCharCode(64 + n)}</span>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <MathText text={text || ""} className="text-base leading-relaxed" />
+                          {image && <QuestionFigure image={image} inline />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  </div>
+                ) : currentQuestion.question_type === "NAT" ? (
                   <NumericAnswerInput
                     value={typeof answers[currentQuestion.id] === "string" ? answers[currentQuestion.id] as string : ""}
                     decimalPlaces={currentQuestion.answer_decimal_places}
@@ -582,6 +623,7 @@ export function ExamClient({
                     const isSelected = selection(answers[currentQuestion.id]).includes(n);
                     const optionLabel = String.fromCharCode(64 + n);
                     const optionText = currentQuestion[`option_${n}` as keyof Question] as string;
+                    const optionImage = currentQuestion.option_images?.[n - 1];
                     const isMatchingCode = isMatchCodeOption(optionText || "");
                     return (
                       <div
@@ -608,7 +650,7 @@ export function ExamClient({
                           ) : (
                             <div className="min-w-0 flex-1 space-y-2">
                               <MathText text={optionText || ""} className="text-base leading-relaxed" />
-                              {currentQuestion.option_images?.[n - 1] && <QuestionFigure image={currentQuestion.option_images[n - 1]} inline />}
+                              {optionImage && <QuestionFigure image={optionImage} inline />}
                             </div>
                           )}
                         </div>
@@ -621,10 +663,85 @@ export function ExamClient({
               </div>
             )}
           </div>
+          </div>
+
+        {/* ===== BOTTOM NAVIGATION BAR ===== */}
+        <footer className="relative z-10 shrink-0 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+          <div className="mx-auto flex h-[60px] w-full max-w-2xl items-center justify-between gap-2 px-4 sm:px-6">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentIndex === 0}
+              onClick={() => setCurrentIndex(currentIndex - 1)}
+              className="shrink-0 gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous
+            </Button>
+  
+            <div className="flex min-w-0 flex-1 items-center justify-center gap-3">
+              <div className="hidden lg:flex items-center gap-1">
+                {questions.slice(
+                  Math.max(0, currentIndex - 2),
+                  Math.min(totalQuestions, currentIndex + 3)
+                ).map((_, i) => {
+                  const idx = Math.max(0, currentIndex - 2) + i;
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setCurrentIndex(idx)}
+                      aria-label={`Go to question ${idx + 1}`}
+                      className={`h-2 rounded-full transition-all ${
+                        idx === currentIndex
+                          ? "w-6 bg-primary"
+                          : hasResponse(answers[questions[idx].id])
+                          ? "w-2 bg-green-500"
+                          : "w-2 bg-muted"
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+  
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirm(true)}
+                disabled={isSubmitting}
+                size="sm"
+                className="shrink-0 gap-1.5"
+              >
+                <Send className="h-4 w-4" />
+                <span className="sm:hidden">Submit</span>
+                <span className="hidden sm:inline">Submit Test</span>
+              </Button>
+            </div>
+  
+            <Button
+              size="sm"
+              disabled={currentIndex >= totalQuestions - 1 || isAdvancing || isSubmitting}
+              onClick={handleSaveAndNext}
+              className="shrink-0 gap-1 whitespace-nowrap"
+            >
+              {isAdvancing ? "Saving…" : "Save & Next"}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </footer>
         </div>
 
+        <ExamCalculatorPanel open={calculatorOpen} onOpen={() => { setSidebarOpen(false); setCalculatorOpen(true); }} onClose={closeCalculator} closeButtonRef={closeCalculatorRef}>
+          {/* Keep mounted so calculations and memory survive closing or changing questions. */}
+          <GateCalculator examMode />
+        </ExamCalculatorPanel>
+
         {/* ===== QUESTION PALETTE (Desktop) ===== */}
-        <aside className="hidden lg:flex flex-col w-64 border-l bg-card shrink-0">
+        <aside aria-label="Question palette" className={`${examTools.palette} ${calculatorOpen ? examTools.paletteCollapsed : ""} hidden lg:flex flex-col border-l bg-card shrink-0`}>
+          {calculatorOpen && <button type="button" onClick={closeCalculator} aria-label="Restore question palette" title="Restore question palette" className="flex h-full w-full flex-col items-center gap-3 py-4 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary">
+            <PanelRightOpen className="h-4 w-4 shrink-0" />
+            <span className={examTools.paletteLabel}>Question Palette</span>
+          </button>}
+          <div className={calculatorOpen ? "hidden" : "contents"}>
           <div className="p-4 border-b">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Question Palette
@@ -683,72 +800,9 @@ export function ExamClient({
               <span>Bookmarked ({bookmarks.size})</span>
             </div>
           </div>
+          </div>
         </aside>
       </div>
-
-      {/* ===== BOTTOM NAVIGATION BAR ===== */}
-      <footer className="relative z-10 shrink-0 border-t bg-card shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-        <div className="flex items-center justify-between gap-2 px-3 sm:px-6 h-16">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={currentIndex === 0}
-            onClick={() => setCurrentIndex(currentIndex - 1)}
-            className="shrink-0 gap-1"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Previous
-          </Button>
-
-          <div className="flex min-w-0 flex-1 items-center justify-center gap-3">
-            <div className="hidden lg:flex items-center gap-1">
-              {questions.slice(
-                Math.max(0, currentIndex - 2),
-                Math.min(totalQuestions, currentIndex + 3)
-              ).map((_, i) => {
-                const idx = Math.max(0, currentIndex - 2) + i;
-                return (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setCurrentIndex(idx)}
-                    aria-label={`Go to question ${idx + 1}`}
-                    className={`h-2 rounded-full transition-all ${
-                      idx === currentIndex
-                        ? "w-6 bg-primary"
-                        : hasResponse(answers[questions[idx].id])
-                        ? "w-2 bg-green-500"
-                        : "w-2 bg-muted"
-                    }`}
-                  />
-                );
-              })}
-            </div>
-
-            <Button
-              variant="outline"
-              onClick={() => setShowConfirm(true)}
-              disabled={isSubmitting}
-              size="sm"
-              className="shrink-0 gap-1.5"
-            >
-              <Send className="h-4 w-4" />
-              <span className="sm:hidden">Submit</span>
-              <span className="hidden sm:inline">Submit Test</span>
-            </Button>
-          </div>
-
-          <Button
-            size="sm"
-            disabled={currentIndex >= totalQuestions - 1 || isAdvancing || isSubmitting}
-            onClick={handleSaveAndNext}
-            className="shrink-0 gap-1 whitespace-nowrap"
-          >
-            {isAdvancing ? "Saving…" : "Save & Next"}
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </footer>
 
       {/* ===== MOBILE QUESTION PALETTE (overlay) ===== */}
       {sidebarOpen && (

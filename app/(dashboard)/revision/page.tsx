@@ -1,425 +1,127 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  CheckCircle2,
-  XCircle,
-  ArrowLeft,
-  Sparkles,
-  Clock,
-  BookOpen,
-  Brain,
-  ThumbsUp,
-  HelpCircle,
-  ChevronRight,
-  Eye,
-  EyeOff,
-} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { ArrowLeft, Calculator, CheckCircle2, Eye, RotateCcw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { QuestionPrompt } from "@/components/QuestionPrompt";
+import { QuestionFigure } from "@/components/QuestionFigure";
+import { QuestionExplanation } from "@/components/QuestionExplanation";
+import { MathText } from "@/components/MathText";
 import { MatchingQuestion } from "@/components/MatchingQuestion";
 import { MatchOption } from "@/components/MatchOption";
 import { isMatchingQuestion, isMatchCodeOption } from "@/lib/matching-question-utils";
-
-interface SRSQuestion {
-  srsId: string;
-  intervalDays: number;
-  easeFactor: number;
-  repetitionCount: number;
-  nextReviewDate: string;
-  question: {
-    id: string;
-    text: string;
-    options: string[];
-    correctOption: number;
-    explanation: string;
-    year: number | null;
-    subject: string | null;
-  };
-}
-
-const optionLabels = ["A", "B", "C", "D"];
+import { GateCalculator } from "@/components/calculator/GateCalculator";
+import { multipleAnswerLabel, numericAnswerLabel } from "@/lib/question-response";
+import { DAILY_REVISION_CAP, REVISION_INTERVALS, type RevisionQueue } from "@/lib/revision";
 
 export default function RevisionPage() {
-  const [questions, setQuestions] = useState<SRSQuestion[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [queue, setQueue] = useState<RevisionQueue | null>(null);
+  const [index, setIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [results, setResults] = useState<
-    { questionId: string; result: string }[]
-  >([]);
-  const [finished, setFinished] = useState(false);
-  const router = useRouter();
+  const [error, setError] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const [calculator, setCalculator] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const busy = useRef(false);
+  const heading = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/srs?action=due");
-        if (!res.ok) return;
-        const json = await res.json();
-        setQuestions(json.questions || []);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  async function load() {
+    setLoading(true); setError("");
+    try {
+      const response = await fetch("/api/srs?action=due", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to load revision.");
+      setQueue(data); setIndex(0); setRevealed(false);
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to load revision. Please retry."); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void load(); }, []);
 
-  const handleRate = useCallback(
-    async (result: "correct" | "wrong" | "skipped") => {
-      if (submitting || !questions[currentIndex]) return;
-      setSubmitting(true);
-      setResults((r) => [
-        ...r,
-        { questionId: questions[currentIndex].question.id, result },
-      ]);
-
-      try {
-        await fetch("/api/srs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "answer",
-            questionId: questions[currentIndex].question.id,
-            result,
-          }),
-        });
-      } catch {
-        // ignore
-      }
-
-      setShowAnswer(false);
-      setSubmitting(false);
-
-      if (currentIndex < questions.length - 1) {
-        setCurrentIndex((i) => i + 1);
-      } else {
-        setFinished(true);
-      }
-    },
-    [currentIndex, questions, submitting]
-  );
-
-  const handleSkip = useCallback(() => {
-    handleRate("skipped");
-  }, [handleRate]);
-
-  if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto space-y-6 py-6">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <Skeleton className="h-9 w-28" />
-        </div>
-        <Skeleton className="h-2 w-full" />
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            <Skeleton className="h-5 w-24" />
-            <Skeleton className="h-6 w-full" />
-            <Skeleton className="h-6 w-3/4" />
-            <div className="space-y-2.5">
-              <Skeleton className="h-12 w-full rounded-lg" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-              <Skeleton className="h-12 w-full rounded-lg" />
-            </div>
-            <Skeleton className="h-12 w-full rounded-lg" />
-          </CardContent>
-        </Card>
-      </div>
-    );
+  async function rate(result: "correct" | "wrong") {
+    if (busy.current || !queue || !revealed || !queue.questions[index]) return;
+    busy.current = true; setSaving(true); setError("");
+    try {
+      const response = await fetch("/api/srs", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "answer", questionId: queue.questions[index].question.id, result, reviewDate: queue.reviewDate }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to save review.");
+      setQueue(previous => previous && ({ ...previous, summary: { ...previous.summary,
+        completedCount: previous.summary.completedCount + 1, dueCount: Math.max(0, previous.summary.dueCount - 1),
+        xpEarned: data.xpEarned, queueComplete: data.queueComplete } }));
+      setNotice(data.alreadySaved ? "This review was already saved in another tab." : data.mastered ? "Mastered! This question has graduated from revision." :
+        `Saved · Stage ${data.stage} · Review in ${REVISION_INTERVALS[data.stage - 1]} days · +${data.xpAwarded} XP`);
+      setIndex(value => value + 1); setRevealed(false);
+      window.scrollTo({ top: 0, behavior: "instant" });
+      requestAnimationFrame(() => heading.current?.focus());
+    } catch (err) { setError(err instanceof Error ? err.message : "Unable to save review. Please retry."); }
+    finally { busy.current = false; setSaving(false); }
   }
 
-  if (finished) {
-    const correctCount = results.filter((r) => r.result === "correct").length;
-    const wrongCount = results.filter((r) => r.result === "wrong").length;
-    const skippedCount = results.filter((r) => r.result === "skipped").length;
-    const totalXp = correctCount * 10;
+  if (loading) return <div className="mx-auto max-w-2xl py-8" role="status"><div className="h-72 animate-pulse rounded-xl bg-muted" /><p className="mt-4 text-sm text-muted-foreground">Preparing your revision queue…</p></div>;
+  if (!queue) return <div className="mx-auto max-w-lg space-y-4 py-12"><p role="alert">{error}</p><Button onClick={load}>Retry loading revision</Button></div>;
 
-    return (
-      <div className="max-w-2xl mx-auto space-y-8 py-12">
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: "spring", stiffness: 400, damping: 20 }}
-          className="flex flex-col items-center gap-4"
-        >
-          <div className="h-16 w-16 rounded-2xl bg-green-500/10 flex items-center justify-center">
-            <CheckCircle2 className="h-9 w-9 text-green-600" />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight">Revision Complete!</h1>
-        </motion.div>
-
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
-              <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto" />
-              <div className="text-xl sm:text-2xl font-bold text-green-600 dark:text-green-400">
-                {correctCount}
-              </div>
-              <p className="text-xs text-muted-foreground">Correct</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
-              <XCircle className="h-5 w-5 text-red-500 mx-auto" />
-              <div className="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400">
-                {wrongCount}
-              </div>
-              <p className="text-xs text-muted-foreground">Still Learning</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 sm:p-4 text-center space-y-1.5">
-              <Clock className="h-5 w-5 text-muted-foreground mx-auto" />
-              <div className="text-xl sm:text-2xl font-bold text-muted-foreground">
-                {skippedCount}
-              </div>
-              <p className="text-xs text-muted-foreground">Skipped</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="bg-gradient-to-r from-emerald-500/10 to-green-500/10 rounded-xl border border-emerald-500/20 p-5 text-center"
-        >
-          <Sparkles className="h-5 w-5 text-emerald-500 mx-auto mb-1.5" />
-          <p className="text-emerald-700 dark:text-emerald-400 font-semibold text-lg">
-            +{totalXp} XP earned
-          </p>
-          <p className="text-sm text-muted-foreground mt-1">
-            Next revision scheduled based on your performance.
-          </p>
-        </motion.div>
-
-        <div className="flex justify-center">
-          <Button onClick={() => router.push("/dashboard")} size="lg">
-            Back to Dashboard
-            <ArrowLeft className="h-4 w-4 ml-1.5 rotate-180" />
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (questions.length === 0) {
-    return (
-      <div className="max-w-md mx-auto py-16">
-        <Card>
-          <CardContent className="flex flex-col items-center text-center py-12 gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-green-500/10 flex items-center justify-center">
-              <CheckCircle2 className="h-7 w-7 text-green-600" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight">All Caught Up!</h1>
-              <p className="text-sm text-muted-foreground mt-1.5 max-w-sm">
-                You&apos;ve reviewed everything due. Questions you answer wrong
-                or bookmark will appear here for spaced repetition.
-              </p>
-            </div>
-            <Button asChild className="mt-2">
-              <Link href="/test/select">
-                Practice More
-                <ChevronRight className="h-4 w-4 ml-1" />
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const q = questions[currentIndex];
-  const progress = ((currentIndex + 1) / questions.length) * 100;
-
-  return (
-    <div className="max-w-3xl mx-auto space-y-6 py-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <BookOpen className="h-6 w-6 text-primary" />
-            Revision
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {questions.length} question{questions.length > 1 ? "s" : ""} due today
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={handleSkip}>
-          <Clock className="h-3.5 w-3.5" />
-          Skip for today
-        </Button>
-      </div>
-
-      {/* Progress */}
-      <div className="space-y-1.5">
-        <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">
-            <span className="font-medium text-foreground">{currentIndex + 1}</span> / {questions.length} reviewed
-          </span>
-          <span className="text-muted-foreground">
-            +{questions.length * 10} XP available
-          </span>
-        </div>
-        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-            className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-500"
-          />
-        </div>
-      </div>
-
-      {/* Question Card */}
-      <Card className="overflow-hidden">
-        <CardContent className="p-5 sm:p-6 space-y-5">
-          {/* Subject + question */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {q.question.subject && (
-              <Badge variant="secondary">{q.question.subject}</Badge>
-            )}
-            {q.question.year && (
-              <Badge variant="outline" className="text-xs">{q.question.year}</Badge>
-            )}
-          </div>
-
-          <div className="text-base lg:text-lg leading-relaxed font-medium">
-            {isMatchingQuestion(q.question.text) ? (
-              <MatchingQuestion text={q.question.text} />
-            ) : (
-              q.question.text
-            )}
-          </div>
-
-          {/* Options */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {q.question.options.map((opt, idx) => {
-              const optNum = idx + 1;
-              const isCorrectAnswer = showAnswer && q.question.correctOption === optNum;
-
-              return (
-                <div
-                  key={idx}
-                  className={`rounded-xl border-2 px-4 py-3.5 text-sm transition-all ${
-                    isCorrectAnswer
-                      ? "border-green-500 bg-green-50 dark:bg-green-950/20"
-                      : "border-border bg-card"
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
-                    <span
-                      className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium shrink-0 mt-0.5 ${
-                        isCorrectAnswer
-                          ? "bg-green-500 text-white"
-                          : "border border-muted-foreground/30 text-muted-foreground"
-                      }`}
-                    >
-                      {optionLabels[idx]}
-                    </span>
-                    <span className="flex-1 leading-relaxed">
-                      {isMatchCodeOption(opt) ? (
-                        <MatchOption text={opt} className="text-xs" />
-                      ) : (
-                        opt
-                      )}
-                    </span>
-                    {isCorrectAnswer && (
-                      <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0 mt-0.5" />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Explanation */}
-          <AnimatePresence>
-            {showAnswer && q.question.explanation && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="overflow-hidden"
-              >
-                <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground leading-relaxed border">
-                  {q.question.explanation}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Rating buttons or Show Answer */}
-          {showAnswer ? (
-            <div className="space-y-3">
-              <div className="text-center">
-                <p className="text-sm font-medium text-muted-foreground">
-                  How did you do?
-                </p>
-              </div>
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                <Button
-                  variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 hover:border-red-300"
-                  onClick={() => handleRate("wrong")}
-                  disabled={submitting}
-                >
-                  <Brain className="h-5 w-5 text-red-500" />
-                  <span className="text-xs font-medium">
-                    <span className="sm:hidden">Confused</span>
-                    <span className="hidden sm:inline">Still Confused</span>
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-amber-200 hover:bg-amber-50 dark:border-amber-900 dark:hover:bg-amber-950/30 hover:border-amber-300"
-                  onClick={() => handleRate("correct")}
-                  disabled={submitting}
-                >
-                  <HelpCircle className="h-5 w-5 text-amber-500" />
-                  <span className="text-xs font-medium">
-                    <span className="sm:hidden">Effort</span>
-                    <span className="hidden sm:inline">Got it with effort</span>
-                  </span>
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex flex-col gap-1.5 h-auto py-3 sm:py-4 border-emerald-200 hover:bg-emerald-50 dark:border-emerald-900 dark:hover:bg-emerald-950/30 hover:border-emerald-300"
-                  onClick={() => handleRate("correct")}
-                  disabled={submitting}
-                >
-                  <ThumbsUp className="h-5 w-5 text-emerald-500" />
-                  <span className="text-xs font-medium">Easy!</span>
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <Button
-              onClick={() => setShowAnswer(true)}
-              className="w-full"
-              size="lg"
-            >
-              <Eye className="h-4 w-4" />
-              Show Answer
-            </Button>
-          )}
-        </CardContent>
-      </Card>
+  const current = queue.questions[index];
+  const summary = queue.summary;
+  const complete = !current && summary.queueComplete;
+  const q = current?.question;
+  return <main className="mx-auto max-w-2xl space-y-5 py-4 sm:py-8">
+    <div className="flex items-center justify-between gap-3">
+      <Link href="/dashboard" className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground"><ArrowLeft className="h-4 w-4" />Dashboard</Link>
+      <span className="text-xs text-muted-foreground">At most {DAILY_REVISION_CAP} questions a day</span>
     </div>
-  );
+    <header className="space-y-2">
+      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Recall · Derive · Remember</p>
+      <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold tracking-tight outline-none">{complete ? "Today’s revision complete" : "Today’s revision queue"}</h1>
+      <p className="text-sm text-muted-foreground">{current ? "Work it out on paper, then reveal the answer and check your reasoning." : complete ? "Your study streak is maintained. Come back tomorrow for your next reviews." : "New mistakes and bookmarked questions begin here after one day."}</p>
+    </header>
+    {notice && <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-sm">{notice}</p>}
+    {error && <div role="alert" className="space-y-2 rounded-lg border border-destructive/40 p-3 text-sm"><p>{error}</p><Button variant="outline" size="sm" disabled={saving} onClick={load}>Reload queue</Button></div>}
+    {summary.totalCount > 0 && <div className="space-y-2">
+      <div className="flex justify-between text-xs text-muted-foreground"><span>{summary.completedCount} of {summary.totalCount} reviewed</span><span>{summary.xpEarned} XP earned</span></div>
+      <div role="progressbar" aria-label="Daily revision progress" aria-valuenow={summary.completedCount} aria-valuemin={0} aria-valuemax={summary.totalCount} className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full bg-primary transition-[width] motion-reduce:transition-none" style={{ width: `${summary.completedCount / summary.totalCount * 100}%` }} /></div>
+    </div>}
+    {!current && <Card><CardContent className="flex flex-col items-center gap-4 p-8 text-center">
+      <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+      <h2 className="text-xl font-semibold">{complete ? "A little stronger, every day." : summary.deferredCount ? "Daily limit reached" : "Nothing due today"}</h2>
+      {complete && <p className="text-sm">{summary.completedCount} questions reviewed · {summary.xpEarned} XP saved</p>}
+      <p className="text-sm text-muted-foreground">{summary.deferredCount > 0 ? `${summary.deferredCount} other due questions will carry forward. Keep today manageable.` : "We’ll bring back the right questions at the right time."}</p>
+      <Button asChild><Link href="/test/select">Continue practicing</Link></Button>
+    </CardContent></Card>}
+    {current && q && <>
+      <ol aria-label="Revision stages" className="grid grid-cols-5 gap-1 rounded-xl border p-2">
+        {REVISION_INTERVALS.map((days, i) => <li key={days} aria-current={current.stage === i + 1 ? "step" : undefined} className={`rounded-lg px-1 py-2 text-center ${current.stage === i + 1 ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}><span className="block text-[10px] sm:text-xs">Stage {i + 1}</span><span className="text-sm font-semibold">{days}d</span></li>)}
+      </ol>
+      <Card><CardContent className="space-y-5 p-4 sm:p-6">
+        <div className="flex flex-wrap gap-2"><Badge variant="secondary">{q.question_type}</Badge>{q.year && <Badge variant="outline">GATE {q.year}</Badge>}<Badge variant="outline">Stage {current.stage} / 5</Badge></div>
+        {isMatchingQuestion(q.question_text) ? <><MatchingQuestion text={q.question_text} />{q.image_url && <QuestionFigure image={{ url: q.image_url, width: q.image_width, height: q.image_height }} />}</> : <QuestionPrompt text={q.question_text} image={q.image_url ? { url: q.image_url, width: q.image_width, height: q.image_height } : undefined} />}
+        <Button variant="outline" className="min-h-11 w-full" onClick={() => setCalculator(value => !value)} aria-expanded={calculator} aria-controls="revision-calculator"><Calculator className="mr-2 h-4 w-4" />{calculator ? "Hide calculator" : "Open virtual calculator"}</Button>
+        <div id="revision-calculator" hidden={!calculator}><GateCalculator examMode /></div>
+        {!revealed ? <Button size="lg" className="min-h-14 w-full whitespace-normal" onClick={() => setRevealed(true)}><Eye className="mr-2 h-4 w-4" />Reveal Answer &amp; Derivation</Button> : <div className="space-y-5">
+          <section aria-label="Answer and derivation" className="space-y-3">
+            <h2 className="text-sm font-semibold">Answer &amp; derivation</h2>
+            {q.question_type === "NAT" ? <p className="rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm font-medium">{numericAnswerLabel(q.answer_min, q.answer_max, q.answer_ranges)}</p> : <>
+              {q.correct_option_sets && <p className="text-sm font-medium">{multipleAnswerLabel(q.correct_option_sets)}</p>}
+              <div className="space-y-2">{[q.option_1, q.option_2, q.option_3, q.option_4].map((option, i) => {
+                const correct = q.correct_option_sets ? q.correct_option_sets.some(set => set.includes(i + 1)) : q.question_type === "MSQ" ? q.correct_options?.includes(i + 1) : q.correct_option === i + 1;
+                return <div key={i} className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${correct ? "border-emerald-500/50 bg-emerald-500/5" : ""}`}><span className="shrink-0 font-semibold">{String.fromCharCode(65 + i)}{correct && <span className="sr-only"> (correct)</span>}</span><div className="min-w-0 flex-1">{isMatchCodeOption(option || "") ? <MatchOption text={option || ""} /> : <MathText text={option || ""} />}{q.option_images?.[i] && <QuestionFigure image={q.option_images[i]} inline />}</div>{correct && <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />}</div>;
+              })}</div>
+            </>}
+            {q.explanation ? <QuestionExplanation text={q.explanation} /> : <p className="text-sm text-muted-foreground">A detailed derivation isn’t available for this question yet. Use the answer key to check your work.</p>}
+          </section>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Button variant="outline" disabled={saving} onClick={() => rate("wrong")} className="min-h-16 flex-col whitespace-normal border-red-500/40 text-red-700 dark:text-red-300"><span>Got it Wrong / Confused</span><span className="text-xs font-normal">Stage 1 · Tomorrow · +5 XP</span></Button>
+            <Button disabled={saving} onClick={() => rate("correct")} className="min-h-16 flex-col whitespace-normal bg-emerald-700 text-white hover:bg-emerald-800"><span>Solved it Easily</span><span className="text-xs font-normal">{current.stage === 5 ? "Master this question" : `Stage ${current.stage + 1} · In ${REVISION_INTERVALS[current.stage]} days`} · +10 XP</span></Button>
+          </div>
+          {saving && <p role="status" className="text-center text-xs text-muted-foreground">Saving your review…</p>}
+        </div>}
+      </CardContent></Card>
+      <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><RotateCcw className="h-3 w-3" />Mistakes return tomorrow. Progress is saved after every review.</p>
+    </>}
+  </main>;
 }

@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import type { ExamStream } from '@/lib/stream-scope';
 import { filterTestPool, type PoolQuestion, type TestTopic, type TestMode } from '@/lib/test-pool';
 import { createTest } from './actions';
+import { describeYears, summariseAvailability } from '@/lib/content-availability';
 type Props = {
+    initialSelection?: Record<string, string>;
     examId: string;
     examName: string;
     stream: ExamStream | null;
@@ -19,12 +21,16 @@ type Props = {
     pool: PoolQuestion[];
 };
 const styles = 'h-11 w-full rounded-lg border bg-background px-3 text-sm disabled:opacity-50';
-export function TestSelectForm({ examId, examName, stream, requiresStream, subjects, topics, pool }: Props) {
+export function TestSelectForm({ examId, examName, stream, requiresStream, subjects, topics, pool, initialSelection = {} }: Props) {
     const router = useRouter();
-    const [mode, setMode] = useState<TestMode>(requiresStream ? 'full_paper' : 'full_mock');
-    const [year, setYear] = useState('');
-    const [paper, setPaper] = useState('');
-    const [subjectId, setSubject] = useState('');
+    const requestedMode = initialSelection.mode;
+    const initialMode: TestMode = requestedMode === 'subject_wise' || requestedMode === 'topic_wise' || requestedMode === 'custom' ? requestedMode : requiresStream ? 'full_paper' : 'full_mock';
+    const initialYear = pool.some(q => String(q.year) === initialSelection.year) ? initialSelection.year : '';
+    const initialPaper = pool.some(q => (!initialYear || String(q.year) === initialYear) && q.paper === initialSelection.paper) ? initialSelection.paper : '';
+    const [mode, setMode] = useState<TestMode>(initialMode);
+    const [year, setYear] = useState(initialYear);
+    const [paper, setPaper] = useState(initialPaper);
+    const [subjectId, setSubject] = useState(subjects.some(s => s.id === initialSelection.subject) ? initialSelection.subject : '');
     const [topicId, setTopic] = useState('');
     const [count, setCount] = useState(10);
     const [timed, setTimed] = useState(true);
@@ -34,6 +40,8 @@ export function TestSelectForm({ examId, examName, stream, requiresStream, subje
     const years = [...new Set(pool.flatMap(q => q.year ? [q.year] : []))].sort((a, b) => b - a);
     const papers = [...new Set(pool.filter(q => !year || q.year === Number(year)).flatMap(q => q.paper ? [q.paper] : []))].sort();
     const sourcePool = filterTestPool(pool, { year: year ? Number(year) : null, paper: paper || null, subjectId: null, topicId: null }, topics);
+    const availability = summariseAvailability(pool);
+    const selectedPaper = year && paper ? availability.papers.find(item => item.year === Number(year) && item.paper === paper) : undefined;
     const matching = filterTestPool(sourcePool, { year: null, paper: null, subjectId: full ? null : subjectId || null, topicId: full ? null : topicId || null }, topics);
     const availableSubjects = subjects.filter(s => sourcePool.some(q => q.subject_id === s.id));
     const availableTopics = topics.filter(t => t.subject_id === subjectId && filterTestPool(sourcePool, { year: null, paper: null, subjectId, topicId: t.id }, topics).length);
@@ -68,6 +76,11 @@ export function TestSelectForm({ examId, examName, stream, requiresStream, subje
         return <div className="mx-auto max-w-2xl space-y-4 py-6"><h1 className="text-2xl font-bold">{stream?.name || examName}</h1><p>No questions have been added for this {stream ? 'stream' : 'exam'} yet. Papers and subjects will appear here after questions are added.</p><Button asChild variant="outline"><Link href="/onboarding">Change exam or stream</Link></Button></div>;
     return <div className="mx-auto max-w-2xl space-y-6 py-4">
     <header><p className="text-sm text-muted-foreground">{examName}{stream ? ` · ${stream.name} (${stream.code})` : ''}</p><h1 className="mt-1 text-2xl font-bold">Create your test</h1><p className="mt-2 text-sm text-muted-foreground">Choose a source paper, then take the full paper or focus your practice.</p></header>
+    <details className="rounded-xl border bg-card p-4 text-sm">
+      <summary className="cursor-pointer font-medium">Available papers · {describeYears(availability.years)} · {availability.questionCount} questions</summary>
+      <ul className="mt-3 space-y-2">{availability.papers.map(item => <li key={JSON.stringify([item.year, item.paper])} className="flex flex-wrap justify-between gap-2"><span>{item.year ?? 'Year not labelled'} · {item.paper ?? 'Paper not labelled'}</span><span className="text-muted-foreground">{item.questionCount} questions · {item.marks} marks</span></li>)}</ul>
+    </details>
+    {requiresStream && selectedPaper && (selectedPaper.questionCount !== 65 || selectedPaper.marks !== 100 || !selectedPaper.sequentialNumbering) && <p role="status" className="rounded-lg border p-3 text-sm">This source currently has {selectedPaper.questionCount} questions and {selectedPaper.marks} marks available. It has not been confirmed as a complete 65-question paper.</p>}
     <fieldset disabled={pending} className="space-y-6">
       <div className="grid grid-cols-2 gap-3">{modes.map(([value, title, desc]) => <button type="button" key={value} aria-pressed={mode === value} onClick={() => { setMode(value); setSubject(''); setTopic(''); setError(''); }} className={`rounded-xl border p-4 text-left ${mode === value ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-muted'}`}><span className="block font-semibold">{title}</span><span className="mt-1 block text-xs text-muted-foreground">{desc}</span></button>)}</div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -83,7 +96,7 @@ export function TestSelectForm({ examId, examName, stream, requiresStream, subje
       <p className="text-sm">{ready ? <><strong>{total} questions</strong>{mode === 'full_paper' ? ` · ${matching.reduce((n, q) => n + Number(q.marks || 0), 0)} marks` : ''} · {timed ? `${minutes} minutes` : 'Untimed practice'}{paper ? ` · ${year} / ${paper}` : ''}</> : requiresStream && (!year || !paper) ? 'Select a year and paper / shift to continue.' : 'Select your subject or topic to continue.'}</p>
       {mode !== 'full_paper' && matching.length < count && ready && <p className="text-xs text-muted-foreground">This selection has {matching.length} questions. All available questions will be included.</p>}
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <Button onClick={start} disabled={!ready || pending} className="w-full">{pending ? 'Creating…' : timed ? 'Start test' : 'Start practice'}</Button>
+      <Button onClick={start} disabled={!ready || pending} aria-busy={pending} className="h-11 w-full">{pending ? 'Creating…' : timed ? 'Start test' : 'Start practice'}</Button>
     </div>
   </div>;
 }

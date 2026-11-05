@@ -23,23 +23,27 @@ import {
   X,
   ChevronRight,
   Shield,
+  Calculator,
+  Zap,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/daily", label: "Daily", icon: CalendarCheck },
   { href: "/revision", label: "Revision", icon: BookOpen },
+  { href: "/practice", label: "5-Q Sprint", icon: Zap },
   { href: "/test/select", label: "Start Test", icon: PlaySquare },
   { href: "/recent-tests", label: "Recent Tests", icon: ClipboardList },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
+  { href: "/dashboard/calculator", label: "GATE Calculator", icon: Calculator },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
 const TAB_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/daily", label: "Daily", icon: CalendarCheck },
-  { href: "/test/select", label: "Test", icon: PlaySquare },
+  { href: "/practice", label: "Sprint", icon: Zap },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
@@ -274,7 +278,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
 
       {/* Mobile: bottom tab bar — hidden during active test-taking only */}
       {!(/^\/test\/[a-f0-9-]+/.test(pathname)) && (
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <nav aria-label="Main navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex items-center justify-around h-16 px-1">
           {TAB_ITEMS.map((item) => {
             const Icon = item.icon;
@@ -283,7 +287,8 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] ${
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-11 flex-1 flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] ${
                   active
                     ? "text-primary"
                     : "text-muted-foreground hover:text-foreground"
@@ -305,7 +310,9 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
 
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] text-muted-foreground hover:text-foreground"
+            aria-label="Open more navigation options"
+            aria-expanded={drawerOpen}
+            className="flex min-h-11 flex-1 flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] text-muted-foreground hover:text-foreground"
           >
             <div className="flex items-center justify-center h-7 w-7 rounded-full">
               <Menu className="h-5 w-5" />

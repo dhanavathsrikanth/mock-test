@@ -20,13 +20,11 @@ export interface StreakStatus {
 }
 
 function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0];
+  return new Date(Date.now() + 330 * 60000).toISOString().split("T")[0];
 }
 
 function getYesterdayDate(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split("T")[0];
+  return new Date(Date.now() + 330 * 60000 - 86400000).toISOString().split("T")[0];
 }
 
 export async function updateStreak(userId: string): Promise<StreakRecord> {
@@ -64,7 +62,7 @@ export async function updateStreak(userId: string): Promise<StreakRecord> {
     return streak;
   }
 
-  let newStreak = streak.current_streak;
+  let newStreak = streak.last_activity_date ? streak.current_streak : 1;
   let newFreezeTokens = streak.freeze_tokens;
   let milestoneAwarded: "Week Warrior" | "Iron Will" | null = null;
 

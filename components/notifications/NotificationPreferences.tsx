@@ -15,7 +15,7 @@ import { useNotificationPreferences } from "@/hooks/use-notification-preferences
 import { usePushSubscription } from "@/hooks/use-push-subscription";
 
 export function NotificationPreferencesPanel() {
-  const { preferences, loading, saving, updatePreferences, toggleType } =
+  const { preferences, loading, saving, error, refresh, updatePreferences, toggleType } =
     useNotificationPreferences();
   const { supported: pushSupported, subscribed: pushEnabled, permission, subscribe, unsubscribe } =
     usePushSubscription();
@@ -30,7 +30,7 @@ export function NotificationPreferencesPanel() {
     );
   }
 
-  if (!preferences) return null;
+  if (!preferences) return <Card><CardContent className="space-y-3 p-5"><p role="alert">{error || 'Notification settings are unavailable.'}</p><button type="button" onClick={refresh} className="min-h-11 underline">Retry settings</button></CardContent></Card>;
 
   const togglePush = async () => {
     if (pushEnabled) {
@@ -49,6 +49,7 @@ export function NotificationPreferencesPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {error && <p role="alert" className="rounded-lg border border-destructive/40 p-3 text-sm">{error}</p>}
         {/* Master Push Toggle */}
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
@@ -86,6 +87,18 @@ export function NotificationPreferencesPanel() {
             </p>
           </div>
         )}
+
+        <hr />
+
+        <fieldset disabled={saving} className="space-y-4">
+          <legend className="mb-3 text-sm font-semibold">Streak milestones</legend>
+          <ToggleRow id="milestone-enabled" label="Celebrate my study milestones" description="Messages when you reach 5- and 7-day streaks. Turn off anytime." checked={preferences.milestone_enabled ?? false} onToggle={() => updatePreferences({milestone_enabled:!preferences.milestone_enabled})} />
+          <label className="block text-sm font-medium">Send milestone messages through<select className="mt-2 h-11 w-full rounded-lg border bg-background px-3" value={preferences.milestone_channel ?? 'in_app'} onChange={e => updatePreferences({milestone_channel:e.target.value as 'in_app'|'push'|'email'})}><option value="in_app">In-app inbox</option><option value="push">Push notification</option><option value="email">Email</option></select></label>
+          <ToggleRow id="email-master" label="Email notifications" description="Use my verified account email for enabled email messages." checked={preferences.email_enabled ?? false} onToggle={() => updatePreferences({email_enabled:!preferences.email_enabled})} />
+          {preferences.milestone_channel==='email' && !preferences.email_enabled && <p className="text-xs text-muted-foreground">Enable email notifications to receive milestone emails.</p>}
+          {preferences.milestone_channel==='push' && !pushEnabled && <p className="text-xs text-muted-foreground">Enable push notifications in this browser to receive milestone pushes.</p>}
+          <p className="text-xs text-muted-foreground">At most one milestone message a day, once per milestone per campaign. Quiet hours use India time, with 9 PM–8 AM as the milestone default.</p>
+        </fieldset>
 
         <hr />
 
@@ -200,7 +213,7 @@ export function NotificationPreferencesPanel() {
             Quiet Hours
           </p>
           <p className="text-xs text-muted-foreground">
-            No push notifications during these hours
+            India time. Milestone messages on all channels also respect these hours.
           </p>
           <div className="flex items-center gap-4">
             <div className="flex-1 space-y-1">
@@ -241,7 +254,7 @@ export function NotificationPreferencesPanel() {
               <Loader2 className="h-3 w-3 animate-spin" /> Saving...
             </span>
           )}
-          {!saving && (
+          {!saving && !error && (
             <span className="text-xs text-green-600 flex items-center gap-1">
               <CheckCircle2 className="h-3 w-3" /> Saved
             </span>

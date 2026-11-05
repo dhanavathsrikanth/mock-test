@@ -45,7 +45,7 @@ test('catalog queries keep the exam and stream filters while paging past 1000 qu
  const calls=[];
  const all=[...Array.from({length:1005},(_,i)=>({id:`civil-${i}`,exam:'gate',stream:'civil'})),{id:'me',exam:'gate',stream:'mechanical'},{id:'other-exam',exam:'other',stream:'civil'}];
  const client={from(){let exam,stream;return {select(){return this},eq(_key,value){exam=value;return this},or(value){stream=value;return this},order(){return this},async range(start,end){calls.push([start,end,exam,stream]);return {data:all.filter(q=>q.exam===exam&&stream===`stream_id.eq.${q.stream}`).slice(start,end+1),error:null};}};}};
- const catalog=load('lib/test-catalog.ts',{'@/lib/supabase/server':{createClient:async()=>client},'@/lib/stream-scope':scope});
+ const catalog=load('lib/test-catalog.ts',{'@/lib/supabase/server':{createClient:async()=>client},'@/lib/stream-scope':scope,'@/lib/content-availability':load('lib/content-availability.ts')});
  const rows=await catalog.getTestPool('gate',{id:'civil'});
  assert.equal(rows.length,1005);assert.ok(rows.every(q=>q.stream==='civil'&&q.exam==='gate'));
  assert.deepEqual(calls.map(c=>c[0]),[0,1000]);

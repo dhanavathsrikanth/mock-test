@@ -133,7 +133,7 @@ export function BookmarksContent({
           </p>
         </div>
         {bookmarks.length > 0 && (
-          <Button onClick={startTest} disabled={creating} size="lg">
+          <Button onClick={startTest} disabled={creating} size="lg" className="w-full sm:w-auto">
             <Play className="h-4 w-4" />
             {creating ? "Creating..." : "Start Test from Bookmarks"}
           </Button>
@@ -142,11 +142,11 @@ export function BookmarksContent({
 
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex gap-2 overflow-x-auto pb-1 flex-1">
+        <div className="flex min-w-0 gap-2 overflow-x-auto pb-1 sm:flex-1">
           <button
             type="button"
             onClick={() => setSubjectFilter(null)}
-            className={`px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap transition-colors ${
+            className={`min-h-11 shrink-0 px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap transition-colors ${
               subjectFilter === null
                 ? "bg-primary text-primary-foreground border-primary"
                 : "bg-background text-foreground border-input hover:bg-accent"
@@ -159,7 +159,7 @@ export function BookmarksContent({
               key={name}
               type="button"
               onClick={() => setSubjectFilter(name)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap transition-colors ${
+              className={`min-h-11 shrink-0 px-3 py-1.5 text-sm font-medium rounded-full border whitespace-nowrap transition-colors ${
                 subjectFilter === name
                   ? "bg-primary text-primary-foreground border-primary"
                   : "bg-background text-foreground border-input hover:bg-accent"

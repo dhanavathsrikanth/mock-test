@@ -65,6 +65,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  :where(a, button, input, select, textarea):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
 }
 
 /* Keep display equations scrollable on narrow screens without shrinking symbols. */

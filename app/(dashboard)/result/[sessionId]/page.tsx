@@ -4,6 +4,7 @@ import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { calculateMarks } from "@/lib/marking";
 import { ResultContent } from "./result-content";
+import { loadSmartDiagnostic } from "@/lib/smart-tags-server";
 
 export async function generateMetadata({
   params,
@@ -67,18 +68,19 @@ async function ResultPageContent({
     .eq("exam_id", session.exam_id).in("id", questionIds);
   const marks = calculateMarks(markedQuestions || [], answerList);
   const accuracy =
-    totalQuestions > 0
-      ? Math.round((correctCount / totalQuestions) * 100)
+    correctCount + wrongCount > 0
+      ? Math.round((correctCount / (correctCount + wrongCount)) * 100)
       : 0;
 
   const subjectMap = new Map<
     string,
-    { name: string; total: number; correct: number; wrong: number }
+    { id: string; name: string; total: number; correct: number; wrong: number }
   >();
   answerList.forEach((a: { questions?: { subject_id: string }; is_correct: boolean | null }) => {
     const subjectId = a.questions?.subject_id || "unknown";
     const subjectName = subjectNameMap.get(subjectId) || "Unknown";
     const entry = subjectMap.get(subjectId) || {
+      id: subjectId,
       name: subjectName,
       total: 0,
       correct: 0,
@@ -95,18 +97,19 @@ async function ResultPageContent({
   const completedAt = session.completed_at
     ? new Date(session.completed_at).getTime()
     : Date.now();
-  const timeTakenSeconds = Math.floor(
+  const timeTakenSeconds = session.mode === "sprint" && session.sprint_active_seconds != null ? session.sprint_active_seconds : Math.floor(
     (completedAt - startedAt) / 1000
   );
 
   let message: { title: string; subtitle: string; icon: string };
-  if (accuracy >= 80)
+  const correctRate = totalQuestions > 0 ? correctCount / totalQuestions * 100 : 0;
+  if (correctRate >= 80)
     message = {
       title: "Excellent!",
       subtitle: "You're exam ready",
       icon: "🏆",
     };
-  else if (accuracy >= 60)
+  else if (correctRate >= 60)
     message = {
       title: "Good effort!",
       subtitle: "Keep practicing",
@@ -121,6 +124,7 @@ async function ResultPageContent({
 
   return (
     <ResultContent
+      diagnostic={await loadSmartDiagnostic({ userId, examId: exam.id, streamId: stream?.id ?? null, sessionId })}
       marks={marks}
       correctCount={correctCount}
       wrongCount={wrongCount}
@@ -131,6 +135,9 @@ async function ResultPageContent({
       subjectBreakdown={subjectBreakdown}
       message={message}
       sessionId={sessionId}
+      isSprint={session.mode === "sprint"}
+      sourceYear={session.year}
+      sourcePaper={session.paper}
     />
   );
 }

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Bookmark, ArrowLeft, Check, X, Minus, Eye, AlertTriangle } from "lucide-react";
+import { ChevronRight, Bookmark, ArrowLeft, Check, X, Minus, Eye, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { QuestionFigure, type QuestionImage } from "@/components/QuestionFigure";
 import { QuestionTypeTag } from "@/components/QuestionTypeTag";
@@ -50,10 +50,12 @@ interface ReviewContentProps {
   bookmarkedIds: Set<string>;
   userId: string;
   sessionId: string;
+  initialFilter?: string;
 }
 
 const FILTERS: { key: string; label: string; icon: typeof X }[] = [
   { key: "all", label: "All", icon: X },
+  { key: "correct", label: "Correct", icon: Check },
   { key: "wrong", label: "Wrong", icon: X },
   { key: "skipped", label: "Skipped", icon: Minus },
   { key: "bookmarked", label: "Bookmarked", icon: Bookmark },
@@ -64,14 +66,20 @@ export function ReviewContent({
   bookmarkedIds,
   userId,
   sessionId,
+  initialFilter,
 }: ReviewContentProps) {
-  const [filter, setFilter] = useState<string>("all");
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [filter, setFilter] = useState<string>(FILTERS.some(item => item.key === initialFilter) ? initialFilter! : "all");
   const [bookmarks, setBookmarks] = useState(bookmarkedIds);
+  const [bookmarkPending, setBookmarkPending] = useState(false);
+  const bookmarkBusy = useRef(false);
+  const [bookmarkFeedback, setBookmarkFeedback] = useState<{ error: boolean; message: string } | null>(null);
   const [expandedExplanations, setExpandedExplanations] = useState<Set<string>>(new Set());
+  const questionListRef = useRef<HTMLDivElement>(null);
+  const previousFilter = useRef(filter);
 
   const filtered = useMemo(() => {
     let list = answers;
+    if (filter === "correct") list = list.filter(a => a.is_correct === true);
     if (filter === "wrong") {
       list = list.filter(a => (a.numeric_answer != null || a.selected_option != null || !!a.selected_options?.length) && a.is_correct === false);
     }
@@ -84,26 +92,38 @@ export function ReviewContent({
     return list;
   }, [filter, answers, bookmarks]);
 
-  useEffect(() => setCurrentIndex(0), [filter]);
+  useEffect(() => {
+    if (previousFilter.current === filter) return;
+    previousFilter.current = filter;
+    questionListRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [filter]);
 
-  const current = filtered[currentIndex];
-  const currentQ = current?.questions;
-  const isBookmarked = current ? bookmarks.has(current.question_id) : false;
 
   const toggleBookmark = async (questionId: string) => {
-    const next = new Set(bookmarks);
-    if (next.has(questionId)) {
-      next.delete(questionId);
-      await createClient().from("bookmarks")
-        .delete()
-        .eq("user_id", userId)
-        .eq("question_id", questionId);
-    } else {
-      next.add(questionId);
-      await createClient().from("bookmarks")
-        .insert({ user_id: userId, question_id: questionId });
+    if (bookmarkBusy.current) return;
+    bookmarkBusy.current = true;
+    setBookmarkPending(true);
+    setBookmarkFeedback(null);
+    const removing = bookmarks.has(questionId);
+    try {
+      const client = createClient();
+      const { error } = removing
+        ? await client.from("bookmarks").delete().eq("user_id", userId).eq("question_id", questionId)
+        : await client.from("bookmarks").insert({ user_id: userId, question_id: questionId });
+      if (error) throw error;
+      setBookmarks(previous => {
+        const next = new Set(previous);
+        if (removing) next.delete(questionId);
+        else next.add(questionId);
+        return next;
+      });
+      setBookmarkFeedback({ error: false, message: removing ? "Bookmark removed." : "Question bookmarked." });
+    } catch {
+      setBookmarkFeedback({ error: true, message: "Unable to update bookmark. Please try again." });
+    } finally {
+      bookmarkBusy.current = false;
+      setBookmarkPending(false);
     }
-    setBookmarks(next);
   };
 
   const toggleExplanation = (questionId: string) => {
@@ -121,9 +141,10 @@ export function ReviewContent({
   const getFilterCount = (key: string) => {
     switch (key) {
       case "all": return allCount;
+      case "correct": return correctCount;
       case "wrong": return wrongCount;
       case "skipped": return skippedCount;
-      case "bookmarked": return bookmarks.size;
+      case "bookmarked": return answers.filter(answer => bookmarks.has(answer.question_id)).length;
       default: return 0;
     }
   };
@@ -131,7 +152,7 @@ export function ReviewContent({
   const optionLabels = ["A", "B", "C", "D"];
 
   return (
-    <div className="h-[100dvh] lg:h-auto flex flex-col bg-background">
+    <div className="flex flex-1 min-h-0 flex-col bg-background">
       {/* Header */}
       <div className="shrink-0 px-4 sm:px-6 pt-4 pb-3 border-b bg-card">
         <div className="max-w-4xl mx-auto">
@@ -161,15 +182,21 @@ export function ReviewContent({
             </div>
           </div>
 
-          {/* Filter pills */}
-          <div className="flex gap-2 overflow-x-auto pb-1 mt-3 -mx-1 px-1">
+        </div>
+      </div>
+
+      {/* Keep filters within reach while reading the question list. */}
+      <div className="sticky top-0 z-20 shrink-0 border-b bg-card px-4 py-3 sm:px-6">
+        <div className="max-w-4xl mx-auto">
+          <div role="group" aria-label="Filter review questions" className="flex gap-2 overflow-x-auto -mx-1 px-1 py-1">
             {FILTERS.map((f) => {
               const count = getFilterCount(f.key);
               return (
                 <button
                   key={f.key}
+                  aria-pressed={filter === f.key}
                   onClick={() => setFilter(f.key)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors whitespace-nowrap ${
+                  className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full border transition-colors whitespace-nowrap ${
                     filter === f.key
                       ? "bg-primary text-primary-foreground border-primary shadow-sm"
                       : "bg-background text-foreground border-input hover:bg-accent hover:border-muted-foreground/30"
@@ -186,9 +213,10 @@ export function ReviewContent({
         </div>
       </div>
 
-      {/* Scrollable content area */}
-      <div className="flex-1 overflow-y-auto min-h-0">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 space-y-4">
+      {bookmarkFeedback && <p role={bookmarkFeedback.error ? "alert" : "status"} className={`mx-4 my-2 shrink-0 rounded-lg border p-3 text-sm ${bookmarkFeedback.error ? "text-destructive" : "text-muted-foreground"}`}>{bookmarkFeedback.message}</p>}
+      {/* One continuous question list on every screen size. */}
+      <div className="flex-1 min-h-0">
+        <div ref={questionListRef} role="region" aria-label="Review questions" className="max-w-4xl mx-auto scroll-mt-24 px-4 sm:px-6 py-4 space-y-8">
           {/* Empty state */}
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -211,17 +239,20 @@ export function ReviewContent({
                 </Button>
               )}
             </div>
-          ) : current && currentQ ? (
-            <>
+          ) : filtered.map((current, questionIndex) => {
+            const currentQ = current.questions;
+            const isBookmarked = bookmarks.has(current.question_id);
+            return (
+            <article key={current.question_id} aria-label={`Question ${questionIndex + 1} of ${filtered.length}`} className="space-y-4">
               {/* Progress bar */}
               <div className="flex items-center gap-3">
                 <span className="text-sm text-muted-foreground font-medium min-w-fit">
-                  {currentIndex + 1} / {filtered.length}
+                  {questionIndex + 1} / {filtered.length}
                 </span>
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-300"
-                    style={{ width: `${((currentIndex + 1) / filtered.length) * 100}%` }}
+                    style={{ width: `${((questionIndex + 1) / filtered.length) * 100}%` }}
                   />
                 </div>
               </div>
@@ -233,7 +264,7 @@ export function ReviewContent({
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="h-7 min-w-[1.75rem] px-2 rounded-lg bg-primary/10 text-primary text-sm font-bold inline-flex items-center justify-center">
-                        {currentIndex + 1}
+                        {questionIndex + 1}
                       </span>
                       <QuestionTypeTag type={currentQ.question_type} />
                       {!currentQ.marks_to_all && (current.numeric_answer == null && current.selected_option == null && !current.selected_options?.length) && (
@@ -250,18 +281,22 @@ export function ReviewContent({
                       <ReportButton
                         questionId={currentQ.id}
                         questionText={currentQ.question_text}
-                        questionNumber={currentIndex + 1}
+                        questionNumber={questionIndex + 1}
                         className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted transition-colors"
                       />
                       <button
                         type="button"
                         onClick={() => toggleBookmark(current.question_id)}
-                        className={`inline-flex items-center justify-center p-2 rounded-md transition-colors ${
+                        disabled={bookmarkPending}
+                        aria-busy={bookmarkPending}
+                        className={`inline-flex h-11 w-11 items-center justify-center p-2 rounded-md transition-colors disabled:opacity-50 ${
                           isBookmarked
                             ? "text-yellow-600 hover:bg-yellow-50 dark:text-yellow-400 dark:hover:bg-yellow-950"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
                         }`}
                         title={isBookmarked ? "Remove bookmark" : "Bookmark"}
+                        aria-label={isBookmarked ? "Remove bookmark" : "Bookmark question"}
+                        aria-pressed={isBookmarked}
                       >
                         <Bookmark className={`h-4 w-4 ${isBookmarked ? "fill-current" : ""}`} />
                       </button>
@@ -372,6 +407,7 @@ export function ReviewContent({
                 <div className="rounded-xl border bg-card overflow-hidden">
                   <button
                     type="button"
+                    aria-expanded={expandedExplanations.has(current.question_id)}
                     onClick={() => toggleExplanation(current.question_id)}
                     className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium hover:bg-muted/50 transition-colors"
                   >
@@ -394,43 +430,12 @@ export function ReviewContent({
                   )}
                 </div>
               )}
-            </>
-          ) : null}
+            </article>
+            );
+          })}
         </div>
       </div>
 
-      {/* Navigation - fixed at bottom */}
-      {filtered.length > 0 && current && currentQ && (
-        <div className="shrink-0 border-t bg-card px-4 sm:px-6 py-3 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-          <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex(currentIndex - 1)}
-              className="gap-1.5"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Previous</span>
-            </Button>
-
-            <span className="text-sm text-muted-foreground font-medium tabular-nums">
-              {currentIndex + 1} / {filtered.length}
-            </span>
-
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentIndex >= filtered.length - 1}
-              onClick={() => setCurrentIndex(currentIndex + 1)}
-              className="gap-1.5"
-            >
-              <span className="hidden sm:inline">Next</span>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

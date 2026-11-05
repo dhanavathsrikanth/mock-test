@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SmartTagPanel } from "@/components/smart-tags/SmartTagPanel";
+import type { DiagnosticLoad } from "@/lib/smart-tags-server";
 import {
   Check,
   X,
@@ -16,6 +18,7 @@ import {
 } from "lucide-react";
 
 interface SubjectBreakdown {
+  id: string;
   name: string;
   total: number;
   correct: number;
@@ -23,6 +26,7 @@ interface SubjectBreakdown {
 }
 
 interface ResultContentProps {
+  diagnostic?: DiagnosticLoad;
   marks?: { earned: number; deducted: number; maximum: number; net: number };
   correctCount: number;
   wrongCount: number;
@@ -33,6 +37,9 @@ interface ResultContentProps {
   subjectBreakdown: SubjectBreakdown[];
   message: { title: string; subtitle: string; icon: string };
   sessionId: string;
+  isSprint?: boolean;
+  sourceYear?: number | null;
+  sourcePaper?: string | null;
 }
 
 function AnimatedScore({
@@ -107,6 +114,7 @@ function formatTime(seconds: number): string {
 }
 
 export function ResultContent({
+  diagnostic,
   marks,
   correctCount,
   wrongCount,
@@ -117,7 +125,20 @@ export function ResultContent({
   subjectBreakdown,
   message,
   sessionId,
+  sourceYear,
+  sourcePaper,
+  isSprint = false,
 }: ResultContentProps) {
+  const weakestSubject = [...subjectBreakdown]
+    .filter(subject => subject.total > 0 && subject.correct < subject.total && subject.id !== "unknown")
+    .sort((a, b) => a.correct / a.total - b.correct / b.total)[0];
+  const practiceParams = new URLSearchParams({ mode: "subject_wise" });
+  if (weakestSubject) practiceParams.set("subject", weakestSubject.id);
+  if (sourceYear) practiceParams.set("year", String(sourceYear));
+  if (sourcePaper) practiceParams.set("paper", sourcePaper);
+  const marksPercentage = marks && marks.maximum > 0
+    ? Math.round((marks.net / marks.maximum) * 100)
+    : 0;
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="text-center">
@@ -127,9 +148,12 @@ export function ResultContent({
       {marks && <Card><CardContent className="pt-5 text-center space-y-2">
         <p className="text-sm text-muted-foreground">Marks scored</p>
         <p className="text-3xl font-bold tabular-nums">{formatMarks(marks.net)} <span className="text-lg text-muted-foreground">/ {formatMarks(marks.maximum)}</span></p>
+        <p className="text-sm text-muted-foreground">{marksPercentage}% of available marks, after deductions</p>
         <p className="text-xs text-muted-foreground">Earned: +{formatMarks(marks.earned)} · Deductions: −{formatMarks(marks.deducted)} · Unattempted: 0</p>
       </CardContent></Card>}
+      {diagnostic && <SmartTagPanel result={diagnostic} variant="result" />}
       <AnimatedScore value={correctCount} total={totalQuestions} />
+      <p className="text-center text-xs text-muted-foreground">Correct answers out of all questions · before marking deductions</p>
 
       <p className="text-center text-lg">
         <span className="font-semibold">{message.title}</span>{" "}
@@ -138,7 +162,7 @@ export function ResultContent({
 
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="pt-4 sm:pt-6 text-center">
+          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 text-center">
             <Check className="h-5 w-5 text-green-600 mx-auto mb-1" />
             <div className="text-xl sm:text-2xl font-bold text-green-600">
               {correctCount}
@@ -147,7 +171,7 @@ export function ResultContent({
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 sm:pt-6 text-center">
+          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 text-center">
             <X className="h-5 w-5 text-red-600 mx-auto mb-1" />
             <div className="text-xl sm:text-2xl font-bold text-red-600">
               {wrongCount}
@@ -156,7 +180,7 @@ export function ResultContent({
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4 sm:pt-6 text-center">
+          <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6 text-center">
             <Minus className="h-5 w-5 text-muted-foreground mx-auto mb-1" />
             <div className="text-xl sm:text-2xl font-bold">{skippedCount}</div>
             <div className="text-xs text-muted-foreground">Skipped</div>
@@ -167,10 +191,11 @@ export function ResultContent({
       <div className="grid grid-cols-2 gap-2 sm:gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Accuracy</CardTitle>
+            <CardTitle className="text-sm">Answer accuracy</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{accuracy}%</div>
+            <p className="mt-1 text-xs text-muted-foreground">Correct ÷ attempted questions</p>
           </CardContent>
         </Card>
         <Card>
@@ -192,7 +217,20 @@ export function ResultContent({
             <CardTitle>Subject-wise Performance</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="overflow-x-auto">
+            <div className="space-y-3 sm:hidden">
+              {subjectBreakdown.map(subject => (
+                <div key={subject.id} className="rounded-lg border p-3">
+                  <p className="break-words text-sm font-medium">{subject.name}</p>
+                  <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                    <div><dt className="text-muted-foreground">Correct</dt><dd className="mt-1 font-semibold text-green-600">{subject.correct}</dd></div>
+                    <div><dt className="text-muted-foreground">Wrong</dt><dd className="mt-1 font-semibold text-red-600">{subject.wrong}</dd></div>
+                    <div><dt className="text-muted-foreground">Total</dt><dd className="mt-1 font-semibold">{subject.total}</dd></div>
+                  </dl>
+                  <p className="mt-3 border-t pt-2 text-xs text-muted-foreground">Answer accuracy: {subject.correct + subject.wrong > 0 ? `${Math.round(subject.correct / (subject.correct + subject.wrong) * 100)}%` : "No attempts"}</p>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
@@ -205,13 +243,13 @@ export function ResultContent({
                       Wrong
                     </th>
                     <th className="pb-2 font-medium text-center">
-                      Accuracy
+                      Answer accuracy
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {subjectBreakdown.map((s) => (
-                    <tr key={s.name} className="border-b last:border-0">
+                    <tr key={s.id} className="border-b last:border-0">
                       <td className="py-2.5">{s.name}</td>
                       <td className="py-2.5 text-center">{s.total}</td>
                       <td className="py-2.5 text-center text-green-600">
@@ -221,8 +259,8 @@ export function ResultContent({
                         {s.wrong}
                       </td>
                       <td className="py-2.5 text-center font-medium">
-                        {s.total > 0
-                          ? Math.round((s.correct / s.total) * 100)
+                        {s.correct + s.wrong > 0
+                          ? Math.round((s.correct / (s.correct + s.wrong)) * 100)
                           : 0}
                         %
                       </td>
@@ -235,20 +273,33 @@ export function ResultContent({
         </Card>
       )}
 
-      <div className="flex flex-col sm:flex-row gap-3 pt-2">
-        <Button asChild size="lg" className="flex-1">
+      {(wrongCount > 0 || skippedCount > 0) && (
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-base">Your next step</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">{weakestSubject ? `Focus on ${weakestSubject.name}: ${weakestSubject.correct} of ${weakestSubject.total} questions correct.` : "Review the questions you missed, then try another practice session."}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Button asChild className="h-11 px-3"><Link href={`/review/${sessionId}?filter=${wrongCount > 0 ? "wrong" : "skipped"}`}>Review {wrongCount > 0 ? "mistakes" : "skipped questions"}</Link></Button>
+              {weakestSubject && <Button asChild variant="outline" className="h-11 px-3"><Link href={isSprint ? "/practice" : `/test/select?${practiceParams}`}>{isSprint ? "Choose another sprint" : "Practice this subject"}</Link></Button>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-3">
+        <Button asChild size="lg" className="h-11 w-full px-4">
           <Link href={`/review/${sessionId}`}>
             <Eye className="h-4 w-4" />
             Review Answers
           </Link>
         </Button>
-        <Button asChild variant="secondary" size="lg" className="flex-1">
-          <Link href="/test/select">
+        <Button asChild variant="secondary" size="lg" className="h-11 w-full px-4">
+          <Link href={isSprint ? "/practice" : "/test/select"}>
             <Play className="h-4 w-4" />
-            Take Another Test
+            {isSprint ? "Another 5-Q Sprint" : "Take Another Test"}
           </Link>
         </Button>
-        <Button asChild variant="outline" size="lg" className="flex-1">
+        <Button asChild variant="outline" size="lg" className="h-11 w-full px-4">
           <Link href="/dashboard">
             <ArrowLeft className="h-4 w-4" />
             Dashboard

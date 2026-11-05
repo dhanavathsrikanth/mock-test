@@ -17,9 +17,12 @@ export async function generateMetadata({
 
 async function ReviewPageContent({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }) {
+  const { filter } = await searchParams;
   const { sessionId } = await params;
   const { user, exam, stream } = await requireExamContext();
   const supabase = await createClient();
@@ -60,15 +63,17 @@ async function ReviewPageContent({
     (a, b) => (questionOrder.get(a.question_id) ?? Infinity) - (questionOrder.get(b.question_id) ?? Infinity)
   );
 
-  return <ReviewContent answers={orderedAnswers} bookmarkedIds={bookmarkedIds} userId={userId} sessionId={sessionId} />;
+  return <ReviewContent answers={orderedAnswers} bookmarkedIds={bookmarkedIds} userId={userId} sessionId={sessionId} initialFilter={filter} />;
 }
 
 export default function ReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ sessionId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }) {
-  return <ReviewPageContent params={params} />;
+  return <ReviewPageContent params={params} searchParams={searchParams} />;
 }
 
 export { ReviewContent };

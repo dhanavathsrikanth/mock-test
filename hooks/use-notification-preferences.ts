@@ -7,6 +7,7 @@ export function useNotificationPreferences() {
   const [preferences, setPreferences] = useState<NotificationPreference | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPreferences = useCallback(async () => {
     try {
@@ -14,9 +15,10 @@ export function useNotificationPreferences() {
       if (res.ok) {
         const data = await res.json();
         setPreferences(data);
-      }
+        setError(null);
+      } else setError('Unable to load notification settings. Please retry.');
     } catch {
-      // use defaults
+      setError('Unable to load notification settings. Please retry.');
     } finally {
       setLoading(false);
     }
@@ -25,6 +27,7 @@ export function useNotificationPreferences() {
   const updatePreferences = useCallback(
     async (updates: Partial<Omit<NotificationPreference, "id" | "user_id" | "created_at" | "updated_at">>) => {
       setSaving(true);
+      setError(null);
       try {
         const res = await fetch("/api/notification-preferences", {
           method: "PUT",
@@ -36,8 +39,10 @@ export function useNotificationPreferences() {
           setPreferences((prev) => (prev ? { ...prev, ...updates } : null));
           return true;
         }
+        setError('Unable to save settings. Your previous settings still apply.');
         return false;
       } catch {
+        setError('Unable to save settings. Please reconnect and retry.');
         return false;
       } finally {
         setSaving(false);
@@ -60,6 +65,7 @@ export function useNotificationPreferences() {
   }, [fetchPreferences]);
 
   return {
+    error,
     preferences,
     loading,
     saving,

@@ -2,7 +2,7 @@ import { MathText } from "@/components/MathText";
 
 /** Headed solution blocks stay plain text in the database, with LaTeX for formulas. */
 export function QuestionExplanation({ text }: { text: string }) {
-  const sections = text.trim().split(/\n(?=### )/);
+  const sections = text.replace(/\r\n?/g, "\n").trim().split(/\n(?=### )/);
   return (
     <div className="space-y-3 text-sm">
       {sections.map((section, index) => {

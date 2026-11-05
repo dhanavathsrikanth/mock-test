@@ -5,6 +5,9 @@ import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { getQuestionsForSession } from "@/lib/question-distribution";
 import { ExamClient } from "./exam-client";
+import { SprintClient } from "@/components/practice/SprintClient";
+import Link from "next/link";
+import { toQuestionPresentation } from "@/lib/question-contract";
 
 export async function generateMetadata({
   params,
@@ -44,7 +47,7 @@ async function ExamPageContent({
     redirect(`/result/${sessionId}`);
 
   // Auto-submit if time expired while user was away
-  if (session.duration_minutes > 0) {
+  if (session.mode !== "sprint" && session.duration_minutes > 0) {
     const startedAt = new Date(session.started_at).getTime();
     const endTime = startedAt + session.duration_minutes * 60 * 1000;
     if (Date.now() > endTime + 5000) {
@@ -85,6 +88,12 @@ async function ExamPageContent({
   const questions = (questionIds || []).map(id => questionMap.get(id)).filter(question => question != null);
 
   // Sync session to actual question count (user may have requested more than available)
+  if (session.mode === "concept_fix" && questions.length !== session.total_questions) {
+    return <div className="mx-auto max-w-lg space-y-3 p-6"><h1 className="text-xl font-semibold">This concept fix is no longer available</h1><p>A question could not be retrieved. Return to your dashboard to choose another concept fix.</p><Link href="/dashboard" className="underline">Open dashboard</Link></div>;
+  }
+  if (session.mode === "sprint" && questions.length !== 5) {
+    return <div className="mx-auto max-w-lg space-y-3 p-6"><h1 className="text-xl font-semibold">This sprint is no longer available</h1><p>One of its questions has been removed. Start a new sprint from Quick Practice.</p><Link href="/practice" className="underline">Open Quick Practice</Link></div>;
+  }
   if (questions.length !== session.total_questions) {
     await supabase
       .from("test_sessions")
@@ -104,14 +113,7 @@ async function ExamPageContent({
   }
 
   // Send only presentation fields. Answers, explanations and import metadata stay server-side.
-  const safeQuestions = questions.map(question => ({
-    id: question.id, question_text: question.question_text,
-    option_1: question.option_1, option_2: question.option_2,
-    option_3: question.option_3, option_4: question.option_4,
-    image_url: question.image_url, image_width: question.image_width, image_height: question.image_height,
-    option_images: question.option_images, marks: question.marks, negative_marks: question.negative_marks,
-    answer_decimal_places: question.answer_decimal_places, question_type: question.question_type, source_question_number: question.source_question_number, year: question.year, paper: question.paper,
-  }));
+  const safeQuestions = questions.map(toQuestionPresentation);
 
   const { data: existingBookmarks } = await supabase
     .from("bookmarks")
@@ -126,6 +128,8 @@ async function ExamPageContent({
   const initialBookmarks = new Set(
     existingBookmarks?.map((b) => b.question_id) || []
   );
+
+  if (session.mode === "sprint") return <SprintClient userId={userId} session={session} questions={safeQuestions} initialAnswers={initialAnswers} />;
 
   return (
     <ExamClient

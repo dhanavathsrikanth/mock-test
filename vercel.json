@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/streak-campaigns",
+      "schedule": "30 2 * * *"
+    },
+    {
       "path": "/api/cron/daily-question",
       "schedule": "30 18 * * *"
     },

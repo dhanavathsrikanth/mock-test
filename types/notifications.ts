@@ -95,6 +95,9 @@ export interface Notification {
 }
 
 export interface NotificationPreference {
+  milestone_enabled?: boolean;
+  milestone_channel?: 'in_app' | 'push' | 'email';
+  milestone_consent_at?: string | null;
   id: string;
   user_id: string;
   push_enabled: boolean;

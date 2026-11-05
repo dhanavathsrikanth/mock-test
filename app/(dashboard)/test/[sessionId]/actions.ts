@@ -4,15 +4,17 @@ import { createClient } from "@/lib/supabase/server";
 import { gradeResponse, numericResponse, selection, type QuestionResponse } from "@/lib/question-response";
 
 /** Grade the persisted question set on the server, including unanswered questions. */
-export async function submitTest(sessionId: string, userId: string, responses?: Record<string, QuestionResponse>) {
+export async function submitTest(sessionId: string, userId: string, responses?: Record<string, QuestionResponse>, activeSeconds?: number) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user || user.id !== userId) return { error: "Unauthorized" };
   const { data: session, error: sessionError } = await supabase.from("test_sessions")
-    .select("id, user_id, exam_id, question_ids, started_at, duration_minutes, status")
+    .select("id, user_id, exam_id, question_ids, started_at, duration_minutes, status, mode")
     .eq("id", sessionId).eq("user_id", user.id).single();
   if (sessionError || !session) return { error: "Session not found" };
   if (session.status !== "in_progress") return { success: true };
+  if (session.mode === "sprint" && (typeof activeSeconds !== "number" || !Number.isInteger(activeSeconds) || activeSeconds < 0 || activeSeconds > session.duration_minutes * 60))
+    return { error: "Invalid sprint timer. Reload your saved sprint and try again." };
 
   const { data: answers, error: answersError } = await supabase.from("test_answers")
     .select("question_id, selected_option, selected_options, numeric_answer").eq("session_id", sessionId);
@@ -22,7 +24,7 @@ export async function submitTest(sessionId: string, userId: string, responses?: 
     .select("id, correct_option, correct_options, correct_option_sets, question_type, marks_to_all, answer_min, answer_max, answer_ranges, answer_decimal_places").eq("exam_id", session.exam_id).in("id", questionIds);
   if (questionsError || !questions?.length) return { error: "Unable to load test questions" };
 
-  const expired = session.duration_minutes > 0 && Date.now() >
+  const expired = session.mode !== "sprint" && session.duration_minutes > 0 && Date.now() >
     new Date(session.started_at).getTime() + session.duration_minutes * 60000 + 60000;
   const saved = new Map((answers || []).map(answer => [answer.question_id, answer.numeric_answer ?? (answer.selected_options?.length ? answer.selected_options : answer.selected_option)]));
   const graded = questions.map(question => {
@@ -43,7 +45,7 @@ export async function submitTest(sessionId: string, userId: string, responses?: 
     .upsert(graded, { onConflict: "session_id,question_id" });
   if (gradeError) return { error: "Failed to save graded answers" };
   const { error: updateError } = await supabase.from("test_sessions")
-    .update({ status: "completed", completed_at: new Date().toISOString() })
+    .update({ status: "completed", completed_at: new Date().toISOString(), ...(session.mode === "sprint" ? { sprint_active_seconds: activeSeconds } : {}) })
     .eq("id", sessionId).eq("user_id", user.id);
   if (updateError) return { error: "Failed to complete test" };
   return { success: true };

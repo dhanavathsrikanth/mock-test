@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { getTestPool } from '@/lib/test-catalog';
 import { TestSelectForm } from './test-select-form';
 export const metadata = { title: 'New Test | Exam Prep' };
-export default async function TestSelectPage() {
+export default async function TestSelectPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+    const query = await searchParams;
     const { exam, stream } = await requireExamContext();
     const supabase = await createClient();
     const pool = await getTestPool(exam.id, stream);
@@ -16,5 +17,6 @@ export default async function TestSelectPage() {
         throw subjects.error;
     if (topics.error)
         throw topics.error;
-    return <TestSelectForm examId={exam.id} examName={exam.name} stream={stream} requiresStream={exam.requires_stream} subjects={subjects.data || []} topics={topics.data || []} pool={pool}/>;
+    const initialSelection = Object.fromEntries(Object.entries(query).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+    return <TestSelectForm examId={exam.id} examName={exam.name} stream={stream} requiresStream={exam.requires_stream} subjects={subjects.data || []} topics={topics.data || []} pool={pool} initialSelection={initialSelection}/>;
 }

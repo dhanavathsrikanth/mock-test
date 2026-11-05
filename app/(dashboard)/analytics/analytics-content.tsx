@@ -28,7 +28,6 @@ import {
   ScatterChart,
   Scatter,
   ReferenceLine,
-  Legend,
 } from "recharts";
 import { Activity, Brain, TrendingUp, BarChart3, CalendarDays } from "lucide-react";
 
@@ -164,14 +163,14 @@ export function AnalyticsContent({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
         <p className="text-muted-foreground mt-1">
-          Track your performance across all tests
+          Track your performance across all tests. Correct rate includes skipped questions; marks and deductions are shown in each result.
         </p>
       </div>
 
       {/* 1. Overall Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">
               Total Tests
             </CardTitle>
@@ -182,7 +181,7 @@ export function AnalyticsContent({
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">
               Total Questions
             </CardTitle>
@@ -195,9 +194,9 @@ export function AnalyticsContent({
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">
-              Overall Accuracy
+              Avg correct rate
             </CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -208,7 +207,7 @@ export function AnalyticsContent({
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardHeader className="flex flex-row items-center justify-between gap-2 px-3 pb-2 sm:px-6">
             <CardTitle className="text-sm font-medium">
               Study Streak
             </CardTitle>
@@ -225,7 +224,7 @@ export function AnalyticsContent({
       {/* 2. Score Trend */}
       <Card>
         <CardHeader>
-          <CardTitle>Score Trend</CardTitle>
+          <CardTitle>Correct rate over time</CardTitle>
         </CardHeader>
         <CardContent>
           {scoreTrend.length === 0 ? (
@@ -254,7 +253,7 @@ export function AnalyticsContent({
                   tickFormatter={(v: number) => `${v}%`}
                 />
                 <Tooltip
-                  formatter={(value) => [`${value}%`, "Score"]}
+                  formatter={(value) => [`${value}%`, "Correct rate"]}
                   contentStyle={chartTooltipStyle}
                 />
                 <Line
@@ -274,7 +273,7 @@ export function AnalyticsContent({
       {/* 3. Subject Accuracy */}
       <Card>
         <CardHeader>
-          <CardTitle>Subject-wise Accuracy</CardTitle>
+          <CardTitle>Subject-wise correct rate</CardTitle>
         </CardHeader>
         <CardContent>
           {subjectAccuracy.length === 0 ? (
@@ -307,7 +306,7 @@ export function AnalyticsContent({
                   tickFormatter={(v: number) => `${v}%`}
                 />
                 <Tooltip
-                  formatter={(value) => [`${value}%`, "Accuracy"]}
+                  formatter={(value) => [`${value}%`, "Correct rate"]}
                   contentStyle={chartTooltipStyle}
                 />
                 <Bar dataKey="accuracy" radius={[4, 4, 0, 0]}>
@@ -432,7 +431,7 @@ export function AnalyticsContent({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[400px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-2 font-medium">Year</th>
@@ -440,10 +439,10 @@ export function AnalyticsContent({
                       Tests Taken
                     </th>
                     <th className="pb-2 font-medium text-center">
-                      Avg Score
+                      Avg correct rate
                     </th>
                     <th className="pb-2 font-medium text-center">
-                      Best Score
+                      Best correct rate
                     </th>
                   </tr>
                 </thead>
@@ -469,12 +468,12 @@ export function AnalyticsContent({
 
       {/* ── ADVANCED ANALYTICS ────────────────────────────────── */}
 
-      {/* A. Time vs Accuracy */}
+      {/* A. Time vs correct rate */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Activity className="h-5 w-5 text-muted-foreground" />
-            Time vs Accuracy
+            Time vs correct rate
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -504,7 +503,7 @@ export function AnalyticsContent({
                 />
                 <YAxis
                   dataKey="score"
-                  name="Score"
+                  name="Correct rate"
                   domain={[0, 100]}
                   tick={{ fontSize: 12 }}
                   className="text-muted-foreground"
@@ -571,7 +570,7 @@ export function AnalyticsContent({
                   tickFormatter={(v: number) => `${v}%`}
                 />
                 <Tooltip
-                  formatter={(value) => [`${value}%`, "Avg Score"]}
+                  formatter={(value) => [`${value}%`, "Avg correct rate"]}
                   contentStyle={chartTooltipStyle}
                 />
                 <Bar

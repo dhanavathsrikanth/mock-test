@@ -26,7 +26,7 @@ export default async function DashboardLayout({
   const { exam, profile, stream } = await requireExamContext();
   const supabase = await createClient();
   const configRes = await supabase.from("app_config").select("*").eq("key", "general").maybeSingle();
-  const generalConfig = configRes.data?.value as Record<string, any> | undefined;
+  const generalConfig = configRes.data?.value as Record<string, unknown> | undefined;
   const maintenanceMode = generalConfig?.maintenanceMode === true;
   const userRole = profile?.role || "user";
   const userName = profile?.full_name || "User";
@@ -37,9 +37,9 @@ export default async function DashboardLayout({
       <TestLayoutWrapper
         sidebar={<Sidebar userName={userName} userRole={userRole} avatarUrl={avatarUrl} />}
         header={
-          <div className="flex items-center justify-between gap-3 border-b px-4 py-2 text-sm">
-            <span className="font-medium">{exam.name}{stream ? ` · ${stream.name} (${stream.code})` : ""}</span>
-            <Link href="/onboarding" className="text-primary underline">Switch exam / stream</Link>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b px-4 py-2 text-sm">
+            <span className="min-w-0 break-words font-medium">{exam.name}{stream ? ` · ${stream.name} (${stream.code})` : ""}</span>
+            <Link href="/onboarding" className="inline-flex min-h-11 items-center text-primary underline">Switch exam / stream</Link>
           </div>
         }
       >

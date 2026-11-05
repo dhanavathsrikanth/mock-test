@@ -10,6 +10,8 @@ import Link from "next/link";
 export const metadata = { title: "Recent Tests | Exam Prep" };
 
 const modeLabels: Record<string, string> = {
+  sprint: "5-Q Sprint",
+  concept_fix: "Concept fix",
   full_mock: "Full Mock",
   full_paper: "Full paper",
   subject_wise: "Subject-wise",
@@ -18,6 +20,8 @@ const modeLabels: Record<string, string> = {
 };
 
 const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
+  sprint: "secondary",
+  concept_fix: "secondary",
   full_mock: "default",
   full_paper: "default",
   subject_wise: "secondary",
@@ -70,7 +74,7 @@ export default async function RecentTestsPage() {
     );
     const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
     const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
-    const skipped = sessionAnswers.filter((a) => a.is_correct === null).length;
+    const skipped = Math.max(0, s.total_questions - correct - wrong);
     const total = s.total_questions;
     const score = total > 0 ? Math.round((correct / total) * 100) : 0;
     return { ...s, correct, wrong, skipped, score };
@@ -98,7 +102,7 @@ export default async function RecentTestsPage() {
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 flex flex-col items-start gap-2 sm:p-4 sm:flex-row sm:items-center sm:gap-3">
             <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               <ClipboardList className="h-5 w-5 text-primary" />
             </div>
@@ -109,29 +113,29 @@ export default async function RecentTestsPage() {
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 flex flex-col items-start gap-2 sm:p-4 sm:flex-row sm:items-center sm:gap-3">
             <div className="h-10 w-10 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
               <TrendingUp className="h-5 w-5 text-green-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Average Score</p>
+              <p className="text-xs text-muted-foreground">Avg correct rate</p>
               <p className={`text-xl font-bold ${getScoreColor(avgScore)}`}>{avgScore}%</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 flex flex-col items-start gap-2 sm:p-4 sm:flex-row sm:items-center sm:gap-3">
             <div className="h-10 w-10 rounded-lg bg-yellow-500/10 flex items-center justify-center shrink-0">
               <Target className="h-5 w-5 text-yellow-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Best Score</p>
+              <p className="text-xs text-muted-foreground">Best correct rate</p>
               <p className={`text-xl font-bold ${getScoreColor(bestScore)}`}>{bestScore}%</p>
             </div>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4 flex items-center gap-3">
+          <CardContent className="p-3 flex flex-col items-start gap-2 sm:p-4 sm:flex-row sm:items-center sm:gap-3">
             <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
               <BarChart3 className="h-5 w-5 text-blue-600" />
             </div>
@@ -142,6 +146,8 @@ export default async function RecentTestsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <p className="text-xs text-muted-foreground">Correct rate = correct answers ÷ all questions, including skipped questions. Open a result for marks and deductions.</p>
 
       {/* Test list */}
       <Card>
@@ -170,12 +176,12 @@ export default async function RecentTestsPage() {
               {sessionScores.map((test) => (
                 <Card key={test.id} className="overflow-hidden border-border/60 hover:border-border transition-colors">
                   <div className="p-4 sm:p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex flex-col xl:flex-row xl:items-center gap-4">
                       {/* Left: Info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-sm truncate">
-                            {(test as any).subjects?.name || "General"}
+                            {(test.subjects as unknown as { name?: string } | null)?.name || "General"}
                           </span>
                           <Badge variant={modeVariants[test.mode] || "outline"} className="text-xs">
                             {modeLabels[test.mode] || test.mode}
@@ -209,7 +215,7 @@ export default async function RecentTestsPage() {
                         <div className="w-24 sm:w-32">
                           <div className="flex items-baseline justify-between mb-1">
                             <span className={`text-lg font-bold ${getScoreColor(test.score)}`}>
-                              {test.score}%
+                              {test.score}% <span className="text-xs font-normal text-muted-foreground">correct</span>
                             </span>
                           </div>
                           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
@@ -222,7 +228,7 @@ export default async function RecentTestsPage() {
                       </div>
 
                       {/* Right: Buttons */}
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="grid grid-cols-2 gap-2 xl:flex xl:items-center xl:shrink-0">
                         <Button variant="outline" size="sm" asChild>
                           <Link href={`/result/${test.id}`}>Result</Link>
                         </Button>

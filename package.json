@@ -4,7 +4,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test:revision": "node --test tests/revision-db.test.mjs tests/revision-ui.test.mjs",
+    "test:sprint": "node --test tests/micro-practice.test.mjs tests/sprint-ui.test.mjs",
+    "test:campaigns": "node --test tests/streak-campaigns.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.1",
@@ -35,6 +38,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.15",
     "@eslint/eslintrc": "^3",
     "@types/canvas-confetti": "^1.9.0",
     "@types/katex": "^0.16.8",

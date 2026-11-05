@@ -7,6 +7,8 @@ export type PoolQuestion = {
     paper: string | null;
     source_question_number: number | null;
     marks: number | null;
+    question_type?: string;
+    marks_to_all?: boolean;
 };
 export type TestTopic = {
     id: string;

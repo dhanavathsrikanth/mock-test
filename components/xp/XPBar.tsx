@@ -57,7 +57,7 @@ export function XPBar() {
 
   return (
     <div className="w-full bg-background border-b px-3 py-1.5">
-      <div className="flex items-center gap-3">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 sm:grid-cols-[auto_minmax(0,1fr)_auto]">
         <Badge
           variant="secondary"
           className="shrink-0 text-xs font-semibold px-2.5 py-0.5"
@@ -74,7 +74,7 @@ export function XPBar() {
           />
         </div>
 
-        <span className="text-xs text-muted-foreground whitespace-nowrap tabular-nums shrink-0">
+        <span className="col-span-2 text-right text-xs text-muted-foreground tabular-nums sm:col-span-1">
           {data.totalXP.toLocaleString()}
           {data.nextLevelName && (
             <> / {data.xpForNextLevel > 0 ? data.xpForNextLevel.toLocaleString() : "MAX"} XP to {data.nextLevelName}</>

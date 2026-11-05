@@ -20,13 +20,13 @@ import {
   BookOpen,
   Sparkles,
   Zap,
-  Clock,
-  Trophy,
-  Flame,
 } from "lucide-react";
 import Link from "next/link";
 import { SubjectChart } from "./subject-chart";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
+import { Suspense } from "react";
+import { QuickPractice } from "@/components/practice/QuickPractice";
+import { DashboardConcepts } from "@/components/smart-tags/DashboardConcepts";
 
 const StreakCard = dynamic(
   () => import("@/components/streak/StreakCard").then((m) => m.StreakCard)
@@ -61,6 +61,8 @@ const modeLabels: Record<string, string> = {
   subject_wise: "Subject-wise",
   topic_wise: "Topic-wise",
   custom: "Custom",
+  sprint: "5-Q Sprint",
+  concept_fix: "Concept fix",
 };
 
 const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
@@ -69,6 +71,8 @@ const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
   subject_wise: "secondary",
   topic_wise: "secondary",
   custom: "outline",
+  sprint: "secondary",
+  concept_fix: "secondary",
 };
 
 function getScoreColor(score: number) {
@@ -102,6 +106,16 @@ export default async function DashboardPage() {
     .order("completed_at", { ascending: false });
   const sessions = sessionsResult.data;
   const userName = profile?.full_name || "User";
+  const studyDay = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+  const dayStart = new Date(`${studyDay}T00:00:00+05:30`).toISOString();
+  const [{ data: streak }, dailyProgress] = await Promise.all([
+    supabase.from("streaks").select("current_streak,last_activity_date").eq("user_id", userId).maybeSingle(),
+    supabase.from("test_answers").select("id,test_sessions!inner(user_id,exam_id,stream_id,completed_at,status)", { count: "exact", head: true })
+      .eq("test_sessions.user_id", userId).eq("test_sessions.exam_id", exam.id)
+      .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "test_sessions" })
+      .eq("test_sessions.status", "completed").gte("test_sessions.completed_at", dayStart).not("is_correct", "is", null)
+      .or("selected_option.not.is.null,selected_options.not.is.null,numeric_answer.not.is.null"),
+  ]);
 
   const sessionIds = sessions?.map((s) => s.id) || [];
 
@@ -129,10 +143,11 @@ export default async function DashboardPage() {
     const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
     const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
     const skipped = sessionAnswers.filter((a) => a.is_correct === null).length;
-    const total = correct + wrong + skipped || s.total_questions;
+    const total = s.total_questions;
     const score = total > 0 ? Math.round((correct / total) * 100) : 0;
     return { ...s, correct, wrong, skipped, score };
   });
+  const dailyAnswered = dailyProgress.error ? null : dailyProgress.count ?? 0;
 
   const totalTests = sessions?.length || 0;
   const avgScore =
@@ -152,8 +167,9 @@ export default async function DashboardPage() {
   const recentTests = sessionScores.slice(0, 5);
 
   const subjectMap = new Map<string, { correct: number; total: number }>();
-  (allAnswers || []).forEach((a: any) => {
-    const subjectName = a.questions?.subjects?.name;
+  (allAnswers || []).forEach((a) => {
+    const question = a.questions as unknown as { subjects?: { name: string } | null } | null;
+    const subjectName = question?.subjects?.name;
     if (!subjectName) return;
     const entry = subjectMap.get(subjectName) || { correct: 0, total: 0 };
     entry.total += 1;
@@ -186,13 +202,14 @@ export default async function DashboardPage() {
               Keep practicing for {exam.name}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button asChild size="sm" className="gap-1.5">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+            <Button asChild size="sm" className="hidden gap-1.5 lg:inline-flex">
               <Link href="/test/select">
                 <Play className="h-3.5 w-3.5" />
                 Start Test
               </Link>
             </Button>
+            <Button asChild size="sm" className="min-h-11 gap-1.5 lg:hidden"><a href="#quick-practice"><Zap className="h-3.5 w-3.5" />5-Q Sprint</a></Button>
             <Button asChild size="sm" variant="outline" className="gap-1.5">
               <Link href="/daily">
                 <Zap className="h-3.5 w-3.5" />
@@ -202,6 +219,16 @@ export default async function DashboardPage() {
           </div>
         </div>
       </div>
+
+      <Suspense fallback={<div role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">Loading concept insights…</div>}><DashboardConcepts /></Suspense>
+
+      <section aria-label="Your daily practice" className="space-y-3 lg:hidden">
+        <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-3">
+          <div><p className="text-xs text-muted-foreground">Study streak</p><p className="mt-1 text-sm font-semibold">🔥 {streak?.current_streak ?? 0} days</p></div>
+          <div><p className="text-xs text-muted-foreground">Daily goal · answered today</p>{dailyAnswered == null ? <p className="mt-1 text-xs text-muted-foreground">Progress temporarily unavailable</p> : <><p className="mt-1 text-sm font-semibold">🎯 {dailyAnswered}/20 questions</p><div role="progressbar" aria-label="Daily question goal" aria-valuenow={Math.min(20, dailyAnswered)} aria-valuemin={0} aria-valuemax={20} className="mt-2 h-1 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100,dailyAnswered / 20 * 100)}%` }} /></div></>}</div>
+        </div>
+        <div className="grid items-start gap-3 sm:grid-cols-2"><Suspense fallback={<div id="quick-practice" role="status" className="h-56 animate-pulse rounded-xl bg-muted" />}><QuickPractice /></Suspense><RevisionWidget /></div>
+      </section>
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -227,7 +254,7 @@ export default async function DashboardPage() {
                 <TrendingUp className="h-4 w-4 text-green-600" />
               </div>
               <div>
-                <p className="text-[11px] text-muted-foreground leading-none mb-1">Avg Score</p>
+                <p className="text-[11px] text-muted-foreground leading-tight mb-1">Avg correct rate</p>
                 <p className={`text-xl font-bold leading-none ${getScoreColor(avgScore)}`}>{avgScore}%</p>
               </div>
             </div>
@@ -241,7 +268,7 @@ export default async function DashboardPage() {
                 <Target className="h-4 w-4 text-amber-600" />
               </div>
               <div>
-                <p className="text-[11px] text-muted-foreground leading-none mb-1">Best Score</p>
+                <p className="text-[11px] text-muted-foreground leading-tight mb-1">Best correct rate</p>
                 <p className={`text-xl font-bold leading-none ${getScoreColor(bestScore)}`}>{bestScore}%</p>
               </div>
             </div>
@@ -263,18 +290,20 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
+      <p className="text-xs text-muted-foreground">Correct rate = correct answers ÷ all questions, including skipped questions. Marks and deductions are shown in each result.</p>
+
       {/* Countdown */}
       <ExamCountdown key={`${userId}:${exam.id}`} examId={exam.id} examName={exam.name} userId={userId} />
 
       {/* Widgets Row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div aria-label="Study activity" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] items-start gap-4">
+        <div className="hidden lg:block"><RevisionWidget /></div>
         <DailyQuestionWidget />
         <StreakCard />
-        <RevisionWidget />
       </div>
 
       {/* Quick Start */}
-      <Card>
+      <Card className="hidden lg:block">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <Zap className="h-4 w-4 text-primary" />
@@ -282,7 +311,8 @@ export default async function DashboardPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-3 pt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
+            <Link href="/practice" className="group flex items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3 hover:bg-primary/10"><Zap className="h-5 w-5 shrink-0 text-primary" /><div><p className="text-sm font-semibold">5-Q Sprint</p><p className="text-[11px] text-muted-foreground">One concept · 12–15 minutes</p></div></Link>
             <Link
               href="/test/select"
               className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
@@ -291,13 +321,13 @@ export default async function DashboardPage() {
                 <Play className="h-4 w-4 text-primary" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">Full Mock Test</p>
-                <p className="text-[11px] text-muted-foreground">Choose count and timer</p>
+                <p className="text-sm font-semibold leading-tight">Start a test</p>
+                <p className="text-[11px] text-muted-foreground">Choose your paper or practice mode</p>
               </div>
               <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </Link>
             <Link
-              href="/test/select"
+              href="/test/select?mode=subject_wise"
               className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
             >
               <div className="h-9 w-9 rounded-lg bg-secondary/50 flex items-center justify-center shrink-0">
@@ -310,7 +340,7 @@ export default async function DashboardPage() {
               <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </Link>
             <Link
-              href="/test/select"
+              href="/test/select?mode=custom"
               className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
             >
               <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
@@ -363,12 +393,12 @@ export default async function DashboardPage() {
                 {recentTests.map((test) => (
                   <div
                     key={test.id}
-                    className="flex items-center justify-between p-2.5 rounded-lg hover:bg-muted/50 transition-colors"
+                    className="flex flex-col items-stretch gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-sm truncate">
-                          {(test as any).subjects?.name || "General"}
+                          {(test.subjects as unknown as { name?: string } | null)?.name || "General"}
                         </span>
                         <Badge variant={modeVariants[test.mode] || "outline"} className="text-[9px] px-1.5 py-0 shrink-0">
                           {modeLabels[test.mode] || test.mode}
@@ -378,15 +408,15 @@ export default async function DashboardPage() {
                         {format(new Date(test.completed_at!), "MMM d, yyyy")}
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 ml-3 shrink-0">
+                    <div className="flex items-center justify-between gap-3 sm:ml-3 sm:shrink-0">
                       <span className={`text-sm font-semibold ${getScoreColor(test.score)}`}>
-                        {test.score}%
+                        {test.score}% <span className="text-xs font-normal text-muted-foreground">correct</span>
                       </span>
                       <div className="flex gap-1">
-                        <Button variant="outline" size="sm" asChild className="h-6 text-[10px] px-1.5">
+                        <Button variant="outline" size="sm" asChild className="h-11 px-3 text-xs sm:h-8">
                           <Link href={`/result/${test.id}`}>Result</Link>
                         </Button>
-                        <Button variant="outline" size="sm" asChild className="h-6 text-[10px] px-1.5">
+                        <Button variant="outline" size="sm" asChild className="h-11 px-3 text-xs sm:h-8">
                           <Link href={`/review/${test.id}`}>Review</Link>
                         </Button>
                       </div>

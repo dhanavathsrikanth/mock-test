@@ -53,7 +53,7 @@ export function SubjectChart({
           tickFormatter={(v: number) => `${v}%`}
         />
         <Tooltip
-          formatter={(value) => [`${value}%`, "Accuracy"]}
+          formatter={(value) => [`${value}%`, "Correct rate"]}
           contentStyle={{
             borderRadius: "8px",
             border: "1px solid hsl(var(--border))",

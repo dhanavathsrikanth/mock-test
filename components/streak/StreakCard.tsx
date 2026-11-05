@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,12 +26,6 @@ function getDateNDaysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
   return d.toISOString().split("T")[0];
-}
-
-function flameSize(streak: number): "sm" | "md" | "lg" {
-  if (streak >= 30) return "lg";
-  if (streak >= 7) return "md";
-  return "sm";
 }
 
 function nextMilestone(streak: number): { name: string; daysAway: number } | null {
@@ -96,7 +90,6 @@ export function StreakCard() {
   }
 
   const data = streak;
-  const size = flameSize(data.currentStreak);
   const milestone = nextMilestone(data.currentStreak);
   const today = getTodayDate();
 
@@ -113,146 +106,46 @@ export function StreakCard() {
 
   const last7 = Array.from({ length: 7 }, (_, i) => getDateNDaysAgo(6 - i));
 
-  const flameSizeClass =
-    size === "lg" ? "text-6xl" : size === "md" ? "text-5xl" : "text-4xl";
-
   return (
-    <Card className="overflow-hidden border-0 shadow-lg bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20">
-      <CardContent className="p-6">
-        <div className="flex flex-col items-center text-center space-y-4">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={data.currentStreak}
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 15 }}
-              className="relative"
-            >
-              {data.currentStreak > 0 ? (
-                <motion.span
-                  className={`${flameSizeClass} block select-none`}
-                  animate={
-                    size === "lg"
-                      ? {
-                          scale: [1, 1.15, 1],
-                          rotate: [0, -3, 3, 0],
-                        }
-                      : size === "md"
-                      ? {
-                          scale: [1, 1.1, 1],
-                        }
-                      : {}
-                  }
-                  transition={{
-                    duration: size === "lg" ? 1.5 : 2,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                  }}
-                >
-                  🔥
-                </motion.span>
-              ) : (
-                <span className="text-4xl block select-none">🔥</span>
-              )}
-            </motion.div>
-          </AnimatePresence>
-
-          <div>
-            <motion.span
-              key={data.currentStreak}
-              initial={{ y: -10, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              className="text-5xl font-extrabold tabular-nums block"
-            >
-              {data.currentStreak}
-            </motion.span>
-            <span className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              Day Streak
-            </span>
-          </div>
-
-          <div className="flex items-center justify-center gap-1.5">
-            {last7.map((date, i) => {
-              const practiced = isDayPracticed(date);
-              return (
-                <motion.div
-                  key={date}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: i * 0.05 }}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-                    practiced
-                      ? "bg-orange-500 text-white shadow-sm shadow-orange-300"
-                      : "bg-muted text-muted-foreground"
-                  }`}
-                  title={date}
-                >
-                  {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][new Date(date).getDay()]}
-                </motion.div>
-              );
-            })}
-          </div>
-
-          {data.freezeTokens > 0 && (
-            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-              <span>🛡️</span>
-              <span>{data.freezeTokens} freeze token{data.freezeTokens > 1 ? "s" : ""} remaining</span>
-            </p>
-          )}
-
-          {data.practicedToday ? (
-            <p className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1.5">
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: "spring", stiffness: 400 }}
-              >
-                ✅
-              </motion.span>
-              Practiced today
-            </p>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Practice today to keep your streak!
-              </p>
-              <Button
-                size="sm"
-                onClick={() => router.push("/test/select")}
-                className="bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                Start Practice
-              </Button>
+    <Card className="min-w-0 overflow-hidden border-orange-200/60 bg-gradient-to-br from-orange-50 to-amber-50 shadow-sm dark:border-orange-900/40 dark:from-orange-950/20 dark:to-amber-950/20">
+      <CardContent className="space-y-4 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl leading-none" aria-hidden="true">🔥</span>
+            <div>
+              <h3 className="text-sm font-semibold">Study streak</h3>
+              <p className="text-xs text-muted-foreground"><span className="text-xl font-bold tabular-nums text-foreground">{data.currentStreak}</span> day{data.currentStreak !== 1 ? "s" : ""} in a row</p>
             </div>
-          )}
-
-          {milestone && (
-            <div className="w-full space-y-1.5">
-              <div className="flex justify-between text-xs text-muted-foreground">
-                <span>{milestone.daysAway} day{milestone.daysAway > 1 ? "s" : ""} away from {milestone.name}</span>
-                <span>🏆</span>
-              </div>
-              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{
-                    width: `${
-                      milestone.name === "Week Warrior"
-                        ? (data.currentStreak / 7) * 100
-                        : (data.currentStreak / 30) * 100
-                    }%`,
-                  }}
-                  transition={{ duration: 0.8, ease: "easeOut" }}
-                  className="h-full rounded-full bg-gradient-to-r from-orange-400 to-amber-500"
-                />
-              </div>
-            </div>
-          )}
-
-          <p className="text-xs text-muted-foreground">
-            Longest streak: {data.longestStreak} day{data.longestStreak !== 1 ? "s" : ""}
-          </p>
+          </div>
+          <div className="text-right text-xs text-muted-foreground">
+            <p>Personal best</p>
+            <p className="mt-1 font-medium text-foreground">{data.longestStreak} day{data.longestStreak !== 1 ? "s" : ""}</p>
+          </div>
         </div>
+
+        <div className="grid grid-cols-7 gap-1.5" aria-label="Practice over the last seven days">
+          {last7.map((date) => {
+            const practiced = isDayPracticed(date);
+            return <div key={date} title={date} aria-label={`${date}: ${practiced ? "practiced" : "not practiced"}`} className={`flex h-8 min-w-0 items-center justify-center rounded-md text-xs font-semibold ${practiced ? "bg-orange-500 text-white" : "bg-background/70 text-muted-foreground dark:bg-muted"}`}>
+              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][new Date(date).getDay()]}
+            </div>;
+          })}
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className={`text-xs ${data.practicedToday ? "font-medium text-green-600 dark:text-green-400" : "text-muted-foreground"}`}>
+            {data.practicedToday ? "✓ Practiced today" : "Keep your streak going today."}
+          </p>
+          {!data.practicedToday && <Button size="sm" onClick={() => router.push("/test/select")} className="bg-orange-500 text-white hover:bg-orange-600">Start Practice</Button>}
+        </div>
+
+        {milestone && <div className="space-y-1.5">
+          <p className="text-xs text-muted-foreground">{milestone.daysAway} day{milestone.daysAway > 1 ? "s" : ""} to {milestone.name}</p>
+          <div role="progressbar" aria-label={`Progress toward ${milestone.name}`} aria-valuemin={0} aria-valuemax={milestone.name === "Week Warrior" ? 7 : 30} aria-valuenow={data.currentStreak} className="h-1.5 overflow-hidden rounded-full bg-orange-100 dark:bg-orange-950/50">
+            <motion.div initial={{ width: 0 }} animate={{ width: `${(data.currentStreak / (milestone.name === "Week Warrior" ? 7 : 30)) * 100}%` }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full rounded-full bg-orange-500" />
+          </div>
+        </div>}
+        {data.freezeTokens > 0 && <p className="text-xs text-muted-foreground">🛡️ {data.freezeTokens} freeze token{data.freezeTokens > 1 ? "s" : ""} remaining</p>}
       </CardContent>
     </Card>
   );

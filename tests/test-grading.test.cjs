@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const ts = require("typescript");
 const vm = require("node:vm");
 
-function loadGrader({ expired = false, userId = "student", saved = [], multiple = false, numeric = false, marksToAll = false, alternatives = false, multipleAlternatives = false, mcqAlternatives = false } = {}) {
+function loadGrader({ expired = false, userId = "student", saved = [], multiple = false, numeric = false, marksToAll = false, alternatives = false, multipleAlternatives = false, mcqAlternatives = false, mode } = {}) {
   let graded;
   let completed = false;
   const supabase = {
@@ -15,7 +15,7 @@ function loadGrader({ expired = false, userId = "student", saved = [], multiple 
       const response = () => {
         if (table === "test_sessions" && operation === "select") return { data: {
           id: "session", user_id: "student", exam_id: "gate", question_ids: ["q1", "q2", "q3"],
-          status: "in_progress", duration_minutes: 1,
+          status: "in_progress", duration_minutes: 1, mode,
           started_at: new Date(Date.now() - (expired ? 180000 : 0)).toISOString(),
         } };
         if (table === "test_answers" && operation === "select") return { data: saved };
@@ -54,6 +54,25 @@ test("submission grades every selected question, with unanswered questions expli
   assert.equal(graded[2].selected_option, null);
   assert.equal(graded[2].is_correct, null);
   assert.equal(grader.completed(), true);
+});
+
+test('paused sprint submission grades restored responses after a long interruption; full mocks still expire', async () => {
+  const sprint=loadGrader({expired:true,mode:'sprint'});
+  assert.equal((await sprint.submit('session','student',{q1:3},30)).success,true);
+  assert.equal(sprint.graded()[0].selected_option,3);
+  assert.equal(sprint.graded()[0].is_correct,true);
+  const mock=loadGrader({expired:true,mode:'full_paper'});
+  await mock.submit('session','student',{q1:3});
+  assert.equal(mock.graded()[0].selected_option,null);
+});
+
+test('sprint submission rejects missing or out-of-range active timer values', async () => {
+  for (const seconds of [undefined,-1,61,NaN,1.5]) {
+    const sprint=loadGrader({mode:'sprint'});
+    assert.ok((await sprint.submit('session','student',{q1:3},seconds)).error);
+    assert.equal(sprint.graded(),undefined);
+    assert.equal(sprint.completed(),false);
+  }
 });
 
 test('server preserves either accepted MCQ choice during submission and expiry without allowing multiple selection',async()=>{
