@@ -3,6 +3,8 @@ import { type NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // Challenges are guest-first. Mutating handlers enforce their own ownership checks.
+  if (request.nextUrl.pathname.startsWith('/c/') || request.nextUrl.pathname === '/api/challenges' || request.nextUrl.pathname.startsWith('/api/challenges/')) return NextResponse.next();
   // The standalone practice calculator does not require an account.
   if (request.nextUrl.pathname === "/calculator") return NextResponse.next();
   // These handlers authenticate using signed links, provider signatures, or the

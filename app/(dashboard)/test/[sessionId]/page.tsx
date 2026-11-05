@@ -88,7 +88,7 @@ async function ExamPageContent({
   const questions = (questionIds || []).map(id => questionMap.get(id)).filter(question => question != null);
 
   // Sync session to actual question count (user may have requested more than available)
-  if (session.mode === "concept_fix" && questions.length !== session.total_questions) {
+  if ((session.mode === "concept_fix" || (session.mode === "custom" && session.question_ids)) && questions.length !== session.total_questions) {
     return <div className="mx-auto max-w-lg space-y-3 p-6"><h1 className="text-xl font-semibold">This concept fix is no longer available</h1><p>A question could not be retrieved. Return to your dashboard to choose another concept fix.</p><Link href="/dashboard" className="underline">Open dashboard</Link></div>;
   }
   if (session.mode === "sprint" && questions.length !== 5) {

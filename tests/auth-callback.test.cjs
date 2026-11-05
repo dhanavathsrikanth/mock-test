@@ -65,3 +65,14 @@ test("authorization codes arriving on the homepage go to the callback before ses
   const response = await route.updateSession(new NextRequest("http://localhost:3000/?code=test-code"));
   assert.equal(response.headers.get("location"), "http://localhost:3000/auth/callback?code=test-code");
 });
+
+test('challenge OAuth callbacks preserve private recovery fragments on success and failure', async () => {
+  const next='/c/ch_'+'a'.repeat(32)+'#resume=00000000-0000-4000-8000-000000000090';
+  for (const failed of [false,true]) {
+    const route=loadRoute('app/auth/callback/route.ts',failed?{message:'expired'}:null);
+    const response=await route.GET(new NextRequest(`http://localhost:3000/auth/callback?code=test&next=${encodeURIComponent(next)}`));
+    const location=new URL(response.headers.get('location'));
+    assert.equal(location.pathname,next.split('#')[0]);assert.equal(location.hash,'#'+next.split('#')[1]);
+    assert.equal(location.searchParams.get('authError'),failed?'oauth_callback_failed':null);
+  }
+});

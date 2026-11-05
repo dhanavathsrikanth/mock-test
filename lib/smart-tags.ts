@@ -1,7 +1,9 @@
 import { gradeResponse, type QuestionResponse } from './question-response';
 import type { GradingKey } from './question-contract';
+import { analyseAnswerPatterns, type AnswerPattern } from './automatic-smart-tags';
 
-export type SmartTagSet = { core_concepts: string[]; common_error_triggers: string[]; reviewed: boolean };
+export type SmartTagSet = { core_concepts: string[]; common_error_triggers: string[]; reviewed: boolean;
+  source?: 'syllabus' | 'reviewed'; concept_keys?: string[] };
 export type TaggedAttempt = {
   sessionId: string; questionId: string; subjectId: string; completedAt: string;
   question: GradingKey; response: QuestionResponse; tags: SmartTagSet | null;
@@ -14,6 +16,9 @@ export type SmartDiagnostic = {
   concepts: ConceptCounter[]; weakSpots: ConceptCounter[];
   possibleTraps: { label: string; questions: number }[];
   answered: number; tagged: number; sessionCount: number;
+  automaticTagged?: number; reviewedTagged?: number;
+  answerPatterns?: (AnswerPattern & { count: number })[];
+  improvements?: { label: string; before: number; after: number; beforeAttempts: number; afterAttempts: number }[];
 };
 export const conceptKey = (label: string) => label.trim().replace(/\s+/g, ' ').toLowerCase();
 
@@ -29,15 +34,22 @@ export function diagnoseConcepts(attempts: TaggedAttempt[]): SmartDiagnostic {
   const unique = [...new Map(attempts.map(a => [JSON.stringify([a.sessionId, a.questionId]), a])).values()];
   const counters = new Map<string, ConceptCounter & { sessionIds: Set<string> }>();
   const traps = new Map<string, { label: string; questions: number }>();
+  const patterns = new Map<string, AnswerPattern & { count: number }>();
+  let automaticTagged = 0, reviewedTagged = 0;
   let answered = 0, tagged = 0;
   for (const a of unique) {
     if (a.question.marks_to_all) continue;
     const correct = gradeResponse(a.question, a.response);
     if (correct == null) continue; // Skips/invalid NAT text are not failures.
     answered++;
-    if (!a.tags?.reviewed || !a.tags.core_concepts.length) continue;
+    for (const pattern of analyseAnswerPatterns(a.question, a.response)) {
+      const entry = patterns.get(pattern.code) ?? { ...pattern, count: 0 };
+      entry.count++; patterns.set(pattern.code, entry);
+    }
+    if (!a.tags || (!a.tags.reviewed && a.tags.source !== 'syllabus') || !a.tags.core_concepts.length) continue;
     tagged++;
-    const labels = new Map(a.tags.core_concepts.map(label => [conceptKey(label), label]));
+    if (a.tags.source === 'syllabus') automaticTagged++; else reviewedTagged++;
+    const labels = new Map(a.tags.core_concepts.map((label, index) => [a.tags!.concept_keys?.[index] ?? conceptKey(label), label]));
     for (const [key, label] of labels) {
       const id = JSON.stringify([a.subjectId, key]);
       const counter = counters.get(id) ?? { key, label, subjectId: a.subjectId, attempts: 0, failed: 0,
@@ -59,7 +71,19 @@ export function diagnoseConcepts(attempts: TaggedAttempt[]): SmartDiagnostic {
   const weakSpots = concepts.filter(c => c.attempts >= 3 && c.failed / c.attempts >= .6)
     .sort((a, b) => b.failed / b.attempts - a.failed / a.attempts || b.attempts - a.attempts || a.label.localeCompare(b.label)).slice(0, 3);
   return { concepts, weakSpots, possibleTraps: [...traps.values()].sort((a, b) => b.questions - a.questions || a.label.localeCompare(b.label)).slice(0, 3),
-    answered, tagged, sessionCount: new Set(unique.map(a => a.sessionId)).size };
+    answered, tagged, automaticTagged, reviewedTagged,
+    answerPatterns: [...patterns.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label)).slice(0, 3),
+    sessionCount: new Set(unique.map(a => a.sessionId)).size };
+}
+
+export function compareConceptProgress(current: SmartDiagnostic, previous: SmartDiagnostic): SmartDiagnostic {
+  const older = new Map(previous.concepts.map(c => [JSON.stringify([c.subjectId, c.key]), c]));
+  const improvements = current.concepts.flatMap(c => {
+    const before = older.get(JSON.stringify([c.subjectId, c.key]));
+    return before && before.attempts >= 3 && c.attempts >= 3 && c.accuracy > before.accuracy
+      ? [{ label: c.label, before: before.accuracy, after: c.accuracy, beforeAttempts: before.attempts, afterAttempts: c.attempts }] : [];
+  }).sort((a, b) => (b.after - b.before) - (a.after - a.before)).slice(0, 3);
+  return { ...current, improvements };
 }
 
 export function chooseConceptFix<T extends { id: string }>(questions: T[], recentlySeen: Set<string>, random = Math.random): T[] {

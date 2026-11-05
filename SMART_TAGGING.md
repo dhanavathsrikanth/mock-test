@@ -1,5 +1,7 @@
 # Smart-tagging layer
 
+**Current version:** automatic syllabus mapping and answer-pattern feedback supersede the manual-only activation steps below. No tag-table migration or content backfill is needed for automatic diagnostics and concept practice. See [Automatic Smart Tagging](AUTOMATIC_SMART_TAGGING.md) for the current behaviour and release evidence. The remainder records the original optional editorial-tag design.
+
 *Implemented locally on 5 November 2026. Free-platform scope; no payment or entitlement logic.*
 
 ## Student experience
@@ -62,7 +64,7 @@ Before the migration, the added dashboard/result panels display a preparation me
 
 ## Validation
 
-The automated checks cover counter thresholds, retries, subjects, NAT/MSQ grading, skips/MTA, tag bounds, RLS for drafts/writes, reviewer stamping, stale-review invalidation, legacy sessions, optional-query failures, paginated/scoped selection and session-shape constraints. TypeScript, focused lint and a production build also pass. Browser checks include the actual dashboard's preparation state and desktop/mobile renders of the populated cards using explicitly labelled sample data.
+All **456 tests passed**, including 14 smart-tagging checks. They cover counter thresholds, retries, subjects, NAT/MSQ grading, skips/MTA, tag bounds, RLS for drafts/writes, reviewer stamping, stale-review invalidation, legacy sessions, optional-query failures, paginated/scoped selection and session-shape constraints. TypeScript, focused lint and a production build also pass. Browser checks include the actual dashboard and saved result page's preparation states, plus desktop/mobile renders of populated cards using explicitly labelled sample data. A complete hosted database/concept-fix/result journey remains a staging release check.
 
 Evidence and preview screenshots are under the ignored `output/smart-tags/` folder. The sample preview is not a production route, real student history or a database integration test.
 

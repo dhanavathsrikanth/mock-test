@@ -22,7 +22,7 @@ export async function submitTest(sessionId: string, userId: string, responses?: 
   const questionIds: string[] = session.question_ids || (answers || []).map(answer => answer.question_id);
   const { data: questions, error: questionsError } = await supabase.from("questions")
     .select("id, correct_option, correct_options, correct_option_sets, question_type, marks_to_all, answer_min, answer_max, answer_ranges, answer_decimal_places").eq("exam_id", session.exam_id).in("id", questionIds);
-  if (questionsError || !questions?.length) return { error: "Unable to load test questions" };
+  if (questionsError || !questions?.length || questions.length !== new Set(questionIds).size) return { error: "Unable to load all test questions. Please retry." };
 
   const expired = session.mode !== "sprint" && session.duration_minutes > 0 && Date.now() >
     new Date(session.started_at).getTime() + session.duration_minutes * 60000 + 60000;

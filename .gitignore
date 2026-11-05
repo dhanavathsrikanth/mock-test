@@ -18,3 +18,4 @@ deepseek_csv_*.txt
 # scraped/generated artifacts
 output/
 data/
+supabase/.temp/

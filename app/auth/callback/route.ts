@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     if (candidate.origin === origin && !candidate.pathname.startsWith("/auth")) {
       destination.pathname = candidate.pathname;
       destination.search = candidate.search;
+      destination.hash = candidate.hash;
     }
   }
 
@@ -39,6 +40,10 @@ export async function GET(request: NextRequest) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
+      if (/^\/c\/ch_[a-f0-9]{32}$/.test(destination.pathname)) {
+        destination.searchParams.set('authError', 'oauth_callback_failed');
+        return NextResponse.redirect(destination);
+      }
       const login = new URL("/auth/login", origin);
       login.searchParams.set("error", "oauth_callback_failed");
       const failedResponse = NextResponse.redirect(login);
@@ -50,5 +55,9 @@ export async function GET(request: NextRequest) {
     return supabaseResponse;
   }
 
+  if (/^\/c\/ch_[a-f0-9]{32}$/.test(destination.pathname)) {
+    destination.searchParams.set('authError', 'oauth_callback_failed');
+    return NextResponse.redirect(destination);
+  }
   return NextResponse.redirect(`${origin}/auth/login`);
 }

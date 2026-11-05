@@ -126,6 +126,8 @@ language plpgsql security definer set search_path='' as $$
 declare t challenge_private.turns;
 begin
   if not exists(select 1 from challenge_private.challenges where id=p_id) then raise exception 'Challenge not found'; end if;
+  -- Bounded cleanup of abandoned recovery payloads; claimed responses are permanent.
+  delete from challenge_private.turns where token in (select token from challenge_private.turns where user_id is null and expires_at<now() limit 100);
   insert into challenge_private.turns(challenge_id) values(p_id) returning * into t;
   return jsonb_build_object('token',t.token,'startedAt',t.started_at);
 end $$;
@@ -138,8 +140,9 @@ begin
   if not found or t.expires_at<now() then raise exception 'This saved turn expired. Start a new challenge'; end if;
   if t.payload is not null then return true; end if; -- first finish is immutable
   select * into c from challenge_private.challenges where id=p_id;
-  if p_seconds is null or p_seconds<0 or p_seconds>c.minutes*60 or jsonb_typeof(p_answers)<>'object' or octet_length(p_answers::text)>4096 then raise exception 'Invalid answers or timer'; end if;
-  if now()>t.started_at+make_interval(mins=>c.minutes)+interval '60 seconds' then raise exception 'Your timer expired. Start a new challenge'; end if;
+  if p_seconds is null or p_seconds<0 or p_seconds>c.minutes*60 or p_answers is null or jsonb_typeof(p_answers)<>'object' or octet_length(p_answers::text)>4096 then raise exception 'Invalid answers or timer'; end if;
+  -- The guest UI locks at the deadline. Accept a device's final offline copy on
+  -- reconnect, charging the full duration when it arrives after the deadline.
   for item in select * from jsonb_each(p_answers) loop
     if not exists(select 1 from jsonb_array_elements(c.questions) q where q->>'id'=item.key) then raise exception 'Unexpected question'; end if;
     if not (item.value='null'::jsonb or (jsonb_typeof(item.value)='number' and item.value::text ~ '^[1-4]$') or

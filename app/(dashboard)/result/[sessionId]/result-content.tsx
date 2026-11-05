@@ -1,7 +1,8 @@
 "use client";
 
 import { formatMarks } from "@/lib/marking";
-import { useEffect, useState } from "react";
+import { ShareChallenge } from '@/components/challenges/ShareChallenge';
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ interface SubjectBreakdown {
 
 interface ResultContentProps {
   diagnostic?: DiagnosticLoad;
+  diagnosticPanel?: ReactNode;
   marks?: { earned: number; deducted: number; maximum: number; net: number };
   correctCount: number;
   wrongCount: number;
@@ -114,6 +116,7 @@ function formatTime(seconds: number): string {
 }
 
 export function ResultContent({
+  diagnosticPanel,
   diagnostic,
   marks,
   correctCount,
@@ -151,7 +154,8 @@ export function ResultContent({
         <p className="text-sm text-muted-foreground">{marksPercentage}% of available marks, after deductions</p>
         <p className="text-xs text-muted-foreground">Earned: +{formatMarks(marks.earned)} · Deductions: −{formatMarks(marks.deducted)} · Unattempted: 0</p>
       </CardContent></Card>}
-      {diagnostic && <SmartTagPanel result={diagnostic} variant="result" />}
+      {diagnosticPanel ?? (diagnostic && <SmartTagPanel result={diagnostic} variant="result" />)}
+      {isSprint && <ShareChallenge sessionId={sessionId} />}
       <AnimatedScore value={correctCount} total={totalQuestions} />
       <p className="text-center text-xs text-muted-foreground">Correct answers out of all questions · before marking deductions</p>
 

@@ -4,7 +4,8 @@ import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { calculateMarks } from "@/lib/marking";
 import { ResultContent } from "./result-content";
-import { loadSmartDiagnostic } from "@/lib/smart-tags-server";
+import { SessionConcepts } from "@/components/smart-tags/SessionConcepts";
+import { Suspense } from "react";
 
 export async function generateMetadata({
   params,
@@ -124,7 +125,7 @@ async function ResultPageContent({
 
   return (
     <ResultContent
-      diagnostic={await loadSmartDiagnostic({ userId, examId: exam.id, streamId: stream?.id ?? null, sessionId })}
+      diagnosticPanel={<Suspense fallback={<section role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">Analysing your answers…</section>}><SessionConcepts userId={userId} examId={exam.id} streamId={stream?.id ?? null} sessionId={sessionId} /></Suspense>}
       marks={marks}
       correctCount={correctCount}
       wrongCount={wrongCount}

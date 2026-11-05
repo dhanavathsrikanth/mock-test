@@ -5,7 +5,6 @@ import { getChallenge } from '@/lib/challenge-server';
 import { challengeTime, validTurn, type ChallengeResult } from '@/lib/challenges';
 import { formatMarks } from '@/lib/marking';
 import { ShareChallenge } from '@/components/challenges/ShareChallenge';
-import { ChallengePass } from '@/components/challenges/ChallengePass';
 import { MathText } from '@/components/MathText';
 
 export const dynamic = 'force-dynamic';
@@ -33,8 +32,7 @@ export default async function ChallengeResultPage({ params, searchParams }: { pa
     </section>
     <p className="text-center text-sm text-muted-foreground">{r.result.correct} correct · {r.result.wrong} incorrect · {r.result.skipped} skipped · {r.result.accuracy}% accuracy</p>
     {r.sharedMistakes.length>0 && <aside className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"><h2 className="font-semibold">A shared sticking point</h2><p className="mt-2 text-sm">You and {c.creatorName} both missed {r.sharedMistakes.map(n=>`Q${n}`).join(', ')}. Revisit {r.sharedMistakes.length===1?'this question':'these questions'} before your next sprint.</p></aside>}
-    <ChallengePass challengeId={challengeId} sessionId={session} unlocked={r.unlocked} ready={!!(process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET && process.env.SUPABASE_SERVICE_ROLE_KEY)} />
-    {r.unlocked && <section className="space-y-4"><h2 className="text-xl font-semibold">Your sprint, explained</h2>{r.solutions.map(s=><article key={s.number} className="rounded-xl border bg-card p-5"><h3 className="mb-3 font-semibold">Question {s.number}</h3><MathText text={s.explanation || 'A detailed explanation is not available for this question yet.'}/></article>)}</section>}
+    <section className="space-y-4"><div><h2 className="text-xl font-semibold">Your sprint, explained</h2><p className="mt-1 text-sm text-muted-foreground">Solutions are free. Your missed questions are saved to your revision queue.</p></div>{r.solutions.map(s=><article key={s.number} className="rounded-xl border bg-card p-5"><h3 className="mb-3 font-semibold">Question {s.number}</h3><MathText text={s.explanation || 'A detailed explanation is not available for this question yet.'}/></article>)}</section>
     <ShareChallenge sessionId={session}/>
     <div className="flex justify-between text-sm"><Link href="/practice" className="underline">Practice another sprint</Link><Link href="/revision" className="underline">Open revision queue</Link></div>
   </div></main>;

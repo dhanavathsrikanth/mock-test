@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const ts = require("typescript");
 const vm = require("node:vm");
 
-function loadGrader({ expired = false, userId = "student", saved = [], multiple = false, numeric = false, marksToAll = false, alternatives = false, multipleAlternatives = false, mcqAlternatives = false, mode } = {}) {
+function loadGrader({ expired = false, userId = "student", saved = [], multiple = false, numeric = false, marksToAll = false, alternatives = false, multipleAlternatives = false, mcqAlternatives = false, missingQuestions = false, mode } = {}) {
   let graded;
   let completed = false;
   const supabase = {
@@ -19,6 +19,7 @@ function loadGrader({ expired = false, userId = "student", saved = [], multiple 
           started_at: new Date(Date.now() - (expired ? 180000 : 0)).toISOString(),
         } };
         if (table === "test_answers" && operation === "select") return { data: saved };
+        if (table === "questions" && missingQuestions) return { data: [{ id: "q1", correct_option: 3 }] };
         if (table === "questions" && multipleAlternatives) return { data: [{id:'q1',question_type:'MSQ',correct_option:null,correct_options:[1,3,4],correct_option_sets:[[1,3,4],[1,3]]},{id:'q2',correct_option:1},{id:'q3',correct_option:1}] };
         if (table === "questions" && mcqAlternatives) return { data: [{id:'q1',question_type:'MCQ',correct_option:1,correct_option_sets:[[1],[2]]},{id:'q2',correct_option:1},{id:'q3',correct_option:1}] };
         if (table === "questions" && alternatives) return { data: [{id:'q1',question_type:'NAT',correct_option:null,answer_min:-5,answer_max:-5,answer_ranges:[{min:-5,max:-5},{min:5,max:5}],answer_decimal_places:0},{id:'q2',correct_option:1},{id:'q3',correct_option:1}] };
@@ -43,6 +44,13 @@ function loadGrader({ expired = false, userId = "student", saved = [], multiple 
   }).outputText, { exports, require: (name) => name === "@/lib/question-response" ? loadResponses() : ({ createClient: async () => supabase }) });
   return { submit: exports.submitTest, graded: () => graded, completed: () => completed };
 }
+
+test('an incomplete persisted question set cannot be partially graded and completed', async () => {
+  const grader = loadGrader({ missingQuestions: true });
+  assert.ok((await grader.submit('session', 'student', { q1: 3 })).error);
+  assert.equal(grader.graded(), undefined);
+  assert.equal(grader.completed(), false);
+});
 
 test("submission grades every selected question, with unanswered questions explicitly skipped", async () => {
   const grader = loadGrader();

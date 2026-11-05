@@ -11,11 +11,13 @@ const require = createRequire(import.meta.url);
 function load(file, imports = {}) {
   const exports = {};
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText,
-    { exports, console, URLSearchParams, require: name => imports[name] ?? require(name) });
+    { exports, console, URLSearchParams, AbortSignal, require: name => imports[name] ?? require(name) });
   return exports;
 }
 const responses = load('lib/question-response.ts');
-const smart = load('lib/smart-tags.ts', { './question-response': responses });
+const automatic = load('lib/automatic-smart-tags.ts', { './question-response': responses });
+const smart = load('lib/smart-tags.ts', { './question-response': responses, './automatic-smart-tags': automatic });
+const serverImports = db => ({ '@/lib/supabase/server': { createClient: async () => db.client }, './smart-tags': smart, './automatic-smart-tags': automatic });
 const plain = x => JSON.parse(JSON.stringify(x));
 function attempt(i, correct = false, extra = {}) {
   return { sessionId: `s${i % 3}`, questionId: `q${i}`, subjectId: 'subject', completedAt: `2026-11-0${i + 1}T00:00:00Z`,
@@ -76,19 +78,24 @@ function mockDb(resolver) {
 }
 test('diagnostic reads only completed owned/scoped sessions, preserves failures, and returns no keys', async () => {
   const db = mockDb(table => ({ data: table === 'test_sessions' ? [{ id: 's1', completed_at: '2026-11-05T00:00:00Z', question_ids: ['q1'] }]
-    : table === 'test_answers' ? [{ question_id: 'q1', selected_option: 1, is_correct: false }]
+    : table === 'test_answers' ? [{ session_id: 's1', question_id: 'q1', selected_option: 1, is_correct: false }]
     : table === 'questions' ? [{ id: 'q1', subject_id: 'subject', question_type: 'MCQ', correct_option: 1 }]
     : [{ question_id: 'q1', reviewed: true, core_concepts: ['DAGs'], common_error_triggers: [] }], error: null }));
-  const { loadSmartDiagnostic } = load('lib/smart-tags-server.ts', { '@/lib/supabase/server': { createClient: async () => db.client }, './smart-tags': smart });
+  const { loadSmartDiagnostic } = load('lib/smart-tags-server.ts', serverImports(db));
   const r = await loadSmartDiagnostic({ userId: 'owner', examId: 'exam', streamId: 'stream' });
   assert.equal(r.diagnostic.concepts[0].failed, 0);
   assert.ok(db.calls.some(c => c[0] === 'test_sessions' && c[1] === 'eq' && c[2] === 'user_id' && c[3] === 'owner'));
   assert.ok(db.calls.some(c => c[1] === 'eq' && c[2] === 'status' && c[3] === 'completed'));
-  assert.ok(db.calls.some(c => c[1] === 'limit' && c[2] === 3));
+  assert.ok(db.calls.some(c => c[1] === 'limit' && c[2] === 6));
   assert.ok(db.calls.some(c => c[0] === 'questions' && c[1] === 'or' && c[2] === 'stream_id.eq.stream'));
   assert.doesNotMatch(JSON.stringify(r), /correct_option|answer_ranges|question_text/);
-  const missing = load('lib/smart-tags-server.ts', { '@/lib/supabase/server': { createClient: async () => mockDb(table => table === 'question_smart_tags' ? { error: { code: 'PGRST205' } } : { data: table === 'test_sessions' ? [{ id: 's', completed_at: 'today', question_ids: ['q'] }] : [] }).client }, './smart-tags': smart });
-  assert.equal((await missing.loadSmartDiagnostic({ userId: 'u', examId: 'e', streamId: null })).state, 'not_enabled');
+  const missingDb = mockDb(table => table === 'question_smart_tags' ? { error: { code: 'PGRST205' } } : { data: table === 'test_sessions'
+    ? [{ id: 's', completed_at: 'today', question_ids: ['q'] }] : table === 'questions'
+      ? [{ id:'q',subject_id:'subject',topic_id:'10000000-0000-0000-0000-000000000001',topics:{id:'10000000-0000-0000-0000-000000000001',name:'Topological sort',subject_id:'subject'},question_type:'MCQ',correct_option:1 }]
+      : [{ session_id:'s',question_id:'q',selected_option:2 }] });
+  const missing = load('lib/smart-tags-server.ts', serverImports(missingDb));
+  const automaticResult = await missing.loadSmartDiagnostic({ userId: 'u', examId: 'e', streamId: null });
+  assert.equal(automaticResult.state, 'ready'); assert.equal(automaticResult.diagnostic.automaticTagged, 1);
 });
 test('concept fix validates scope again on the server and retries the same request without another insert', async () => {
   const context = { user: { id: 'owner' }, exam: { id: 'exam' }, stream: { id: 'stream' } };
@@ -96,7 +103,7 @@ test('concept fix validates scope again on the server and retries the same reque
   const db = mockDb((table, filters) => {
     if (filters.some(f => f[0] === 'insert')) { inserted = filters.find(f => f[0] === 'insert')[1]; return { data: { id: inserted.id } }; }
     if (filters.some(f => f[0] === 'select' && f[1] === 'question_ids')) return { data: [{ question_ids: ['q0'] }] };
-    return { data: inserted ? { id: inserted.id, subject_id: inserted.subject_id, concept_label: inserted.concept_label } : null };
+    return { data: inserted ?? null };
   });
   const scopeCalls = [];
   const { startConceptFix } = load('app/(dashboard)/practice/concept/actions.ts', {
@@ -107,7 +114,8 @@ test('concept fix validates scope again on the server and retries the same reque
   assert.ok((await startConceptFix(subject, 'DAGs', 'bad-id')).error);
   assert.equal((await startConceptFix(subject, 'DAGs', request)).sessionId, request);
   assert.deepEqual(plain(scopeCalls[0]), ['exam','stream',subject,'DAGs']);
-  assert.equal(inserted.mode, 'concept_fix'); assert.equal(inserted.duration_minutes, 10); assert.equal(inserted.total_questions, 2);
+  assert.equal(inserted.mode, 'custom'); assert.equal(inserted.duration_minutes, 10); assert.equal(inserted.total_questions, 2);
+  assert.equal(inserted.concept_label, undefined, 'no new column or migration is needed');
   assert.equal((await startConceptFix(subject, 'dags', request)).sessionId, request);
   assert.equal(db.calls.filter(c => c[1] === 'insert').length, 1);
 });
@@ -121,13 +129,13 @@ test('student UI shows evidence and available actions without asserting an error
 });
 
 test('optional diagnostics survive network exceptions and support legacy question sets', async () => {
-  const broken = load('lib/smart-tags-server.ts', { '@/lib/supabase/server': { createClient: async () => { throw new Error('network'); } }, './smart-tags': smart });
+  const broken = load('lib/smart-tags-server.ts', { ...serverImports({client:null}), '@/lib/supabase/server': { createClient: async () => { throw new Error('network'); } } });
   assert.equal((await broken.loadSmartDiagnostic({ userId: 'u', examId: 'e', streamId: null })).state, 'unavailable');
   const db = mockDb(table => ({ data: table === 'test_sessions' ? [{ id: 's', completed_at: '2026-11-05', question_ids: null }]
-    : table === 'test_answers' ? [{ question_id: 'q', selected_option: 2 }]
+    : table === 'test_answers' ? [{ session_id:'s', question_id: 'q', selected_option: 2 }]
     : table === 'questions' ? [{ id: 'q', subject_id: 'subject', correct_option: 1, question_type: 'MCQ' }]
     : [{ question_id: 'q', reviewed: true, core_concepts: ['DAGs'], common_error_triggers: [] }] }));
-  const legacy = load('lib/smart-tags-server.ts', { '@/lib/supabase/server': { createClient: async () => db.client }, './smart-tags': smart });
+  const legacy = load('lib/smart-tags-server.ts', serverImports(db));
   const r = await legacy.loadSmartDiagnostic({ userId: 'u', examId: 'e', streamId: null, sessionId: 's' });
   assert.equal(r.state, 'ready'); assert.equal(r.diagnostic.tagged, 1); assert.equal(r.diagnostic.concepts[0].failed, 1);
   assert.ok(db.calls.some(c => c[1] === 'limit' && c[2] === 1));
@@ -137,7 +145,7 @@ test('concept pool pages past the API row limit and retains exam, stream, subjec
     const offset = filters.find(f => f[0] === 'range')[1];
     return { data: Array.from({ length: offset === 0 ? 1000 : 1 }, (_, i) => ({ question_id: `q${offset+i}`, core_concepts: i === 0 ? ['DAGs'] : ['Other'] })) };
   });
-  const { getConceptFixPool } = load('lib/concept-fix-server.ts', { '@/lib/supabase/server': { createClient: async () => db.client }, './smart-tags': smart });
+  const { getConceptFixPool } = load('lib/concept-fix-server.ts', serverImports(db));
   const pool = await getConceptFixPool('exam','stream','subject','dags');
   assert.equal(pool.length, 2);
   for (const [field, value] of [['reviewed',true],['questions.exam_id','exam'],['questions.subject_id','subject'],['questions.marks_to_all',false]])
