@@ -1,223 +1,106 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { format } from "date-fns";
-import { Card, CardContent } from "@/components/ui/card";
-import { CalendarDays, Settings, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { format, parseISO } from "date-fns";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CalendarDays, ArrowUpRight, RotateCcw, Clock3, ChevronDown, Check } from "lucide-react";
+import { countdownRemaining, countdownTarget, defaultExamDate, GATE_2027_COUNTDOWN } from "@/lib/exam-countdown";
+import styles from "./countdown.module.css";
 
-interface CountdownData {
-  id: string;
-  label: string;
-  examDate: string | null;
-  isOfficial: boolean;
-}
-
-interface TimeLeft {
-  days: number;
-  hours: number;
-  minutes: number;
-  seconds: number;
-}
-
-function getMotivation(daysLeft: number): string {
-  if (daysLeft > 90) return "Great! You have plenty of time. Build your foundation.";
-  if (daysLeft > 60) return "Time to get serious. Aim for 2 tests/week.";
-  if (daysLeft > 30) return "Final stretch! Daily practice is essential.";
-  if (daysLeft > 7) return "Exam is near! Focus on weak topics only.";
-  return "Game time! Revise formulas & bookmarks.";
-}
-
-function calcTimeLeft(target: Date): TimeLeft {
-  const diff = target.getTime() - Date.now();
-  if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-  return {
-    days: Math.floor(diff / 86400000),
-    hours: Math.floor((diff % 86400000) / 3600000),
-    minutes: Math.floor((diff % 3600000) / 60000),
-    seconds: Math.floor((diff % 60000) / 1000),
-  };
-}
+interface CountdownData { label: string; examDate: string | null; isOfficial: boolean }
 
 export function ExamCountdown({ examId, examName, userId }: { examId: string; examName: string; userId: string }) {
-  const customDateKey = `exam-prep:countdown:${userId}:${examId}`;
+  const storageKey = `exam-prep:countdown:${userId}:${examId}`;
   const [data, setData] = useState<CountdownData | null>(null);
   const [customDate, setCustomDate] = useState<string | null>(null);
-  const [showPicker, setShowPicker] = useState(false);
+  const [draftDate, setDraftDate] = useState<Date | undefined>();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [now, setNow] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [error, setError] = useState(false);
+  const [storageError, setStorageError] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const fallback = defaultExamDate(examName);
+  const date = customDate || data?.examDate || fallback;
+  const target = countdownTarget(date);
+  const usingFallback = !customDate && !data?.examDate && !!fallback;
+  const remaining = target !== null && now !== null ? countdownRemaining(target, now) : null;
+  const expired = target !== null && now !== null && target <= now;
+  const dateLabel = target === null ? null : new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }).format(target);
+  const weekday = target === null ? null : new Intl.DateTimeFormat("en-IN", { weekday: "long", timeZone: "Asia/Kolkata" }).format(target);
+  const todayKey = now === null ? null : new Date(now + 330 * 60000).toISOString().slice(0, 10);
+  const canApply = !!draftDate && !!todayKey && format(draftDate, "yyyy-MM-dd") >= todayKey;
 
   useEffect(() => {
-    const stored = localStorage.getItem(customDateKey);
-    setCustomDate(stored && !Number.isNaN(Date.parse(stored)) ? stored : null);
-  }, [customDateKey]);
-
-  useEffect(() => {
-    async function fetchData() {
+    try {
+      const stored = localStorage.getItem(storageKey);
+      setCustomDate(stored && countdownTarget(stored) !== null ? stored : null);
+    } catch { setStorageError(true); }
+    const controller = new AbortController();
+    async function load() {
       try {
-        const res = await fetch("/api/exam-countdown");
-        if (res.ok) {
-          const json = await res.json();
-          setData(json);
-        }
-      } finally {
-        setLoading(false);
-      }
+        const response = await fetch("/api/exam-countdown", { signal: controller.signal });
+        if (!response.ok) throw new Error("Countdown unavailable");
+        const json = await response.json();
+        if (!controller.signal.aborted) setData(json);
+      } catch { if (!controller.signal.aborted) setError(true); }
+      finally { if (!controller.signal.aborted) setLoading(false); }
     }
-    fetchData();
-  }, [customDateKey]);
-
-  const targetDate = useCallback(() => {
-    if (customDate) return new Date(customDate);
-    if (data?.examDate) return new Date(data.examDate);
-    return null;
-  }, [customDate, data]);
+    load();
+    return () => controller.abort();
+  }, [storageKey]);
 
   useEffect(() => {
-    const update = () => { const target = targetDate(); if (target) setTimeLeft(calcTimeLeft(target)); };
+    const update = () => setNow(Date.now());
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate]);
+    const interval = setInterval(() => { if (!document.hidden) update(); }, 1000);
+    document.addEventListener("visibilitychange", update);
+    return () => { clearInterval(interval); document.removeEventListener("visibilitychange", update); };
+  }, []);
 
-  const handleSetCustomDate = (date: Date | undefined) => {
-    if (date) {
-      const dateStr = format(date, "yyyy-MM-dd");
-      localStorage.setItem(customDateKey, dateStr);
-      setCustomDate(dateStr);
-      setShowPicker(false);
-    }
-  };
-
-  const handleReset = () => {
-    localStorage.removeItem(customDateKey);
-    setCustomDate(null);
-  };
-
-  const isPast = timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0;
-  const daysLeft = timeLeft.days;
-  const motivation = !targetDate() ? "Keep building a consistent practice routine." : isPast ? "Exam has passed. Set a new target date!" : getMotivation(daysLeft);
-  const label = data?.label || examName;
-  const tag = customDate ? "Custom Date" : !data?.examDate ? "Date not announced" : data.isOfficial ? "Official Date" : "Expected Date";
-
-  const box = (value: number, label: string) => (
-    <div className="flex flex-col items-center">
-      <div className="w-full flex items-center justify-center rounded-lg border bg-card shadow-sm py-2">
-        <motion.span
-          key={value}
-          initial={{ y: 6, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.12 }}
-          className="text-xl sm:text-2xl font-bold tabular-nums"
-        >
-          {String(value).padStart(2, "0")}
-        </motion.span>
-      </div>
-      <span className="text-[9px] sm:text-[10px] text-muted-foreground uppercase tracking-wider mt-1">
-        {label}
-      </span>
-    </div>
-  );
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="p-4">
-          <div className="animate-pulse space-y-3">
-            <div className="h-5 w-40 bg-muted rounded mx-auto" />
-            <div className="grid grid-cols-4 gap-2">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="aspect-[3/2] bg-muted rounded-lg" />
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    );
+  function changeDate(value: string | null) {
+    if (value && countdownTarget(value) === null) return;
+    setCustomDate(value);
+    try {
+      if (value) localStorage.setItem(storageKey, value); else localStorage.removeItem(storageKey);
+      setStorageError(false);
+    } catch { setStorageError(true); }
+  }
+  function openPicker(open: boolean) {
+    if (open) setDraftDate(date ? parseISO(date.slice(0, 10)) : undefined);
+    setPickerOpen(open);
+  }
+  function applyDate() {
+    if (!canApply || !draftDate) return;
+    changeDate(format(draftDate, "yyyy-MM-dd"));
+    setPickerOpen(false);
   }
 
-  return (
-    <Card className="overflow-hidden">
-      <CardContent className="p-4 sm:p-5 space-y-4">
-        {/* Header */}
-        <div className="text-center space-y-1">
-          <h2 className="text-sm sm:text-base font-bold tracking-tight flex items-center justify-center gap-1.5">
-            <CalendarDays className="h-3.5 w-3.5 text-primary" />
-            {label}
-          </h2>
-          <span className={`inline-block text-[9px] font-medium px-1.5 py-0.5 rounded-full ${
-            tag === "Official Date"
-              ? "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400"
-              : "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-          }`}>
-            {tag}
-          </span>
-        </div>
-
-        {!targetDate() ? (<p className="text-center text-sm text-muted-foreground py-3">No exam date announced. Set your own target date below.</p>) : isPast ? (
-          <p className="text-center text-sm text-muted-foreground py-3">
-            The exam date has passed. Set a new target date below.
-          </p>
-        ) : (
-          <>
-            {/* Countdown boxes */}
-            <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
-              {box(timeLeft.days, "DAYS")}
-              {box(timeLeft.hours, "HOURS")}
-              {box(timeLeft.minutes, "MINUTES")}
-              {box(timeLeft.seconds, "SECONDS")}
-            </div>
-
-          </>
-        )}
-
-        {/* Motivation */}
-        <AnimatePresence mode="wait">
-          <motion.p
-            key={motivation}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            className="text-xs text-center font-medium text-muted-foreground"
-          >
-            {motivation}
-          </motion.p>
-        </AnimatePresence>
-
-        {/* Custom date */}
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-4">
-            <Popover open={showPicker} onOpenChange={setShowPicker}>
-              <PopoverTrigger asChild>
-                <button className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-                  <Settings className="h-3 w-3" />
-                  {customDate ? `Custom: ${format(new Date(customDate), "MMM d, yyyy")}` : "Set custom exam date"}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="center">
-                <Calendar
-                  mode="single"
-                  selected={customDate ? new Date(customDate) : undefined}
-                  onSelect={handleSetCustomDate}
-                  disabled={{ before: new Date() }}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
-            {customDate && (
-              <button
-                onClick={handleReset}
-                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-              >
-                <RotateCcw className="h-3 w-3" />
-                Reset
-              </button>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+  return <Card className={styles.countdown}>
+    <div className={styles.header}><span className={styles.icon}><CalendarDays size={19} /></span><div><span className={styles.eyebrow}>Your exam countdown</span><h2>{examName}</h2></div><span className={styles.badge}>{customDate ? "Personal" : usingFallback || data?.isOfficial ? "Official" : "Target"}</span></div>
+    <div className={styles.targetDate}><span>{customDate ? "Your paper date" : usingFallback ? "Exams begin" : data?.isOfficial ? "Official date" : "Target date"}</span><strong>{dateLabel ?? (loading ? "Loading…" : "Choose a date")}</strong>{weekday && <small>{weekday} · IST</small>}</div>
+    {expired ? <p className={styles.message}>This target date has passed. Choose your next exam date below.</p> : remaining ? <>
+      <div className={styles.digits} role="timer" aria-label={`${remaining.days} days, ${remaining.hours} hours, ${remaining.minutes} minutes, ${remaining.seconds} seconds remaining`}>
+        {Object.entries(remaining).map(([unit, value]) => <div key={unit}><div className={styles.digitBox}><motion.span key={value} initial={reduceMotion ? false : { y: 8, opacity: 0, rotateX: -30 }} animate={{ y: 0, opacity: 1, rotateX: 0 }} transition={{ duration: 0.25, ease: "easeOut" }}>{String(value).padStart(2, "0")}</motion.span></div><span className={styles.unit}>{unit === "minutes" ? "Mins" : unit === "seconds" ? "Secs" : unit}</span></div>)}
+      </div>
+      <div className={styles.runway}><Clock3 size={14} /><span>{remaining.days >= 7 ? <><strong>{Math.floor(remaining.days / 7)} full {Math.floor(remaining.days / 7) === 1 ? "week" : "weeks"}</strong> remaining to prepare</> : <><strong>{remaining.days} {remaining.days === 1 ? "day" : "days"}</strong> remaining to prepare</>}</span></div>
+    </> : <p className={styles.message} role="status">{loading ? "Preparing your countdown…" : error ? "Unable to load the exam date. Set a personal target below." : "Choose your exam date to start counting down."}</p>}
+    {usingFallback && <div className={styles.scheduleNote}><p>Counts to the first exam day. Your paper may be on a different date.</p><a href={GATE_2027_COUNTDOWN.source} target="_blank" rel="noreferrer">Official GATE schedule<ArrowUpRight size={12} /></a></div>}
+    <div className={styles.actions}>
+      <Popover open={pickerOpen} onOpenChange={openPicker}>
+        <PopoverTrigger asChild><Button variant="outline" className={styles.dateButton}><CalendarDays size={15} />{customDate ? "Change paper date" : "Choose your paper date"}<ChevronDown size={14} /></Button></PopoverTrigger>
+        <PopoverContent align="end" sideOffset={8} collisionPadding={12} className={styles.picker} aria-label="Choose your paper date">
+          <div className={styles.pickerHeading}><h3>Set your paper date</h3><p>Saved for {examName} on this browser. Target time is midnight IST.</p></div>
+          <div className={styles.calendarViewport}><Calendar mode="single" selected={draftDate} onSelect={setDraftDate} defaultMonth={draftDate || (todayKey ? parseISO(todayKey) : undefined)} disabled={day => !!todayKey && format(day, "yyyy-MM-dd") < todayKey} className="relative mx-auto w-fit" classNames={{ nav: "absolute top-3 left-3 right-3 z-10 flex items-center justify-between", button_previous: "inline-flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent", button_next: "inline-flex h-8 w-8 items-center justify-center rounded-md border hover:bg-accent", month_caption: "flex h-8 items-center justify-center px-9", day_button: "inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-normal hover:bg-accent", weekday: "w-9 rounded-md text-xs font-normal text-muted-foreground" }} /></div>
+          <div className={styles.pickerFooter}><p>{draftDate ? format(draftDate, "EEE, d MMM yyyy") : "Select a date"}</p><Button type="button" size="sm" onClick={applyDate} disabled={!canApply}><Check size={14} />Apply date</Button></div>
+        </PopoverContent>
+      </Popover>
+      {customDate && <Button type="button" variant="ghost" size="sm" className={styles.reset} onClick={() => changeDate(null)}><RotateCcw size={13} />Use default date</Button>}
+    </div>
+    {storageError && <p className={styles.message} role="status">This date applies for this visit. Your browser could not save it.</p>}
+  </Card>;
 }

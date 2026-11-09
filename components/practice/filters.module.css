@@ -1,0 +1,17 @@
+.scope {
+  --primary: 255 80% 60%;
+  --primary-foreground: 0 0% 100%;
+  --ring: 255 80% 60%;
+}
+
+.field {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope,
+  .field {
+    transition: none !important;
+    animation: none !important;
+  }
+}

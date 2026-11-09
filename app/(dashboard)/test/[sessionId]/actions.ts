@@ -48,5 +48,23 @@ export async function submitTest(sessionId: string, userId: string, responses?: 
     .update({ status: "completed", completed_at: new Date().toISOString(), ...(session.mode === "sprint" ? { sprint_active_seconds: activeSeconds } : {}) })
     .eq("id", sessionId).eq("user_id", user.id);
   if (updateError) return { error: "Failed to complete test" };
-  return { success: true };
+
+  // Auto-enroll wrong answers into the spaced-repetition revision queue.
+  // This is an application-level backup to the database trigger
+  // (revision_on_test_completed) so the improvement loop works even if the
+  // trigger is not deployed.
+  const wrongQuestionIds = graded
+    .filter((g) => g.is_correct === false)
+    .map((g) => g.question_id);
+  if (wrongQuestionIds.length > 0) {
+    for (const qid of wrongQuestionIds) {
+      try {
+        await supabase.rpc("revision_add", { p_question: qid });
+      } catch (err) {
+        console.error(`Failed to enroll question ${qid} into revision:`, err);
+      }
+    }
+  }
+
+  return { success: true, wrongEnrolled: wrongQuestionIds.length };
 }

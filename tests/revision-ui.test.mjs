@@ -35,9 +35,10 @@ test('flashcards hide solutions, retain the card on failure, prevent double subm
     dueCount:3, totalCount:3, completedCount:0, deferredCount:0, dailyCap:20, xpEarned:0, queueComplete:false,
   }};
   const { default: Page } = load('app/(dashboard)/revision/page.tsx', {
+    './revision.module.css': { default: new Proxy({}, { get: (_, key) => String(key) }) },
     'next/link': { default: props => React.createElement('a', props, props.children) },
     '@/components/ui/button': { Button: props => React.createElement('button',props,props.children) },
-    '@/components/ui/card': { Card: box, CardContent: box },
+    '@/components/ui/card': { Card: box, CardContent: box, CardHeader: box, CardTitle: box, CardDescription: box },
     '@/components/ui/badge': { Badge: box },
     '@/components/QuestionPrompt': { QuestionPrompt:textComponent },
     '@/components/QuestionFigure': { QuestionFigure:() => null },
@@ -47,16 +48,21 @@ test('flashcards hide solutions, retain the card on failure, prevent double subm
     '@/components/MatchOption': { MatchOption:textComponent },
     '@/lib/matching-question-utils': { isMatchingQuestion:() => false, isMatchCodeOption:() => false },
     '@/components/calculator/GateCalculator': { GateCalculator:() => React.createElement('output', null, 'calculator') },
+    '@/components/workspace/PageHeading': { PageHeading: () => null },
     '@/lib/question-response':load('lib/question-response.ts',{}),
     '@/lib/revision':{ DAILY_REVISION_CAP:20, REVISION_INTERVALS:[1,3,7,14,30] },
   }, {
     window:{scrollTo(){}}, requestAnimationFrame:callback => callback(),
     fetch:async (_url,options) => {
-      if (!options?.method) return response(true,queue);
+      if (!options?.method) return response(true, _url.includes('action=deck') ? {
+        questions: questions.map(q => ({ ...q, source: 'srs' })), totalCount: 3,
+        stageCounts: { 1: 1, 2: 1, 3: 1, 4: 0, 5: 0 }, masteredCount: 0,
+        scheduledTomorrow: 0, srsSelectFailed: false,
+      } : queue);
       posts++;
       assert.equal(JSON.parse(options.body).reviewDate,'2026-11-04');
       if(saveFails) return response(false,{error:'Unable to save review. Please retry.'});
-      return response(true,{stage:2,mastered:false,xpAwarded:10,xpEarned:10,queueComplete:false});
+      return response(true,{stage:2,mastered:false,xpAwarded:10,xpEarned:10,queueComplete:posts === 4});
     },
   });
   let renderer;
@@ -64,7 +70,11 @@ test('flashcards hide solutions, retain the card on failure, prevent double subm
     await act(async () => { renderer=create(React.createElement(Page)); });
     const screen = () => text(renderer.toJSON());
     const button = label => renderer.root.findAllByType('button').find(node=>text(node).includes(label));
-    assert.doesNotMatch(screen(),/Option Alpha|Derivation 0/);
+    assert.match(screen(), /Revision studio/);
+    assert.match(screen(), /From first recall to second nature/);
+    assert.ok(button('Continue revision'));
+    assert.match(screen(),/Option Alpha/);
+    assert.doesNotMatch(screen(),/Derivation 0/);
     await act(async () => button('Reveal Answer').props.onClick());
     assert.match(screen(),/Option Alpha/); assert.match(screen(),/Derivation 0/);
     await act(async () => button('Solved it Easily').props.onClick());
@@ -81,5 +91,18 @@ test('flashcards hide solutions, retain the card on failure, prevent double subm
     await act(async () => button('Reveal Answer').props.onClick());
     assert.match(screen(),/Exact answer: 3/); assert.match(screen(),/Derivation 1/);
     assert.doesNotMatch(screen(),/Option Alpha/,'NAT has no choice options');
+    await act(async () => button('Solved it Easily').props.onClick());
+    await act(async () => button('Reveal Answer').props.onClick());
+    await act(async () => button('Solved it Easily').props.onClick());
+    assert.match(screen(), /Session complete/);
+    await act(async () => button('Practice Deck Flashcards').props.onClick());
+    assert.doesNotMatch(screen(), /Derivation 0/);
+    await act(async () => button('Reveal Answer').props.onClick());
+    assert.match(screen(), /Derivation 0/);
+    assert.match(screen(), /daily queue is where reviews, stages, and XP are saved/);
+    const savedPosts = posts;
+    await act(async () => button('Next flashcard').props.onClick());
+    assert.equal(posts, savedPosts, 'free practice does not submit ineligible daily reviews');
+    assert.match(screen(), /Question 1/);
   } finally { if(renderer) await act(async () => renderer.unmount()); }
 });

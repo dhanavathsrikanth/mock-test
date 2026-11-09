@@ -1,0 +1,33 @@
+.footer { flex-shrink: 0; border-top: 1px solid hsl(var(--border)); padding: 13px 10px; background: hsl(var(--card)); }
+.account { border: 1px solid #ebe5fa; border-radius: 12px; background: #faf8ff; }
+.identity { display: flex; align-items: center; gap: 9px; padding: 12px 10px; border-radius: 12px 15px 0 0; transition: background .2s; }
+.identity:hover { background: #f0eaff; }
+.avatarWrap { position: relative; flex-shrink: 0; padding: 3px; border: 1px solid #d7c5ff; border-radius: 50%; background: hsl(var(--card)); }
+.avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #ece3ff; color: #7545e8; font-size: 12px; font-weight: 600; object-fit: cover; }
+.accountDot { position: absolute; bottom: 0; right: 0; border: 2px solid hsl(var(--card)); width: 10px; height: 10px; background: #8a5aee; border-radius: 50%; }
+.identityText { min-width: 0; flex: 1; }
+.identityText strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: hsl(var(--foreground)); }
+.identityText > span { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; font-size: 12px; margin-top: 5px; color: hsl(var(--muted-foreground)); }
+.profileHint { color: #7545e8; border-left: 1px solid #d9c9f7; padding-left: 5px; }
+.profileChevron { color: #9478ba; flex-shrink: 0; transition: transform .2s; }
+.identity:hover .profileChevron { transform: translateX(2px); }
+.tools { margin: 0 10px; padding: 7px 0; border-top: 1px solid #ebe5fa; display: flex; align-items: center; justify-content: space-between; }
+.tools > div { display: flex; align-items: center; justify-content: center; }
+.tools > div > button,.tools > div > div > button,.settings,.logout { display: inline-flex; align-items: center; justify-content: center; height: 34px; min-height: 34px; width: 34px; padding: 0; border-radius: 9px; color: #81738f; transition: color .2s,background .2s; }
+.tools button:hover,.settings:hover { color: #7545e8; background: #ece3ff; }
+.tools .logout:hover { color: #c14161; background: #fceaf0; }
+:global(.dark) .account { background: #231d30; border-color: #40334f; }
+:global(.dark) .identity:hover { background: #30243f; }
+:global(.dark) .avatar { background: #3b2a53; color: #c3a3ff; }
+:global(.dark) .avatarWrap { border-color: #65458e; }
+:global(.dark) .profileHint { color: #c3a3ff; border-color: #594272; }
+:global(.dark) .tools { border-color: #40334f; }
+:global(.dark) .tools button,:global(.dark) .settings { color: #b7a6c7; }
+:global(.dark) .tools button:hover,:global(.dark) .settings:hover { background: #3b2a53; color: #d3baff; }
+@media(prefers-reduced-motion:reduce) { .identity,.profileChevron,.tools button,.settings { transition: none; } .identity:hover .profileChevron { transform: none; } }
+.brandIcon { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg,#7047eb,#6366f1); color: white; display: inline-grid; place-items: center; box-shadow: 0 4px 12px #7047eb25; }
+.navLink { min-height: 44px; }
+.navActive { background: #f5f3ff; color: #7047eb; font-weight: 600; }
+.navActive:hover { background: #ede9fe; color: #7047eb; }
+:global(.dark) .navActive { background: #302347; color: #c4aaff; }
+:global(.dark) .navActive:hover { background: #3b2a53; color: #ddcaff; }

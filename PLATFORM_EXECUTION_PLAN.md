@@ -126,6 +126,10 @@ All boxes below describe work still to be done. Existing code is credited in the
 
 **Purpose:** fix reliability before adding more ways to start tests.
 
+> **Not covered by the analytics trust pass.** `ANALYTICS_TRUST_PASS.md` fixes how results are
+> *presented*; T03/T04/T08 (save state, drafts, recovery verification) are the work that actually
+> prevents a lost answer, and they remain open.
+
 - [ ] **T01 — Audit ownership and grading boundaries.** Verify live database policies and write permissions for sessions, answers, profiles, and grading results. Users must not read another student's records, change their role, set their own correctness, alter authoritative timing, or modify completed answers through direct database requests.
 - [ ] **T02 — Close review-before-submission paths.** The inspected review page checks ownership but has no explicit completed-state guard. Define when keys and explanations are visible in timed versus untimed sessions, then enforce that rule in server routes and the database/API access model. Preserve the active-test client payload's existing omission of keys.
 - [ ] **T03 — Make save state accurate.** Track pending and failed saves across all questions; one successful request must not conceal a different failed save. Provide bounded retries and an understandable retry action.
@@ -141,6 +145,10 @@ All boxes below describe work still to be done. Existing code is credited in the
 
 **Purpose:** make our proposed main differentiator work for the complete question bank.
 
+> **Not covered by the analytics trust pass.** R01's marks-to-all question is fixed on the
+> *result* and *review* screens (MTA is shown separately, never as an ordinary mistake), but the
+> revision queue itself is unchanged and R01–R06 remain open.
+
 - [ ] **R01 — Extend revision beyond MCQ.** Replace the current MCQ-only retrieval and display assumptions with the shared contract for MSQ, NAT, matching questions, images, and accepted-answer alternatives. Define deliberate treatment of marks-to-all questions, rather than showing them as ordinary mistakes.
 - [ ] **R02 — Clarify self-rating versus graded answering.** The existing revision page is a reveal-and-self-rate workflow. Preserve that distinction unless we explicitly add interactive answering; reuse the trusted grader wherever we do add graded responses. Never count self-rated recall as an exam score.
 - [ ] **R03 — Make queue population deterministic.** Queue eligible wrong answers as part of the reliable completion workflow. Define bookmark-to-revision behaviour explicitly; bookmarking currently also requests SRS insertion. Verify retry and duplicate handling.
@@ -154,11 +162,11 @@ All boxes below describe work still to be done. Existing code is credited in the
 
 **Purpose:** ensure students can trust the feedback before we promote advanced analysis.
 
-- [ ] **A01 — Define metrics precisely.** Separate marks, correct rate across all questions, accuracy among attempted questions, and activity. Decide whether aggregates are weighted by question or averaged per test; label them consistently. Exclude or explain marks-to-all cases where they distort accuracy.
-- [ ] **A02 — Count every response type.** Analytics currently selects `selected_option` without the MSQ/NAT response fields and uses it to identify attempted answers. Align counts with the shared response semantics across results, dashboard, and analytics.
-- [ ] **A03 — Validate timing measurements.** Locate or introduce the actual per-question time-recording path before using `time_spent_seconds` for claims. Distinguish elapsed session time from active study time. Do not fabricate historical per-question timings; label missing data and show appropriate fallbacks.
-- [ ] **A04 — Correct topic recommendations and query completeness.** The current “Weak Topics” list is derived from subject summaries. Either rename it or calculate actual topic-level data. Make practice links retain the chosen subject/topic and valid paper scope. Page or aggregate historical data so large histories do not silently truncate; sort weekly trends by actual dates.
-- [ ] **A05 — Fix streak and day-boundary consistency.** Test the inspected first-activity path, which starts from zero, freeze-token semantics, missed days, daily answers, completed tests, and revision activity. Align dashboard/analytics with the authoritative streak model rather than computing incompatible versions.
+- [x] **A01 — Define metrics precisely.** Separate marks, correct rate across all questions, accuracy among attempted questions, and activity. Decide whether aggregates are weighted by question or averaged per test; label them consistently. Exclude or explain marks-to-all cases where they distort accuracy. *(Done: `lib/test-metrics.ts` is the single definition source; aggregates are question-weighted; marks-to-all is excluded from both accuracy rates and shown separately in the marks ledger. See `ANALYTICS_TRUST_PASS.md`.)*
+- [x] **A02 — Count every response type.** Analytics currently selects `selected_option` without the MSQ/NAT response fields and uses it to identify attempted answers. Align counts with the shared response semantics across results, dashboard, and analytics. *(Done: results, dashboard, recent-tests, review, analytics and both admin views read `selected_option`/`selected_options`/`numeric_answer` via the shared layer.)*
+- [ ] **A03 — Validate timing measurements.** Locate or introduce the actual per-question time-recording path before using `time_spent_seconds` for claims. Distinguish elapsed session time from active study time. Do not fabricate historical per-question timings; label missing data and show appropriate fallbacks. *(Partial: elapsed vs active are now distinguished, missing timing is labelled unavailable, and no pacing charts render without real data — but **no code path writes `time_spent_seconds` yet**, so the recording path remains open.)*
+- [ ] **A04 — Correct topic recommendations and query completeness.** The current “Weak Topics” list is derived from subject summaries. Either rename it or calculate actual topic-level data. Make practice links retain the chosen subject/topic and valid paper scope. Page or aggregate historical data so large histories do not silently truncate; sort weekly trends by actual dates. *(Partial: real topic-level aggregation, subject+topic-retaining practice links, chunked paginated fetches with explicit “Showing X of Y”, and timestamp sorting are done; verify behaviour on very large histories and confirm paper-scope retention.)*
+- [ ] **A05 — Fix streak and day-boundary consistency.** Test the inspected first-activity path, which starts from zero, freeze-token semantics, missed days, daily answers, completed tests, and revision activity. Align dashboard/analytics with the authoritative streak model rather than computing incompatible versions. *(Partial: dashboard/analytics now read the `streaks` table and show “unavailable” on read failure; first-activity, freeze-token and day-boundary paths remain untested.)*
 - [ ] **A06 — Verify daily practice and rewards.** Keep the initial daily feature explicitly MCQ-only unless we deliberately extend it. Verify one assignment per branch/day, no silent gaps or duplicates, owner-scoped answer retrieval, correct answer reveal, retry-safe XP, and consistent scheduled dates. Make all screens distinguish unavailable data from an empty history.
 
 **Done when:** mixed MCQ/MSQ/NAT fixtures produce consistent metrics, timing labels match available data, daily activity follows one calendar policy, and reported streaks agree across screens.

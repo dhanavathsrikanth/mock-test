@@ -85,8 +85,13 @@ async function awardTestXP(sessionId: string) {
           }
         }
       }
+    } else {
+      console.warn("XP award returned non-ok:", res.status);
     }
-  } catch {}
+  } catch (err) {
+    // XP failure should not block the results page
+    console.warn("XP award failed:", err);
+  }
 }
 
 function formatTime(seconds: number) {
@@ -202,6 +207,142 @@ export function ExamClient({
     [session.id]
   );
 
+  // ---- Per-question foreground active time ----
+  // Only visible foreground time accrues; a backgrounded tab never adds time.
+  // Totals accumulate per question in memory and are flushed to
+  // test_answers.time_spent_seconds on navigation, visibility loss, a 20s
+  // interval, and before submit. This is the single write path — nothing
+  // else writes time_spent_seconds, so the recorded value stays trustworthy.
+  const timeByQuestionRef = useRef<Map<string, number>>(new Map());
+  const activeQuestionRef = useRef<string | null>(null);
+  const visibleSinceRef = useRef<number | null>(null);
+  const dirtyTimeIdsRef = useRef<Set<string>>(new Set());
+  const timePersistQueueRef = useRef<Map<string, Promise<void>>>(new Map());
+
+  const accumulateQuestionTime = useCallback(() => {
+    const questionId = activeQuestionRef.current;
+    const since = visibleSinceRef.current;
+    visibleSinceRef.current = null;
+    if (!questionId || since == null) return;
+    const delta = Date.now() - since;
+    if (delta <= 0) return;
+    timeByQuestionRef.current.set(
+      questionId,
+      (timeByQuestionRef.current.get(questionId) ?? 0) + delta
+    );
+    dirtyTimeIdsRef.current.add(questionId);
+  }, []);
+
+  const resumeQuestionTime = useCallback(() => {
+    visibleSinceRef.current =
+      activeQuestionRef.current && document.visibilityState === "visible"
+        ? Date.now()
+        : null;
+  }, []);
+
+  const persistQuestionTime = useCallback(
+    async (questionId: string) => {
+      if (!dirtyTimeIdsRef.current.has(questionId)) return;
+      // A timed paper caps a single question at the whole paper duration;
+      // untimed sessions get an absolute ceiling so a stray open tab cannot
+      // poison the analytics with days of "time".
+      const limitSeconds =
+        session.duration_minutes > 0 ? session.duration_minutes * 60 : 86400;
+      const previous = timePersistQueueRef.current.get(questionId) ?? Promise.resolve();
+      const task = previous.then(async () => {
+        try {
+          const elapsedMs = timeByQuestionRef.current.get(questionId);
+          if (elapsedMs == null) return;
+          const seconds = Math.min(limitSeconds, Math.max(0, Math.round(elapsedMs / 1000)));
+          if (seconds <= 0) {
+            dirtyTimeIdsRef.current.delete(questionId);
+            return;
+          }
+          const { error } = await createClient()
+            .from("test_answers")
+            .upsert(
+              {
+                session_id: session.id,
+                question_id: questionId,
+                time_spent_seconds: seconds,
+              },
+              { onConflict: "session_id, question_id" }
+            );
+          if (error) return; // still dirty — a later flush retries
+          // Clear the dirty flag only when the written value covers everything
+          // accrued so far; time added while the write was in flight stays dirty.
+          const nowMs = timeByQuestionRef.current.get(questionId) ?? 0;
+          if (seconds >= limitSeconds || nowMs < (seconds + 1) * 1000) {
+            dirtyTimeIdsRef.current.delete(questionId);
+          }
+        } catch {
+          // Network failure keeps the question dirty for the next flush.
+        }
+      });
+      timePersistQueueRef.current.set(questionId, task);
+      await task;
+    },
+    [session.id, session.duration_minutes]
+  );
+
+  const flushQuestionTimes = useCallback(async () => {
+    const ids = [...dirtyTimeIdsRef.current];
+    if (ids.length === 0) return;
+    await Promise.all(ids.map(persistQuestionTime));
+  }, [persistQuestionTime]);
+
+  // Foreground time for the visible question. The cleanup runs before the next
+  // question's setup, so time is always attributed to the question that was on
+  // screen when it elapsed.
+  useEffect(() => {
+    const questionId = questions[currentIndex]?.id ?? null;
+    accumulateQuestionTime();
+    activeQuestionRef.current = questionId;
+    resumeQuestionTime();
+    return () => {
+      accumulateQuestionTime();
+    };
+  }, [currentIndex, questions, accumulateQuestionTime, resumeQuestionTime]);
+
+  // Pause accrual while the tab is hidden, flush what has accrued, and keep a
+  // low-frequency safety flush running so a crash loses at most ~20s.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        accumulateQuestionTime();
+        void flushQuestionTimes();
+      } else {
+        resumeQuestionTime();
+      }
+    };
+    const handlePageHide = () => {
+      // The page is going away: accrue the final stretch. A flush here is not
+      // guaranteed to complete, which is why the interval flush exists.
+      accumulateQuestionTime();
+    };
+    const interval = window.setInterval(() => {
+      accumulateQuestionTime();
+      resumeQuestionTime();
+      void flushQuestionTimes();
+    }, 20000);
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.clearInterval(interval);
+    };
+  }, [accumulateQuestionTime, resumeQuestionTime, flushQuestionTimes]);
+
+  // Persist the previous question's time the moment the user moves on.
+  const lastPersistedQuestionRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = lastPersistedQuestionRef.current;
+    const current = questions[currentIndex]?.id ?? null;
+    lastPersistedQuestionRef.current = current;
+    if (previous && previous !== current) void persistQuestionTime(previous);
+  }, [currentIndex, questions, persistQuestionTime]);
+
   const handleOptionClick = (optionIndex: number) => {
     if (!currentQuestion) return;
     const newValue = toggleResponse(answers[currentQuestion.id], optionIndex, currentQuestion.question_type === "MSQ");
@@ -210,7 +351,7 @@ export function ExamClient({
   };
 
   const handleSaveAndNext = async () => {
-    if (!currentQuestion || advancingRef.current || currentIndex >= totalQuestions - 1) return;
+    if (!currentQuestion || advancingRef.current) return;
 
     advancingRef.current = true;
     setIsAdvancing(true);
@@ -234,7 +375,9 @@ export function ExamClient({
         return;
       }
 
-      setCurrentIndex((index) => Math.min(index + 1, totalQuestions - 1));
+      // Loop: after the final question, Save & Next returns to the first one
+      // so the session behaves like an endless question loop.
+      setCurrentIndex((index) => (totalQuestions > 0 ? (index + 1) % totalQuestions : index));
     } finally {
       advancingRef.current = false;
       setIsAdvancing(false);
@@ -283,6 +426,10 @@ export function ExamClient({
 
     try {
       const { submitTest } = await import("./actions");
+      // Capture the final stretch of per-question time before grading reads
+      // and rewrites the answer rows.
+      accumulateQuestionTime();
+      await flushQuestionTimes();
       await Promise.all([...pendingSaves.current]);
       const result = await submitTest(session.id, userId, answers);
 
@@ -295,6 +442,16 @@ export function ExamClient({
 
       triggerStreakUpdate();
       void awardTestXP(session.id);
+      // Enroll wrong answers into revision (application-level backup to the DB trigger).
+      try {
+        await fetch("/api/srs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "process-session", sessionId: session.id }),
+        });
+      } catch {
+        // Enrollment failure should not block the results page
+      }
       redirectToResults();
     } catch {
       submittedRef.current = false;
@@ -364,6 +521,8 @@ export function ExamClient({
 
     try {
       const { submitTest } = await import("./actions");
+      accumulateQuestionTime();
+      await flushQuestionTimes();
       await Promise.all([...pendingSaves.current]);
       const result = await submitTest(session.id, userId, answers);
 
@@ -376,6 +535,15 @@ export function ExamClient({
 
       triggerStreakUpdate();
       void awardTestXP(session.id);
+      try {
+        await fetch("/api/srs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "process-session", sessionId: session.id }),
+        });
+      } catch {
+        // Enrollment failure should not block navigation
+      }
       pendingExitRef.current?.();
     } catch {
       submittedRef.current = false;
@@ -599,7 +767,7 @@ export function ExamClient({
                     if (!text && !image) return null;
                     return (
                       <div key={n} className="flex items-center gap-4 rounded-xl border-2 border-border px-5 py-4">
-                        <span className="inline-flex h-8 min-w-[2rem] items-center justify-center rounded-lg bg-muted px-2 text-sm font-bold text-muted-foreground">{String.fromCharCode(64 + n)}</span>
+                        <span aria-hidden="true" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/40" />
                         <div className="min-w-0 flex-1 space-y-2">
                           <MathText text={text || ""} className="text-base leading-relaxed" />
                           {image && <QuestionFigure image={image} inline />}
@@ -621,7 +789,6 @@ export function ExamClient({
                 <div className="space-y-3">
                   {[1, 2, 3, 4].map((n) => {
                     const isSelected = selection(answers[currentQuestion.id]).includes(n);
-                    const optionLabel = String.fromCharCode(64 + n);
                     const optionText = currentQuestion[`option_${n}` as keyof Question] as string;
                     const optionImage = currentQuestion.option_images?.[n - 1];
                     const isMatchingCode = isMatchCodeOption(optionText || "");
@@ -634,27 +801,36 @@ export function ExamClient({
                             : "border-border hover:border-muted-foreground/30 hover:bg-accent/50"
                         }`}
                       >
-                      <button type="button" onClick={() => handleOptionClick(n)} aria-pressed={isSelected} className="w-full rounded-xl px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-                        <div className="flex items-center gap-4">
-                          <span
-                            className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold ${
-                              isSelected
-                                ? "bg-primary text-primary-foreground"
-                                : "bg-muted text-muted-foreground"
-                            }`}
-                          >
-                            {optionLabel}
-                          </span>
-                          {isMatchingCode ? (
-                            <MatchOption text={optionText || ""} className="text-sm" />
-                          ) : (
-                            <div className="min-w-0 flex-1 space-y-2">
-                              <MathText text={optionText || ""} className="text-base leading-relaxed" />
-                              {optionImage && <QuestionFigure image={optionImage} inline />}
-                            </div>
-                          )}
-                        </div>
-                      </button>
+                        <label className="flex w-full cursor-pointer items-start gap-4 px-5 py-4">
+                          <input
+                            data-option={n}
+                            type={currentQuestion.question_type === "MSQ" ? "checkbox" : "radio"}
+                            name={`question-${currentQuestion.id}`}
+                            checked={isSelected}
+                            onChange={() => handleOptionClick(n)}
+                            onClick={(event) => {
+                              // A checked MCQ radio never re-fires onChange, so the
+                              // native click is intercepted to keep "re-click clears
+                              // the answer" — this screen has no Clear Response
+                              // button. MSQ checkboxes toggle natively.
+                              if (currentQuestion.question_type !== "MSQ" && isSelected) {
+                                event.preventDefault();
+                                handleOptionClick(n);
+                              }
+                            }}
+                            className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-primary"
+                          />
+                          <div className="min-w-0 flex-1">
+                            {isMatchingCode ? (
+                              <MatchOption text={optionText || ""} className="text-sm" />
+                            ) : (
+                              <div className="space-y-2">
+                                <MathText text={optionText || ""} className="text-base leading-relaxed" />
+                                {optionImage && <QuestionFigure image={optionImage} inline />}
+                              </div>
+                            )}
+                          </div>
+                        </label>
                       </div>
                     );
                   })}
@@ -704,22 +880,11 @@ export function ExamClient({
                 })}
               </div>
   
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirm(true)}
-                disabled={isSubmitting}
-                size="sm"
-                className="shrink-0 gap-1.5"
-              >
-                <Send className="h-4 w-4" />
-                <span className="sm:hidden">Submit</span>
-                <span className="hidden sm:inline">Submit Test</span>
-              </Button>
             </div>
   
             <Button
               size="sm"
-              disabled={currentIndex >= totalQuestions - 1 || isAdvancing || isSubmitting}
+              disabled={isAdvancing || isSubmitting}
               onClick={handleSaveAndNext}
               className="shrink-0 gap-1 whitespace-nowrap"
             >
@@ -743,9 +908,14 @@ export function ExamClient({
           </button>}
           <div className={calculatorOpen ? "hidden" : "contents"}>
           <div className="p-4 border-b">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Question Palette
-            </h3>
+            <Button
+              onClick={() => setShowConfirm(true)}
+              disabled={isSubmitting}
+              className="w-full gap-1.5"
+            >
+              <Send className="h-4 w-4" />
+              {isSubmitting ? "Submitting..." : "Submit Test"}
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
@@ -812,11 +982,20 @@ export function ExamClient({
             onClick={() => setSidebarOpen(false)}
           />
           <div className="ml-auto relative w-72 bg-background border-l shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-sm font-semibold">Question Palette</h3>
+            <div className="flex items-center gap-2 p-4 border-b">
+              <h3 className="sr-only">Question Palette</h3>
+              <Button
+                onClick={() => setShowConfirm(true)}
+                disabled={isSubmitting}
+                className="min-w-0 flex-1 gap-1.5"
+              >
+                <Send className="h-4 w-4 shrink-0" />
+                <span className="truncate">{isSubmitting ? "Submitting..." : "Submit Test"}</span>
+              </Button>
               <button
                 onClick={() => setSidebarOpen(false)}
-                className="p-1 rounded-md hover:bg-muted"
+                aria-label="Close question palette"
+                className="shrink-0 p-1 rounded-md hover:bg-muted"
               >
                 ×
               </button>
@@ -852,16 +1031,6 @@ export function ExamClient({
                   );
                 })}
               </div>
-            </div>
-            <div className="p-4 border-t">
-              <Button
-                onClick={() => setShowConfirm(true)}
-                disabled={isSubmitting}
-                className="w-full"
-              >
-                <Send className="h-4 w-4 mr-1.5" />
-                {isSubmitting ? "Submitting..." : "Submit Test"}
-              </Button>
             </div>
           </div>
         </div>

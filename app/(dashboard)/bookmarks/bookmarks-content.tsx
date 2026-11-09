@@ -1,7 +1,8 @@
 "use client";
 
 import { createBookmarkTest } from "../test/select/actions";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
+import { PageHeading } from '@/components/workspace/PageHeading';
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -72,6 +73,8 @@ export function BookmarksContent({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [startError, setStartError] = useState("");
+  const removing = useRef(new Set<string>());
+  const [removingIds, setRemovingIds] = useState<Set<string>>(new Set());
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set(reportedQuestionIds));
 
   const filtered = useMemo(() => {
@@ -98,12 +101,18 @@ export function BookmarksContent({
   };
 
   const removeBookmark = async (questionId: string) => {
-    setBookmarks((prev) => prev.filter((b) => b.question_id !== questionId));
-    await getSupabase()
+    if (removing.current.has(questionId)) return;
+    removing.current.add(questionId); setRemovingIds(new Set(removing.current)); setStartError('');
+    try {
+      const { error } = await getSupabase()
       .from("bookmarks")
       .delete()
       .eq("user_id", userId)
       .eq("question_id", questionId);
+      if (error) throw error;
+      setBookmarks(prev => prev.filter(bookmark => bookmark.question_id !== questionId));
+    } catch { setStartError('Unable to remove this bookmark. It is still saved; please retry.'); }
+    finally { removing.current.delete(questionId); setRemovingIds(new Set(removing.current)); }
   };
 
   const startTest = async () => {
@@ -118,27 +127,14 @@ export function BookmarksContent({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6 py-6">
       {startError && <p role="alert" className="text-sm text-destructive">{startError}</p>}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            Your Bookmarks{" "}
-            <span className="text-muted-foreground font-normal">
-              ({bookmarks.length})
-            </span>
-          </h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Review and practice your saved questions
-          </p>
-        </div>
-        {bookmarks.length > 0 && (
+      <PageHeading title="Bookmarks" icon={<Bookmark />} description={`${bookmarks.length} saved questions. Keep useful questions close and revisit them at your pace.`} actions={bookmarks.length > 0 && (
           <Button onClick={startTest} disabled={creating} size="lg" className="w-full sm:w-auto">
             <Play className="h-4 w-4" />
-            {creating ? "Creating..." : "Start Test from Bookmarks"}
+            {creating ? "Creating…" : "Practise saved questions"}
           </Button>
-        )}
-      </div>
+        )} />
 
       {/* Filter bar */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -172,6 +168,7 @@ export function BookmarksContent({
         <div className="relative sm:w-64">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
+            aria-label="Search saved questions"
             placeholder="Search questions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -313,6 +310,8 @@ export function BookmarksContent({
                     <button
                       type="button"
                       onClick={() => toggleExpand(b.question_id)}
+                      aria-label={isExpanded ? 'Hide answer' : 'Show answer'}
+                      aria-expanded={isExpanded}
                       className="inline-flex items-center justify-center p-2 rounded-md hover:bg-muted transition-colors"
                       title={isExpanded ? "Hide answer" : "Show answer"}
                     >
@@ -325,6 +324,9 @@ export function BookmarksContent({
                     <button
                       type="button"
                       onClick={() => removeBookmark(b.question_id)}
+                      disabled={removingIds.has(b.question_id)}
+                      aria-label="Remove bookmark"
+                      aria-busy={removingIds.has(b.question_id)}
                       className="inline-flex items-center justify-center p-2 rounded-md hover:bg-destructive/10 transition-colors"
                       title="Remove bookmark"
                     >

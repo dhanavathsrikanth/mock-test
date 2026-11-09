@@ -79,7 +79,7 @@ export function ReviewContent({
 
   const filtered = useMemo(() => {
     let list = answers;
-    if (filter === "correct") list = list.filter(a => a.is_correct === true);
+    if (filter === "correct") list = list.filter(a => !a.questions.marks_to_all && a.is_correct === true);
     if (filter === "wrong") {
       list = list.filter(a => (a.numeric_answer != null || a.selected_option != null || !!a.selected_options?.length) && a.is_correct === false);
     }
@@ -135,7 +135,8 @@ export function ReviewContent({
 
   const wrongCount = answers.filter(a => (a.numeric_answer != null || a.selected_option != null || !!a.selected_options?.length) && a.is_correct === false).length;
   const skippedCount = answers.filter(a => !a.questions.marks_to_all && (a.numeric_answer == null && a.selected_option == null && !a.selected_options?.length)).length;
-  const correctCount = answers.filter(a => a.is_correct === true).length;
+  const correctCount = answers.filter(a => !a.questions.marks_to_all && a.is_correct === true).length;
+  const marksToAllCount = answers.filter(a => a.questions.marks_to_all).length;
   const allCount = answers.length;
 
   const getFilterCount = (key: string) => {
@@ -179,6 +180,11 @@ export function ReviewContent({
                 <Minus className="h-3.5 w-3.5" />
                 {skippedCount}
               </div>
+              {marksToAllCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-700 dark:text-amber-400 px-2.5 py-1.5 rounded-lg text-sm font-medium" title="Awarded full marks to all candidates; excluded from correct and skipped counts.">
+                  MTA {marksToAllCount}
+                </div>
+              )}
             </div>
           </div>
 

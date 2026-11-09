@@ -1,0 +1,36 @@
+.countdown { padding: 18px; border-radius: 16px; border: 1px solid var(--dash-border,hsl(var(--border))); background: var(--dash-surface,hsl(var(--card))); color: var(--dash-text,hsl(var(--foreground))); box-shadow: 0 3px 14px rgb(40 30 80 / .035); overflow: hidden; }
+.header { display: flex; align-items: center; gap: 10px; }
+.header > div { flex: 1; min-width: 0; }
+.icon { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 11px; background: var(--dash-lilac,#eff6ff); color: var(--dash-purple,#2563eb); flex-shrink: 0; }
+.eyebrow { font-size: 11px; color: var(--dash-muted,hsl(var(--muted-foreground))); }
+.countdown h2 { font-size: 16px; font-weight: 600; margin-top: 2px; }
+.badge { border: 1px solid var(--dash-border); border-radius: 999px; padding: 3px 7px; font-size: 10px; color: var(--dash-purple); background: var(--dash-lilac); }
+.targetDate { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 3px 8px; border-bottom: 1px solid var(--dash-border); margin: 18px 0; padding-bottom: 14px; font-size: 12px; color: var(--dash-muted); }
+.targetDate strong { color: var(--dash-text); font-size: 13px; font-weight: 600; }
+.targetDate small { grid-column: 2; text-align: right; font-size: 11px; }
+.digits { display: grid; grid-template-columns: 1.25fr repeat(3,1fr); gap: 6px; text-align: center; }
+.digitBox { display: flex; align-items: center; justify-content: center; height: 60px; background: var(--dash-bg); border: 1px solid var(--dash-border); border-radius: 10px; overflow: hidden; perspective: 300px; }
+.digitBox span { display: inline-block; font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.8px; }
+.digits > div:first-child .digitBox { background: var(--dash-lilac); border-color: #2563eb20; color: var(--dash-purple); }
+.digits > div:first-child .digitBox span { font-size: 30px; }
+.unit { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--dash-muted); margin-top: 8px; }
+.runway { display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 11px; color: var(--dash-muted); border-radius: 8px; background: var(--dash-bg); padding: 9px; margin-top: 16px; }
+.runway svg { flex-shrink: 0; color: var(--dash-purple); }
+.runway strong { font-weight: 600; color: var(--dash-text); }
+.scheduleNote { margin-top: 14px; }
+.scheduleNote p { font-size: 12px; line-height: 1.6; color: var(--dash-muted); }
+.scheduleNote a { display: inline-flex; gap: 4px; align-items: center; color: var(--dash-purple); font-size: 12px; min-height: 32px; }
+.actions { border-top: 1px solid var(--dash-border); padding-top: 14px; margin-top: 12px; }
+.dateButton { width: 100%; min-height: 42px; justify-content: flex-start; gap: 7px; border-color: #2563eb35; color: var(--dash-purple); background: transparent; font-size: 12px; }
+.dateButton svg:last-child { margin-left: auto; }
+.reset { display: flex; width: 100%; color: var(--dash-muted); font-size: 12px; margin-top: 6px; }
+.message { font-size: 12px; line-height: 1.7; padding: 12px 0; color: var(--dash-muted); }
+.picker { --primary: 255 80% 60%; --primary-foreground: 0 0% 100%; --ring: 255 80% 60%; display: flex; flex-direction: column; width: min(320px,calc(100vw - 24px)); max-height: var(--radix-popover-content-available-height); padding: 0; border-radius: 12px; overflow: hidden; }
+.calendarViewport { min-height: 0; overflow-y: auto; }
+.pickerHeading, .pickerFooter { flex-shrink: 0; }
+.pickerHeading { padding: 15px 16px 12px; border-bottom: 1px solid hsl(var(--border)); }
+.pickerHeading h3 { font-size: 14px; font-weight: 600; }
+.pickerHeading p { margin-top: 4px; font-size: 12px; color: hsl(var(--muted-foreground)); line-height: 1.5; }
+.pickerFooter { padding: 12px; border-top: 1px solid hsl(var(--border)); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pickerFooter p { font-size: 11px; color: hsl(var(--muted-foreground)); }
+@media(prefers-reduced-motion:reduce) { .picker { animation: none !important; } }

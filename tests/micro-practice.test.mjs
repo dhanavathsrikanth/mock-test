@@ -22,6 +22,25 @@ const topics = [{id:'graphs',parent_id:null,subject_id:'math',name:'Graphs'}, {i
 const pool = ['MCQ','MCQ','MCQ','MCQ','MSQ','NAT'].map((type,i) => ({id:`q${i}`,subject_id:'math',topic_id:'trees',year:2021+i,paper:'CS1',source_question_number:i+1,marks:2,question_type:type}));
 const selected = {examId:'gate',streamId:'cs',subjectId:'math',topicId:'graphs',yearFrom:2021,yearTo:2026,minutes:15};
 
+test('checkbox filters combine subjects/topics, include descendants, and preserve nonconsecutive years', () => {
+  const extra = [
+    {...pool[0],id:'mechanics',subject_id:'mechanics',topic_id:'fluids',year:2024},
+    {...pool[0],id:'excluded-gap',year:2022},
+    {...pool[0],id:'excluded-topic',topic_id:null,year:2024},
+    {...pool[0],id:'excluded-subject',subject_id:'foreign',year:2024},
+  ];
+  const multi = {...selected, subjectIds:['math','mechanics'],topicIds:['graphs','fluids'],years:[2021,2024]};
+  const matches = engine.sprintPool([...pool,...extra],multi,topics);
+  assert.deepEqual(Array.from(matches,q=>q.id),['q0','q3','mechanics']);
+  assert.equal(engine.validateSprint(multi,topics,[{id:'math'},{id:'mechanics'}]),null);
+  assert.ok(engine.validateSprint({...multi,subjectIds:['math']},topics,[{id:'math'},{id:'mechanics'}]),'topics outside selected subjects are rejected');
+  for (const invalid of [{years:[]},{years:[2021,2021]},{years:['2021']},{subjectIds:'math'},{topicIds:['graphs','graphs']},{topicIds:['unknown']},{subjectIds:['foreign']}]) {
+    assert.ok(engine.validateSprint({...multi,...invalid},topics,[{id:'math'},{id:'mechanics'}]));
+  }
+  assert.equal(engine.sprintPool(pool,{...multi,years:[]},topics).length,0,'clearing years cannot silently include all years');
+  assert.equal(engine.sprintPool(pool,{...multi,subjectIds:[],topicIds:[],years:[2021,2024]},topics).length,2,'empty subject/topic selections mean all');
+});
+
 test('missing sprint setup, permissions and stale questions produce distinct actionable errors', () => {
   assert.match(engine.sprintCreationMessage({code:'23514',message:'new row violates check constraint "test_sessions_mode_check"'}),/not enabled/);
   assert.match(engine.sprintCreationMessage({code:'PGRST204'}),/not enabled/);
@@ -78,6 +97,17 @@ test('sprint creation validates current scope, snapshots the exact mix, and reus
   assert.equal((await createSprint(selected,request)).sessionId,request);
   assert.equal(row.user_id,'student'); assert.equal(row.stream_id,'cs'); assert.equal(row.total_questions,5); assert.equal(row.duration_minutes,15); assert.equal(row.mode,'sprint');
   assert.equal(row.question_ids.length,5);
+  catalog={...catalog,subjects:[{id:'math'},{id:'mechanics'}],pool:[
+    ...pool.slice(0,3).map(q=>({...q,year:2021})),
+    {...pool[4],year:2024},
+    {...pool[5],subject_id:'mechanics',topic_id:'fluids',year:2024},
+    {...pool[0],id:'gap',year:2022},
+  ]};
+  assert.equal((await createSprint({...selected,subjectIds:['math','mechanics'],topicIds:['graphs','fluids'],years:[2021,2024]},request)).sessionId,request);
+  assert.equal(row.subject_id,null,'a multi-subject sprint is not mislabeled as one subject');
+  assert.equal(row.topic_id,null,'a multi-topic sprint is not mislabeled as one topic');
+  assert.ok(!row.question_ids.includes('gap'),'server excludes unselected years');
+  assert.ok(row.question_ids.includes('q5'),'server includes the selected second subject');
   existing={id:request}; row=undefined;
   assert.equal((await createSprint(selected,request)).sessionId,request); assert.equal(row,undefined,'retry does not create another session');
 });

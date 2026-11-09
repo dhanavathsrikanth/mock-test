@@ -1,32 +1,26 @@
 import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import dynamic from "next/dynamic";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+  recordsForQuestions,
+  sessionQuestionIds,
+  summarizeAttempts,
+  type AttemptRecord,
+  type MetricsAnswer,
+  type MetricsQuestion,
+} from "@/lib/test-metrics";
+import dynamic from "next/dynamic";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
-import {
-  ClipboardList,
-  ArrowRight,
-  Play,
-  TrendingUp,
-  Target,
-  BarChart3,
-  BookOpen,
-  Sparkles,
-  Zap,
-} from "lucide-react";
+import { ClipboardList, ArrowRight, ArrowUpRight, TrendingUp, Target, BookOpen, Zap, GraduationCap, CalendarDays, SlidersHorizontal, Settings2 } from "lucide-react";
 import Link from "next/link";
-import { SubjectChart } from "./subject-chart";
+import { PerformanceTrend, ProgressRing, ProfileAvatar } from "./dashboard-visuals";
+import styles from "./dashboard.module.css";
 import { AnnouncementBanner } from "@/components/AnnouncementBanner";
 import { Suspense } from "react";
 import { QuickPractice } from "@/components/practice/QuickPractice";
 import { DashboardConcepts } from "@/components/smart-tags/DashboardConcepts";
+import { XPBar } from "@/components/xp/XPBar";
 
 const StreakCard = dynamic(
   () => import("@/components/streak/StreakCard").then((m) => m.StreakCard)
@@ -65,22 +59,6 @@ const modeLabels: Record<string, string> = {
   concept_fix: "Concept fix",
 };
 
-const modeVariants: Record<string, "default" | "secondary" | "outline"> = {
-  full_mock: "default",
-  full_paper: "default",
-  subject_wise: "secondary",
-  topic_wise: "secondary",
-  custom: "outline",
-  sprint: "secondary",
-  concept_fix: "secondary",
-};
-
-function getScoreColor(score: number) {
-  if (score >= 60) return "text-green-600 dark:text-green-400";
-  if (score >= 35) return "text-yellow-600 dark:text-yellow-400";
-  return "text-red-600 dark:text-red-400";
-}
-
 export default async function DashboardPage() {
   const supabase = await createClient();
   const { user, exam, stream, profile } = await requireExamContext();
@@ -95,6 +73,7 @@ export default async function DashboardPage() {
       total_questions,
       mode,
       completed_at,
+      question_ids,
       subject_id,
       subjects ( name )
     `
@@ -126,9 +105,19 @@ export default async function DashboardPage() {
           .select(
             `
           session_id,
+          question_id,
           is_correct,
+          selected_option,
+          selected_options,
+          numeric_answer,
           questions (
+            id,
+            marks,
+            negative_marks,
+            marks_to_all,
+            question_type,
             subject_id,
+            topic_id,
             subjects ( name )
           )
         `
@@ -136,307 +125,152 @@ export default async function DashboardPage() {
           .in("session_id", sessionIds)
       : { data: [] };
 
-  const sessionScores = (sessions || []).map((s) => {
-    const sessionAnswers = (allAnswers || []).filter(
-      (a) => a.session_id === s.id
-    );
-    const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
-    const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
-    const skipped = sessionAnswers.filter((a) => a.is_correct === null).length;
-    const total = s.total_questions;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    return { ...s, correct, wrong, skipped, score };
+  type DashboardAnswer = MetricsAnswer & {
+    session_id: string;
+    questions?: (MetricsQuestion & { subjects?: { name: string } | null }) | null;
+  };
+  const answerList = (allAnswers || []) as unknown as DashboardAnswer[];
+
+  const answersBySession = new Map<string, DashboardAnswer[]>();
+  for (const answer of answerList) {
+    const list = answersBySession.get(answer.session_id) || [];
+    list.push(answer);
+    answersBySession.set(answer.session_id, list);
+  }
+
+  const sessionRecords = (sessions || []).map((session) => {
+    const sessionAnswers = answersBySession.get(session.id) || [];
+    const questionById = new Map<string, MetricsQuestion>();
+    for (const answer of sessionAnswers) {
+      if (answer.questions?.id) questionById.set(answer.questions.id, answer.questions);
+    }
+    const answerById = new Map(sessionAnswers.map((answer) => [answer.question_id, answer]));
+    const questionIds = sessionQuestionIds(session, sessionAnswers);
+    const built = recordsForQuestions(questionIds, questionById, answerById);
+    return { session, records: built.records as AttemptRecord[] };
+  });
+
+  const allRecords = sessionRecords.flatMap((entry) => entry.records);
+  const overall = summarizeAttempts(allRecords);
+
+  const sessionScores = sessionRecords.map(({ session, records }) => {
+    const stats = summarizeAttempts(records).stats;
+    const subjectName =
+      (session.subjects as unknown as { name?: string } | null)?.name || "General";
+    return {
+      ...session,
+      subjectName,
+      correct: stats.correct,
+      wrong: stats.wrong,
+      skipped: stats.skipped,
+      graded: stats.graded,
+      marksToAll: stats.marksToAll,
+      score: stats.correctRate ?? 0,
+    };
   });
   const dailyAnswered = dailyProgress.error ? null : dailyProgress.count ?? 0;
 
   const totalTests = sessions?.length || 0;
-  const avgScore =
-    sessionScores.length > 0
-      ? Math.round(
-          sessionScores.reduce((sum, s) => sum + s.score, 0) /
-            sessionScores.length
-        )
-      : 0;
+  const avgScore = overall.stats.correctRate ?? 0;
   const bestScore =
     sessionScores.length > 0
-      ? Math.max(...sessionScores.map((s) => s.score))
+      ? Math.max(...sessionScores.map((session) => session.score))
       : 0;
-  const totalQuestions =
-    sessions?.reduce((sum, s) => sum + s.total_questions, 0) || 0;
+  const totalQuestions = overall.stats.total;
 
   const recentTests = sessionScores.slice(0, 5);
 
-  const subjectMap = new Map<string, { correct: number; total: number }>();
-  (allAnswers || []).forEach((a) => {
-    const question = a.questions as unknown as { subjects?: { name: string } | null } | null;
-    const subjectName = question?.subjects?.name;
-    if (!subjectName) return;
-    const entry = subjectMap.get(subjectName) || { correct: 0, total: 0 };
-    entry.total += 1;
-    if (a.is_correct === true) entry.correct += 1;
-    subjectMap.set(subjectName, entry);
-  });
-
-  const subjectPerformance = Array.from(subjectMap.entries())
-    .map(([name, data]) => ({
-      name,
-      accuracy:
-        data.total > 0
-          ? Math.round((data.correct / data.total) * 100)
-          : 0,
+  const subjectPerformance = overall.bySubject
+    .map((subject) => ({
+      name: subject.name,
+      accuracy: subject.correctRate ?? 0,
+      graded: subject.graded,
     }))
     .sort((a, b) => b.accuracy - a.accuracy);
 
+  const trendData = sessionScores.slice(0, 10).reverse().map(test => ({
+    id: test.id, date: format(new Date(test.completed_at!), "MMM d, yyyy"), score: test.score,
+  }));
+  const firstName = userName.split(" ")[0];
+
   return (
-    <div className="space-y-4 py-4">
+    <div className={styles.dashboard}>
       <AnnouncementBanner />
+      <header className={styles.topline}>
+        <div><h1>Dashboard</h1><p>Welcome back, {firstName}. Keep practising for {exam.name}.</p></div>
+        <div className={styles.date}><CalendarDays size={14} />{format(new Date(studyDay + "T12:00:00+05:30"), "EEE, d MMM yyyy")}</div>
+      </header>
+      <div className={styles.layout}>
+        <div className={styles.main}>
+          <section className={styles.hero} aria-label="Continue your exam preparation">
+            <div className={styles.heroCopy}>
+              <span className={styles.eyebrow}>Your exam preparation</span>
+              <h2>Practise for {exam.name}</h2>
+              <p>Choose a paper, review your answers, and track your progress.</p>
+              <div className={styles.heroActions}>
+                <Button asChild variant="secondary" className={styles.heroAction}><Link href="/test/select">Start a test <ArrowUpRight size={16} /></Link></Button>
+                <Button asChild variant="outline" className={styles.heroSecondary}><Link href="#daily-practice"><Zap size={16} />5-Q Sprint</Link></Button>
+              </div>
+            </div>
+            <div className={styles.orbit} aria-hidden="true"><div className={styles.orbitTrack} /><div className={styles.orbitInner} /><div className={styles.orbitCore}><GraduationCap size={48} strokeWidth={1.4} /></div></div>
+          </section>
+          <Suspense fallback={<div role="status" className={styles.panel}>Loading concept insights…</div>}><DashboardConcepts /></Suspense>
+          <section className={styles.stats} aria-label="Your preparation at a glance">
+            {[{ label: "Tests completed", value: totalTests, icon: ClipboardList }, { label: "Avg correct rate", value: totalTests ? avgScore + "%" : "—", icon: TrendingUp }, { label: "Best correct rate", value: totalTests ? bestScore + "%" : "—", icon: Target }, { label: "Questions in tests", value: totalQuestions, icon: BookOpen }].map(stat => <div className={styles.stat} key={stat.label}><div className={styles.statIcon}><stat.icon size={16} /></div><div><strong>{stat.value}</strong><p>{stat.label}</p></div></div>)}
+          </section>
+          <section aria-labelledby="practice-heading">
+            <div className={styles.sectionHeading}><div><h2 id="practice-heading">Choose your practice</h2><p>Sprint, focus on a subject, or build a custom test.</p></div></div>
+            <div className={styles.paths}>
+              {[
+                { href: "/practice", title: "5-Q Sprint", detail: "One concept. A focused reset.", meta: "12–15 min", action: "Start sprint", mode: "sprint", icon: Zap },
+                { href: "/test/select?mode=subject_wise", title: "Subject practice", detail: "Build strength in one subject.", meta: "Your pace", action: "Pick a subject", mode: "subject", icon: BookOpen },
+                { href: "/test/select?mode=custom", title: "Your own test", detail: "Choose what you practise.", meta: "Fully flexible", action: "Build a test", mode: "custom", icon: SlidersHorizontal },
+              ].map(path => <Link href={path.href} key={path.href} className={styles.path} data-mode={path.mode}>
+                <div className={styles.pathVisual} aria-hidden="true">
+                  <div className={styles.pathIcon}><path.icon size={23} strokeWidth={1.7} /></div>
+                  {path.mode === "sprint" ? <div className={styles.questionTiles}>{[1,2,3,4,5].map(n => <span key={n}>{n}</span>)}</div>
+                    : path.mode === "subject" ? <div className={styles.subjectTiles}><span /><span /><span /></div>
+                    : <div className={styles.sliderArt}><span /><span /><span /></div>}
+                  <span className={styles.pathBadge}>{path.mode === "sprint" ? "5 questions" : path.mode === "subject" ? "One subject" : "Your rules"}</span>
+                </div>
+                <div className={styles.pathBody}><h3>{path.title}</h3><p>{path.detail}</p><span className={styles.pathMeta}>{path.meta}</span></div>
+                <div className={styles.pathFoot}><span>{path.action}</span><span className={styles.pathArrow}><ArrowUpRight size={15} /></span></div>
+              </Link>)}
 
-      {/* Welcome Banner */}
-      <div className="rounded-xl bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
-              Welcome back, {userName}!
-            </h1>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Keep practicing for {exam.name}
-            </p>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
-            <Button asChild size="sm" className="hidden gap-1.5 lg:inline-flex">
-              <Link href="/test/select">
-                <Play className="h-3.5 w-3.5" />
-                Start Test
-              </Link>
-            </Button>
-            <Button asChild size="sm" className="min-h-11 gap-1.5 lg:hidden"><a href="#quick-practice"><Zap className="h-3.5 w-3.5" />5-Q Sprint</a></Button>
-            <Button asChild size="sm" variant="outline" className="gap-1.5">
-              <Link href="/daily">
-                <Zap className="h-3.5 w-3.5" />
-                Daily Q
-              </Link>
-            </Button>
-          </div>
+            </div>
+          </section>
+          <section id="daily-practice" aria-label="Your daily practice" className={styles.widgetGrid}>
+            <Suspense fallback={<div id="quick-practice" role="status" className={styles.panel}>Loading quick practice…</div>}><QuickPractice /></Suspense>
+            <RevisionWidget />
+          </section>
+          <Card className={styles.panel}><PerformanceTrend data={trendData} /></Card>
+          <Card className={styles.panel}>
+            <div className={styles.panelHeading}><div><h2>Recent tests</h2><p>Reflect, review, and keep moving forward</p></div><Link href="/recent-tests" className={styles.textLink}>View all <ArrowRight size={13} /></Link></div>
+            {recentTests.length === 0 ? <div className={styles.emptyChart}><ClipboardList size={28} /><strong>Your first result belongs here</strong><p>Complete a test, then return to review your answers.</p><Button asChild size="sm"><Link href="/test/select">Start a test <ArrowRight size={14} /></Link></Button></div> : <div className={styles.recentList}>{recentTests.map(test => <div key={test.id} className={styles.recentRow}><div className={styles.recentName}><div className={styles.statIcon}><ClipboardList size={16} /></div><div><strong>{test.subjectName}</strong><p>{modeLabels[test.mode] || test.mode} · {format(new Date(test.completed_at!), "MMM d, yyyy")}</p></div></div><div className={styles.recentActions}><strong>{test.score}%</strong><Button variant="outline" size="sm" asChild><Link href={`/result/${test.id}`}>Result</Link></Button><Button variant="ghost" size="sm" asChild><Link href={`/review/${test.id}`}>Review</Link></Button></div></div>)}</div>}
+            <p className={styles.note}>Correct rate = correct answers ÷ graded questions, including skipped questions; marks-to-all questions are excluded from the rate but their marks count. Subject bars use the same definition. This is a practice figure, not an official {exam.name} score.</p>
+          </Card>
         </div>
-      </div>
-
-      <Suspense fallback={<div role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">Loading concept insights…</div>}><DashboardConcepts /></Suspense>
-
-      <section aria-label="Your daily practice" className="space-y-3 lg:hidden">
-        <div className="grid grid-cols-2 gap-3 rounded-xl border bg-card p-3">
-          <div><p className="text-xs text-muted-foreground">Study streak</p><p className="mt-1 text-sm font-semibold">🔥 {streak?.current_streak ?? 0} days</p></div>
-          <div><p className="text-xs text-muted-foreground">Daily goal · answered today</p>{dailyAnswered == null ? <p className="mt-1 text-xs text-muted-foreground">Progress temporarily unavailable</p> : <><p className="mt-1 text-sm font-semibold">🎯 {dailyAnswered}/20 questions</p><div role="progressbar" aria-label="Daily question goal" aria-valuenow={Math.min(20, dailyAnswered)} aria-valuemin={0} aria-valuemax={20} className="mt-2 h-1 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100,dailyAnswered / 20 * 100)}%` }} /></div></>}</div>
-        </div>
-        <div className="grid items-start gap-3 sm:grid-cols-2"><Suspense fallback={<div id="quick-practice" role="status" className="h-56 animate-pulse rounded-xl bg-muted" />}><QuickPractice /></Suspense><RevisionWidget /></div>
-      </section>
-
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-primary" />
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <ClipboardList className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground leading-none mb-1">Tests Taken</p>
-                <p className="text-xl font-bold leading-none">{totalTests}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-green-500" />
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground leading-tight mb-1">Avg correct rate</p>
-                <p className={`text-xl font-bold leading-none ${getScoreColor(avgScore)}`}>{avgScore}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-amber-500" />
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
-                <Target className="h-4 w-4 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground leading-tight mb-1">Best correct rate</p>
-                <p className={`text-xl font-bold leading-none ${getScoreColor(bestScore)}`}>{bestScore}%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="overflow-hidden">
-          <div className="h-1 bg-blue-500" />
-          <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                <BarChart3 className="h-4 w-4 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground leading-none mb-1">Questions</p>
-                <p className="text-xl font-bold leading-none">{totalQuestions}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <p className="text-xs text-muted-foreground">Correct rate = correct answers ÷ all questions, including skipped questions. Marks and deductions are shown in each result.</p>
-
-      {/* Countdown */}
-      <ExamCountdown key={`${userId}:${exam.id}`} examId={exam.id} examName={exam.name} userId={userId} />
-
-      {/* Widgets Row */}
-      <div aria-label="Study activity" className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] items-start gap-4">
-        <div className="hidden lg:block"><RevisionWidget /></div>
-        <DailyQuestionWidget />
-        <StreakCard />
-      </div>
-
-      {/* Quick Start */}
-      <Card className="hidden lg:block">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            Quick Start
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-3 pt-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2">
-            <Link href="/practice" className="group flex items-center gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3 hover:bg-primary/10"><Zap className="h-5 w-5 shrink-0 text-primary" /><div><p className="text-sm font-semibold">5-Q Sprint</p><p className="text-[11px] text-muted-foreground">One concept · 12–15 minutes</p></div></Link>
-            <Link
-              href="/test/select"
-              className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
-            >
-              <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <Play className="h-4 w-4 text-primary" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">Start a test</p>
-                <p className="text-[11px] text-muted-foreground">Choose your paper or practice mode</p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-            <Link
-              href="/test/select?mode=subject_wise"
-              className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
-            >
-              <div className="h-9 w-9 rounded-lg bg-secondary/50 flex items-center justify-center shrink-0">
-                <BookOpen className="h-4 w-4 text-secondary-foreground" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">Subject-wise</p>
-                <p className="text-[11px] text-muted-foreground">Pick a subject to practice</p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-            <Link
-              href="/test/select?mode=custom"
-              className="group flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 hover:border-primary/30 transition-all"
-            >
-              <div className="h-9 w-9 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Sparkles className="h-4 w-4 text-purple-600" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold leading-tight">Custom Test</p>
-                <p className="text-[11px] text-muted-foreground">Pick year · subject · count</p>
-              </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main grid: Recent Tests + Subject Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Recent Tests */}
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Recent Tests</CardTitle>
-              {recentTests.length > 0 && (
-                <Button variant="ghost" size="sm" asChild className="h-7 text-xs">
-                  <Link href="/recent-tests">
-                    View all
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Link>
-                </Button>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            {recentTests.length === 0 ? (
-              <div className="flex flex-col items-center py-8 gap-2">
-                <ClipboardList className="h-8 w-8 text-muted-foreground" />
-                <p className="font-medium text-sm">No tests yet</p>
-                <p className="text-xs text-muted-foreground">
-                  Complete your first test to see results here.
-                </p>
-                <Button size="sm" asChild className="mt-1">
-                  <Link href="/test/select">
-                    <Play className="h-3 w-3 mr-1" />
-                    Start a test
-                  </Link>
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {recentTests.map((test) => (
-                  <div
-                    key={test.id}
-                    className="flex flex-col items-stretch gap-3 p-2.5 rounded-lg hover:bg-muted/50 transition-colors sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-sm truncate">
-                          {(test.subjects as unknown as { name?: string } | null)?.name || "General"}
-                        </span>
-                        <Badge variant={modeVariants[test.mode] || "outline"} className="text-[9px] px-1.5 py-0 shrink-0">
-                          {modeLabels[test.mode] || test.mode}
-                        </Badge>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground mt-0.5">
-                        {format(new Date(test.completed_at!), "MMM d, yyyy")}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 sm:ml-3 sm:shrink-0">
-                      <span className={`text-sm font-semibold ${getScoreColor(test.score)}`}>
-                        {test.score}% <span className="text-xs font-normal text-muted-foreground">correct</span>
-                      </span>
-                      <div className="flex gap-1">
-                        <Button variant="outline" size="sm" asChild className="h-11 px-3 text-xs sm:h-8">
-                          <Link href={`/result/${test.id}`}>Result</Link>
-                        </Button>
-                        <Button variant="outline" size="sm" asChild className="h-11 px-3 text-xs sm:h-8">
-                          <Link href={`/review/${test.id}`}>Review</Link>
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Subject Performance */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Subject Performance</CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0">
-            <SubjectChart data={subjectPerformance} />
-          </CardContent>
-        </Card>
+        <aside className={styles.rail} aria-label="Your profile and study goals">
+          <Card className={`${styles.panel} ${styles.profile}`}>
+            <div className={styles.profileTop}><span>Your profile</span><Link href="/settings" aria-label="Open settings"><Settings2 size={16} /></Link></div>
+            <ProfileAvatar name={userName} url={profile?.avatar_url} />
+            <h2>{userName}</h2><span className={styles.examPill}><GraduationCap size={14} />{exam.name}{stream ? ` · ${stream.code}` : ""}</span>
+            <XPBar />
+            <div className={styles.profileStats}><div><strong>{streak?.current_streak ?? 0}</strong><p>Day study streak</p></div><div><strong>{totalTests}</strong><p>Tests completed</p></div></div>
+          </Card>
+          <ExamCountdown key={`${userId}:${exam.id}`} examId={exam.id} examName={exam.name} userId={userId} />
+          <Card className={`${styles.panel} ${styles.goal}`}>
+            <div className={styles.panelHeading}><h2>Your daily goal</h2><Target size={16} className="text-violet-500" /></div>
+            {dailyAnswered == null ? <p role="status">Progress temporarily unavailable</p> : <><ProgressRing value={dailyAnswered / 20 * 100} label="Daily question goal" size={136}><strong>{dailyAnswered}<small> / 20</small></strong><small>questions today</small></ProgressRing><p>{dailyAnswered >= 20 ? "Goal complete. A great day of practice!" : `${20 - dailyAnswered} more questions to reach today’s goal.`}</p></>}
+            <Button asChild variant="secondary" className={styles.goalAction}><Link href="#daily-practice"><Zap size={16} />Keep practising<ArrowRight size={16} /></Link></Button>
+          </Card>
+          <Card className={styles.panel}>
+            <div className={styles.panelHeading}><h2>Subject performance</h2><Link href="/analytics" className={styles.textLink} aria-label="View subject analytics"><ArrowUpRight size={16} /></Link></div>
+            {subjectPerformance.length ? <div className={styles.subjectList}>{subjectPerformance.slice(0, 5).map(subject => <div key={subject.name} className={styles.subjectBar}><div><h3>{subject.name}</h3><strong>{subject.accuracy}%</strong></div><div className={styles.subjectTrack} role="progressbar" aria-label={`${subject.name} correct rate`} aria-valuenow={subject.accuracy} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${subject.accuracy}%` }} data-level={subject.accuracy >= 60 ? "strong" : subject.accuracy >= 35 ? "developing" : "focus"} /></div></div>)}</div> : <p className={styles.note}>Complete your first test to discover your strengths and subjects to focus on.</p>}
+          </Card>
+          <DailyQuestionWidget />
+          <StreakCard />
+        </aside>
       </div>
     </div>
   );

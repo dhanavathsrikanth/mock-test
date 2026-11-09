@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import styles from "./sidebar.module.css";
 import { NavigationLink as Link } from "@/components/navigation-link";
 import { usePathname } from "next/navigation";
 import { useSignOut } from "@/hooks/use-sign-out";
@@ -25,6 +27,7 @@ import {
   Shield,
   Calculator,
   Zap,
+  Settings2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -32,12 +35,13 @@ const NAV_ITEMS = [
   { href: "/daily", label: "Daily", icon: CalendarCheck },
   { href: "/revision", label: "Revision", icon: BookOpen },
   { href: "/practice", label: "5-Q Sprint", icon: Zap },
-  { href: "/test/select", label: "Start Test", icon: PlaySquare },
-  { href: "/recent-tests", label: "Recent Tests", icon: ClipboardList },
+  { href: "/test/select", label: "Start a test", icon: PlaySquare },
+  { href: "/recent-tests", label: "Recent tests", icon: ClipboardList },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/bookmarks", label: "Bookmarks", icon: Bookmark },
   { href: "/dashboard/calculator", label: "GATE Calculator", icon: Calculator },
   { href: "/profile", label: "Profile", icon: User },
+  { href: "/settings", label: "Settings", icon: Settings2 },
 ];
 
 const TAB_ITEMS = [
@@ -57,9 +61,12 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
   const [imgError, setImgError] = useState(false);
   if (avatarUrl && !imgError) {
     return (
-      <img
+      <Image
         src={avatarUrl}
         alt={userName}
+        width={44}
+        height={44}
+        unoptimized
         className={`${className} object-cover`}
         onError={() => setImgError(true)}
       />
@@ -67,7 +74,7 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
   }
   return (
     <div className={`${className} bg-primary/10 flex items-center justify-center text-sm font-semibold`}>
-      {userName.charAt(0).toUpperCase()}
+      {userName.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase() || "U"}
     </div>
   );
 }
@@ -76,33 +83,51 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
   const pathname = usePathname();
   const { signOut: handleLogout, signingOut, signOutError } = useSignOut();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    closeRef.current?.focus({ preventScroll: true });
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') { event.preventDefault(); setDrawerOpen(false); }
+      if (event.key !== 'Tab') return;
+      const items = [...(drawerRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex="0"]') ?? [])].filter(item => item.getClientRects().length > 0);
+      const first = items[0], last = items.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.body.style.overflow = previousOverflow; document.removeEventListener('keydown', onKeyDown); previousFocus?.focus({ preventScroll: true }); };
+  }, [drawerOpen]);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
 
-  const drawerItems = NAV_ITEMS.filter(
-    (item) => !TAB_ITEMS.some((tab) => tab.href === item.href)
-  );
+  const drawerItems = NAV_ITEMS;
 
   return (
     <>
       {signOutError && <p role="alert" className="fixed top-4 left-1/2 z-[60] -translate-x-1/2 rounded-lg border bg-background p-3 text-sm text-destructive shadow">{signOutError}</p>}
       {/* Desktop sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:border-r lg:bg-card h-screen sticky top-0">
+      <aside className="hidden lg:flex lg:flex-col lg:w-60 lg:shrink-0 lg:border-r lg:bg-card h-screen sticky top-0">
         <div className="p-3 border-b">
           <Link
             href="/dashboard"
             className="flex items-center gap-2 font-bold text-lg"
           >
-            <GraduationCap className="h-6 w-6 text-primary" />
+            <span className={styles.brandIcon}><GraduationCap className="h-5 w-5" /></span>
             Exam Prep
           </Link>
         </div>
 
-        <nav className="flex-1 p-2 space-y-0.5">
+        <nav aria-label="Study navigation" className="min-h-0 flex-1 overflow-y-auto p-2 space-y-0.5">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -110,9 +135,10 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                aria-current={active ? "page" : undefined}
+                className={`${styles.navLink} flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                   active
-                    ? "bg-primary text-primary-foreground"
+                    ? styles.navActive
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
               >
@@ -141,16 +167,17 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
           )}
         </nav>
 
-        <div className="p-3 border-t space-y-2">
-          <div className="flex items-center gap-3 px-1">
-            <UserAvatar userName={userName} avatarUrl={avatarUrl} className="w-8 h-8 rounded-full" />
-            <span className="text-sm font-medium truncate">{userName}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <ThemeSwitcher />
-              <NotificationBell />
-            </div>
+        <div className={styles.footer}>
+          <div className={styles.account}>
+            <Link href="/profile" className={styles.identity} aria-label={`Open profile for ${userName}`}>
+              <span className={styles.avatarWrap}><UserAvatar key={avatarUrl} userName={userName} avatarUrl={avatarUrl} className={styles.avatar} /><span className={styles.accountDot} aria-hidden="true" /></span>
+              <span className={styles.identityText}><strong title={userName}>{userName}</strong><span>{userRole === "admin" ? "Administrator" : "Learner"}<span className={styles.profileHint}>View profile</span></span></span>
+              <ChevronRight size={14} className={styles.profileChevron} />
+            </Link>
+            <div className={styles.tools}>
+              <div title="Appearance"><ThemeSwitcher /></div>
+              <div title="Notifications"><NotificationBell /></div>
+              <Link href="/settings" aria-label="Account settings" title="Settings" className={styles.settings}><Settings2 size={16} /></Link>
             <Button
               variant="ghost"
               size="sm"
@@ -158,10 +185,12 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               disabled={signingOut}
               aria-label={signingOut ? "Signing out" : "Sign out"}
               aria-busy={signingOut}
-              className="text-muted-foreground"
+              className={styles.logout}
+              title="Sign out"
             >
               {signingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
             </Button>
+            </div>
           </div>
         </div>
       </aside>
@@ -176,6 +205,13 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
 
       {/* Mobile: drawer */}
       <div
+        ref={drawerRef}
+        id="study-navigation-drawer"
+        role="dialog"
+        aria-label="Study navigation"
+        aria-modal={drawerOpen ? true : undefined}
+        aria-hidden={!drawerOpen}
+        inert={!drawerOpen}
         className={`lg:hidden fixed top-0 left-0 z-50 h-full w-72 bg-background border-r shadow-2xl transform transition-transform duration-300 ease-in-out ${
           drawerOpen ? "translate-x-0" : "-translate-x-full"
         }`}
@@ -187,10 +223,12 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               className="flex items-center gap-2 font-bold text-lg"
               onClick={() => setDrawerOpen(false)}
             >
-              <GraduationCap className="h-6 w-6 text-primary" />
+              <span className={styles.brandIcon}><GraduationCap className="h-5 w-5" /></span>
               Exam Prep
             </Link>
             <Button
+              ref={closeRef}
+              aria-label="Close navigation"
               variant="ghost"
               size="icon"
               onClick={() => setDrawerOpen(false)}
@@ -220,10 +258,11 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
                 <Link
                   key={item.href}
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => setDrawerOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     active
-                      ? "bg-primary text-primary-foreground"
+                      ? styles.navActive
                       : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   }`}
                 >
@@ -290,13 +329,13 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-11 flex-1 flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] ${
                   active
-                    ? "text-primary"
+                    ? "text-blue-600 dark:text-blue-400"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <div
                   className={`flex items-center justify-center h-7 w-7 rounded-full transition-colors ${
-                    active ? "bg-primary/10" : ""
+                    active ? "bg-blue-100 dark:bg-blue-950" : ""
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -312,6 +351,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
             onClick={() => setDrawerOpen(true)}
             aria-label="Open more navigation options"
             aria-expanded={drawerOpen}
+            aria-controls="study-navigation-drawer"
             className="flex min-h-11 flex-1 flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg text-[10px] font-medium transition-colors min-w-0 max-w-[72px] text-muted-foreground hover:text-foreground"
           >
             <div className="flex items-center justify-center h-7 w-7 rounded-full">

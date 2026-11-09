@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --background: 252 33% 99%;
+    --foreground: 240 20% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 240 20% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
-    --primary: 0 0% 9%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --popover-foreground: 240 20% 12%;
+    --primary: 255 80% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 255 80% 97%;
+    --secondary-foreground: 255 65% 40%;
+    --muted: 250 25% 96%;
+    --muted-foreground: 245 8% 44%;
+    --accent: 255 80% 97%;
+    --accent-foreground: 255 65% 40%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 0 0% 3.9%;
-    --chart-1: 12 76% 61%;
+    --border: 250 22% 91%;
+    --input: 250 20% 86%;
+    --ring: 255 80% 60%;
+    --chart-1: 255 80% 60%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
@@ -31,26 +31,26 @@
     --radius: 0.5rem;
   }
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --background: 245 20% 8%;
+    --foreground: 250 25% 96%;
+    --card: 245 18% 11%;
+    --card-foreground: 250 25% 96%;
+    --popover: 245 18% 12%;
+    --popover-foreground: 250 25% 96%;
+    --primary: 255 85% 72%;
+    --primary-foreground: 245 35% 10%;
+    --secondary: 255 24% 19%;
+    --secondary-foreground: 255 85% 84%;
+    --muted: 245 16% 16%;
+    --muted-foreground: 245 12% 68%;
+    --accent: 255 24% 19%;
+    --accent-foreground: 255 85% 84%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 220 70% 50%;
+    --border: 245 16% 22%;
+    --input: 245 16% 28%;
+    --ring: 255 85% 72%;
+    --chart-1: 255 85% 72%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
@@ -74,3 +74,16 @@
 /* Keep display equations scrollable on narrow screens without shrinking symbols. */
 .question-content { overflow-wrap: anywhere; }
 .question-content .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding-block: 0.25rem; }
+
+/* The study workspace shares one rhythm across every sidebar destination. */
+.workspace-main .workspace-content { width: 100%; max-width: 1440px; margin-inline: auto; padding: 12px 24px 24px; }
+.workspace-main .workspace-content > :first-child { width: 100%; animation: workspace-enter .22s ease-out both; }
+.workspace-main .workspace-content h1 { letter-spacing: -.65px; line-height: 1.25; }
+.workspace-main .workspace-content .rounded-xl.border.bg-card { box-shadow: 0 3px 14px hsl(245 30% 20% / .035); }
+.workspace-main .workspace-content :is(input,textarea,select) { max-width: 100%; }
+.workspace-main .workspace-content table { font-variant-numeric: tabular-nums; }
+.workspace-skip { position: fixed; left: 16px; top: -100px; z-index: 100; border-radius: 8px; background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); padding: 12px 16px; }
+.workspace-skip:focus { top: 12px; }
+@keyframes workspace-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@media(max-width:639px) { .workspace-main .workspace-content { padding: 12px 16px 20px; } }
+@media(prefers-reduced-motion:reduce) { .workspace-main .workspace-content > :first-child { animation: none; } }

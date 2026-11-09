@@ -55,7 +55,7 @@ test('guest starts without auth, edits save synchronously, and network failure r
   const h=harness();let r=await mount(h);
   try{
     assert.equal(h.authCalls(),0);await click(r,'Take the challenge →');assert.equal(h.authCalls(),0);
-    await act(async()=>{r.root.findAllByType('button').find(n=>text(n)==='AAlpha').props.onClick();assert.equal(JSON.parse([...h.items.values()][0]).answers.q0,1);});
+    await act(async()=>{r.root.findAllByType('input').find(n=>n.props['data-option']===1).props.onChange();assert.equal(JSON.parse([...h.items.values()][0]).answers.q0,1);});
     await h.tick(15);await act(async()=>r.unmount());r=await mount(h);
     assert.ok(text(r.toJSON()).includes('11:45'),'refresh keeps elapsed wall time');
     await act(async()=>r.root.findByProps({'aria-label':'Question 5'}).props.onClick());

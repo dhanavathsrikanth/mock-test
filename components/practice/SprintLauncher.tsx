@@ -7,8 +7,7 @@ import { ArrowRight, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createSprint } from '@/app/(dashboard)/practice/actions';
 import { sprintAvailability, sprintPool, type SprintCatalog } from '@/lib/micro-practice';
-
-const selectStyle = 'mt-1 h-11 w-full min-w-0 rounded-lg border bg-background px-3 text-sm';
+import { FilterDropdown } from './FilterDropdown';
 
 export function SprintLauncher({ catalog, compact = false }: { catalog: SprintCatalog; compact?: boolean }) {
   const router = useRouter();
@@ -18,19 +17,22 @@ export function SprintLauncher({ catalog, compact = false }: { catalog: SprintCa
   const recommended = catalog.subjects.find(subject => sprintAvailability(sprintPool(catalog.pool, {
     subjectId: subject.id, topicId: null, yearFrom: defaultFrom, yearTo: defaultTo,
   }, catalog.topics), catalog.mixed).ready)?.id ?? '';
-  const [subjectId, setSubject] = useState(recommended);
-  const [topicId, setTopic] = useState('');
-  const [yearFrom, setFrom] = useState(defaultFrom);
-  const [yearTo, setTo] = useState(defaultTo);
+  const [subjectIds, setSubjects] = useState<string[]>(recommended ? [recommended] : []);
+  const [topicIds, setTopics] = useState<string[]>([]);
+  const [selectedYears, setYears] = useState<number[]>(years.filter(year => year >= defaultFrom && year <= defaultTo));
   const [minutes, setMinutes] = useState<12 | 15>(15);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
   const busy = useRef(false);
   const requestId = useRef<string | null>(null);
-  const selection = { examId: catalog.examId, streamId: catalog.streamId, subjectId: subjectId || null,
-    topicId: topicId || null, yearFrom, yearTo, minutes };
-  const { ready, counts } = sprintAvailability(sprintPool(catalog.pool, selection, catalog.topics), catalog.mixed);
-  const topics = catalog.topics.filter(t => t.subject_id === subjectId && sprintPool(catalog.pool, { ...selection, topicId: t.id }, catalog.topics).length > 0);
+  const selection = { examId: catalog.examId, streamId: catalog.streamId, subjectId: null, topicId: null,
+    subjectIds, topicIds, years: selectedYears, yearFrom: years[0] ?? 2021, yearTo: years.at(-1) ?? 2026, minutes };
+  const matching = sprintPool(catalog.pool, selection, catalog.topics);
+  const { ready, counts } = sprintAvailability(matching, catalog.mixed);
+  const topics = catalog.topics.filter(t => (!subjectIds.length || subjectIds.includes(t.subject_id)) &&
+    sprintPool(catalog.pool, { ...selection, topicIds: [t.id], years }, catalog.topics).length > 0);
+  const yearSummary = selectedYears.length === 0 ? 'Choose years' : [...selectedYears].sort((a,b) => a-b).join(', ');
+  const subjectSummary = subjectIds.length === 1 ? catalog.subjects.find(s => s.id === subjectIds[0])?.name : subjectIds.length ? `${subjectIds.length} subjects` : 'All subjects';
   function changed() { requestId.current = null; setError(''); }
   async function start() {
     if (busy.current || !ready) return;
@@ -44,22 +46,22 @@ export function SprintLauncher({ catalog, compact = false }: { catalog: SprintCa
     finally { busy.current = false; setPending(false); }
   }
   const fields = <fieldset disabled={pending} className="grid min-w-0 gap-3">
-    <label className="min-w-0 text-xs font-medium">Subject<select className={selectStyle} value={subjectId} onChange={e => { setSubject(e.target.value); setTopic(''); changed(); }}><option value="">All subjects in your stream</option>{catalog.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-    <label className="min-w-0 text-xs font-medium">Topic<select className={selectStyle} value={topicId} disabled={!subjectId} onChange={e => { setTopic(e.target.value); changed(); }}><option value="">All topics in this subject</option>{topics.map(t => <option key={t.id} value={t.id}>{t.parent_id ? `${catalog.topics.find(p => p.id === t.parent_id)?.name ?? ''} → ` : ''}{t.name}</option>)}</select></label>
-    <div className="grid grid-cols-2 gap-3">
-      <label className="text-xs font-medium">From year<select className={selectStyle} value={yearFrom} onChange={e => { setFrom(Number(e.target.value)); changed(); }}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
-      <label className="text-xs font-medium">To year<select className={selectStyle} value={yearTo} onChange={e => { setTo(Number(e.target.value)); changed(); }}>{years.map(y => <option key={y} value={y}>{y}</option>)}</select></label>
+    <FilterDropdown label="Subjects" options={catalog.subjects.map(subject => ({ value: subject.id, label: subject.name }))} selected={subjectIds} emptyLabel="All subjects in your stream" disabled={pending} onChange={values => { setSubjects(values); setTopics(current => current.filter(id => catalog.topics.some(topic => topic.id === id && (!values.length || values.includes(topic.subject_id))))); changed(); }} />
+    <FilterDropdown label="Topics" options={topics.map(topic => ({ value: topic.id, label: topic.name, description: [catalog.subjects.find(subject => subject.id === topic.subject_id)?.name, topic.parent_id ? catalog.topics.find(parent => parent.id === topic.parent_id)?.name : null].filter(Boolean).join(' · ') }))} selected={topicIds} emptyLabel="All topics in selected subjects" disabled={pending || !topics.length} onChange={values => { setTopics(values); changed(); }} />
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <FilterDropdown label="Years" options={[...years].reverse().map(year => ({ value: String(year), label: String(year) }))} selected={selectedYears.map(String)} emptyLabel="Choose at least one year" disabled={pending} onChange={values => { setYears(values.map(Number)); changed(); }} />
+      <FilterDropdown label="Focus timer" options={[{value:'15',label:'15 minutes',description:'A little more thinking time'},{value:'12',label:'12 minutes',description:'A quicker challenge'}]} selected={[String(minutes)]} single searchable={false} disabled={pending} onChange={values => { setMinutes(Number(values[0]) as 12 | 15); changed(); }} />
     </div>
-    <label className="text-xs font-medium">Focus timer<select className={selectStyle} value={minutes} onChange={e => { setMinutes(Number(e.target.value) as 12 | 15); changed(); }}><option value={15}>15 minutes</option><option value={12}>12 minutes</option></select></label>
+    <p className="text-xs leading-relaxed text-muted-foreground">Choose multiple subjects, topics and years. No subjects or topics selected means all. Choose one timer per sprint.</p>
   </fieldset>;
   return <section id="quick-practice" aria-label="Quick practice" className="min-w-0 space-y-4 rounded-xl border border-primary/30 bg-card p-4 sm:p-5">
     <div className="flex items-start justify-between gap-2"><div><p className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-primary"><Zap className="h-4 w-4" />Quick practice</p><h2 className="text-xl font-semibold tracking-tight">Five questions. One small win.</h2></div><span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium">{minutes} min</span></div>
-    <p className="text-sm text-muted-foreground">{catalog.mixed ? '3 MCQs · 1 MSQ · 1 NAT' : '5 MCQs'} · {yearFrom}–{yearTo}</p>
+    <p className="text-sm text-muted-foreground">{catalog.mixed ? '3 MCQs · 1 MSQ · 1 NAT' : '5 MCQs'} · {selectedYears.length} {selectedYears.length === 1 ? 'year' : 'years'} selected</p>
     {catalog.resumeId && <Button asChild className="min-h-12 w-full"><Link href={`/test/${catalog.resumeId}`}>Resume unfinished sprint<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>}
-    {compact ? <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">{catalog.resumeId ? 'Choose a new sprint' : catalog.subjects.find(s => s.id === subjectId)?.name ?? 'All subjects'}<span className="ml-2 text-xs font-normal text-muted-foreground">Edit filters</span></summary><div className="mt-4">{fields}</div></details> : fields}
-    {!ready && <p role="status" className="text-xs text-muted-foreground">{yearFrom > yearTo ? 'The start year must come before the end year.' : `Available: ${counts.MCQ} MCQs${catalog.mixed ? `, ${counts.MSQ} MSQs, ${counts.NAT} NATs` : ''}. Broaden the topic or years to build a complete sprint.`}</p>}
+    {compact ? <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm font-medium">{catalog.resumeId ? 'Choose a new sprint' : subjectSummary}<span className="ml-2 text-xs font-normal text-muted-foreground">Edit filters</span></summary><div className="mt-4">{fields}</div></details> : fields}
+    <div className="rounded-lg border bg-muted/25 p-3" role="status" aria-live="polite"><div className="flex items-center justify-between gap-2 text-xs"><strong>{matching.length} matching questions</strong><span className={ready ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'}>{ready ? 'Ready for a sprint' : 'Add more options'}</span></div><p className="mt-1 text-xs text-muted-foreground">{counts.MCQ} MCQs{catalog.mixed ? ` · ${counts.MSQ} MSQs · ${counts.NAT} NATs` : ''}</p><p className="mt-1 break-words text-xs text-muted-foreground">{yearSummary}</p>{!ready && <p className="mt-2 text-xs text-muted-foreground">{!selectedYears.length ? 'Select at least one year.' : 'Broaden your subjects, topics or years to build a complete sprint.'}</p>}</div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-    <Button onClick={start} disabled={!ready || yearFrom > yearTo || pending} aria-busy={pending} className="min-h-12 w-full" variant={catalog.resumeId ? 'outline' : 'default'}>{pending ? 'Preparing your sprint…' : catalog.resumeId ? 'Start a new 5-Q sprint' : 'Start 5-Q Sprint'}<ArrowRight className="ml-2 h-4 w-4" /></Button>
+    <Button onClick={start} disabled={!ready || pending} aria-busy={pending} className="min-h-12 w-full" variant={catalog.resumeId ? 'outline' : 'default'}>{pending ? 'Preparing your sprint…' : catalog.resumeId ? 'Start a new 5-Q sprint' : 'Start 5-Q Sprint'}<ArrowRight className="ml-2 h-4 w-4" /></Button>
     <p className="text-xs text-muted-foreground">Answers save on every tap. Pause now; pick up where you left off.</p>
     <details className="text-xs text-muted-foreground"><summary className="cursor-pointer py-1">Have more time?</summary><Link href="/test/select" className="inline-flex min-h-11 items-center underline underline-offset-4">Full mocks &amp; custom practice</Link></details>
   </section>;

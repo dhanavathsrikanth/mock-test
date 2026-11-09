@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { PageHeading } from '@/components/workspace/PageHeading';
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -314,7 +315,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
 
   if (!profile) {
     return (
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="w-full max-w-3xl mx-auto space-y-6 py-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground mt-1">Loading profile...</p>
@@ -324,18 +325,8 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your account settings
-          </p>
-        </div>
-        {saved && (
-          <span className="text-sm text-green-600 font-medium">Saved!</span>
-        )}
-      </div>
+    <div className="w-full max-w-3xl mx-auto space-y-6 py-6">
+      <PageHeading title="Your profile" icon={<User />} description="Your learning identity, achievements, and account preferences." actions={saved && <span role="status" className="text-sm text-emerald-600 font-medium">Changes saved</span>} />
 
       {/* Avatar Card */}
       <Card>
@@ -351,7 +342,8 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={avatarUploading}
-                className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer disabled:opacity-50"
+                aria-label="Change profile photo"
+                className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity cursor-pointer disabled:opacity-50"
               >
                 <Camera className="h-6 w-6 text-white" />
               </button>
@@ -421,7 +413,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           <div className="space-y-2">
             <p className="text-sm font-medium">Target Exam</p>
             <p className="text-sm">{exams.find(exam => exam.id === profile.target_exam_id)?.name || "Choose your exam"}</p>
-            <Link href="/onboarding" className="text-sm text-primary underline">Change exam</Link>
+            <Link href="/settings" className="text-sm text-primary underline">Exam and stream settings</Link>
           </div>
           <Button
             onClick={saveProfile}
@@ -564,8 +556,8 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
         </Card>
       )}
 
-      {/* Level Roadmap */}
-      <Card>
+        {/* Level Roadmap */}
+        <Card id="level-roadmap" className="scroll-mt-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-muted-foreground" />

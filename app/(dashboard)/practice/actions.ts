@@ -3,7 +3,7 @@
 import { requireExamContext } from '@/lib/exam-context';
 import { createClient } from '@/lib/supabase/server';
 import { getSprintCatalog } from '@/lib/sprint-catalog';
-import { chooseSprint, sprintPool, validateSprint, sprintCreationMessage, type SprintSelection } from '@/lib/micro-practice';
+import { chooseSprint, sprintPool, sprintFilterValues, validateSprint, sprintCreationMessage, type SprintSelection } from '@/lib/micro-practice';
 
 export async function createSprint(selection: SprintSelection, requestId: string): Promise<{ sessionId: string } | { error: string }> {
   const { user, exam, stream } = await requireExamContext();
@@ -23,9 +23,11 @@ export async function createSprint(selection: SprintSelection, requestId: string
     if (previous.data) return { sessionId: previous.data.id };
     const chosen = chooseSprint(sprintPool(catalog.pool, selection, catalog.topics), catalog.mixed);
     if (chosen.length !== 5) return { error: catalog.mixed ? 'This selection needs 3 MCQs, 1 MSQ and 1 NAT. Broaden the topic or year range.' : 'This selection needs 5 MCQs. Broaden the topic or year range.' };
+    const filters = sprintFilterValues(selection);
     const { data, error } = await supabase.from('test_sessions').insert({
       id: requestId, user_id: user.id, exam_id: exam.id, stream_id: stream?.id ?? null,
-      subject_id: selection.subjectId, topic_id: selection.topicId, year: null, paper: null,
+      subject_id: filters.subjects.length === 1 ? filters.subjects[0] : null,
+      topic_id: filters.topics.length === 1 ? filters.topics[0] : null, year: null, paper: null,
       mode: 'sprint', question_ids: chosen.map(q => q.id), total_questions: 5,
       duration_minutes: selection.minutes, status: 'in_progress',
     }).select('id').single();

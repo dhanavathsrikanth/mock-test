@@ -25,8 +25,10 @@ test("test calculator folds palette, retains calculations, and never captures an
     matchMedia: () => ({ matches: false }),
     addEventListener(name, handler) { if (!listeners.has(name)) listeners.set(name, new Set()); listeners.get(name).add(handler); },
     removeEventListener(name, handler) { listeners.get(name)?.delete(handler); },
+    setInterval: () => 0,
+    clearInterval() {},
   };
-  const documentMock = { addEventListener() {}, removeEventListener() {} };
+  const documentMock = { visibilityState: "visible", addEventListener() {}, removeEventListener() {} };
   const css = new Proxy({}, { get: (_, key) => key });
   const engine = load("lib/gate-calculator.ts", {});
   const { ExamCalculatorPanel } = load("components/calculator/ExamCalculatorPanel.tsx", {
@@ -58,7 +60,7 @@ test("test calculator folds palette, retains calculations, and never captures an
     "@/components/MatchOption": { MatchOption: noOp },
     "@/lib/matching-question-utils": { isMatchingQuestion: () => false, isMatchCodeOption: () => false },
     "@/components/ui/toast-provider": { useToast: () => ({ toast() {} }) },
-  }, { window: windowMock });
+  }, { window: windowMock, document: documentMock });
   let renderer;
   try {
     await act(async () => { renderer = create(React.createElement(ExamClient, {

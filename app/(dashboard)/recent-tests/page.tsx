@@ -1,11 +1,20 @@
 import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
+import {
+  recordsForQuestions,
+  sessionQuestionIds,
+  summarizeAttempts,
+  type AttemptRecord,
+  type MetricsAnswer,
+  type MetricsQuestion,
+} from "@/lib/test-metrics";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { ClipboardList, Check, X, Minus, ArrowRight, TrendingUp, Target, BarChart3 } from "lucide-react";
 import Link from "next/link";
+import { PageHeading } from '@/components/workspace/PageHeading';
 
 export const metadata = { title: "Recent Tests | Exam Prep" };
 
@@ -50,7 +59,7 @@ export default async function RecentTestsPage() {
   const { data: sessions } = await supabase
     .from("test_sessions")
     .select(
-      `id, total_questions, mode, completed_at, subject_id, subjects ( name )`
+      `id, total_questions, mode, completed_at, question_ids, subject_id, subjects ( name )`
     )
     .eq("user_id", userId)
     .eq("exam_id", exam.id)
@@ -64,40 +73,73 @@ export default async function RecentTestsPage() {
     sessionIds.length > 0
       ? await supabase
           .from("test_answers")
-          .select("session_id, is_correct")
+          .select(
+            `
+            session_id,
+            question_id,
+            is_correct,
+            selected_option,
+            selected_options,
+            numeric_answer,
+            questions (
+              id,
+              marks,
+              negative_marks,
+              marks_to_all,
+              question_type
+            )
+          `
+          )
           .in("session_id", sessionIds)
       : { data: [] };
 
+  type RowAnswer = MetricsAnswer & {
+    session_id: string;
+    questions?: MetricsQuestion | null;
+  };
+  const answerList = (allAnswers || []) as unknown as RowAnswer[];
+
+  const answersBySession = new Map<string, RowAnswer[]>();
+  for (const answer of answerList) {
+    const list = answersBySession.get(answer.session_id) || [];
+    list.push(answer);
+    answersBySession.set(answer.session_id, list);
+  }
+
   const sessionScores = (sessions || []).map((s) => {
-    const sessionAnswers = (allAnswers || []).filter(
-      (a) => a.session_id === s.id
-    );
-    const correct = sessionAnswers.filter((a) => a.is_correct === true).length;
-    const wrong = sessionAnswers.filter((a) => a.is_correct === false).length;
-    const skipped = Math.max(0, s.total_questions - correct - wrong);
-    const total = s.total_questions;
-    const score = total > 0 ? Math.round((correct / total) * 100) : 0;
-    return { ...s, correct, wrong, skipped, score };
+    const sessionAnswers = answersBySession.get(s.id) || [];
+    const questionById = new Map<string, MetricsQuestion>();
+    for (const answer of sessionAnswers) {
+      if (answer.questions?.id) questionById.set(answer.questions.id, answer.questions);
+    }
+    const answerById = new Map(sessionAnswers.map((a) => [a.question_id, a]));
+    const questionIds = sessionQuestionIds(s, sessionAnswers);
+    const built = recordsForQuestions(questionIds, questionById, answerById);
+    const stats = summarizeAttempts(built.records as AttemptRecord[]).stats;
+    return {
+      ...s,
+      correct: stats.correct,
+      wrong: stats.wrong,
+      skipped: stats.skipped,
+      marksToAll: stats.marksToAll,
+      graded: stats.graded,
+      score: stats.correctRate ?? 0,
+    };
   });
 
   const totalTests = sessionScores.length;
-  const avgScore = totalTests > 0
-    ? Math.round(sessionScores.reduce((sum, t) => sum + t.score, 0) / totalTests)
-    : 0;
+  const totalGraded = sessionScores.reduce((sum, t) => sum + t.graded, 0);
+  const totalCorrect = sessionScores.reduce((sum, t) => sum + t.correct, 0);
+  const avgScore = totalGraded > 0 ? Math.round((totalCorrect / totalGraded) * 100) : 0;
   const bestScore = totalTests > 0
     ? Math.max(...sessionScores.map((t) => t.score))
     : 0;
-  const totalQuestions = sessionScores.reduce((sum, t) => sum + t.total_questions, 0);
+  const totalQuestions = sessionScores.reduce((sum, t) => sum + t.graded, 0);
 
   return (
     <div className="space-y-6 py-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Recent Tests</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Review your completed test sessions and track your progress
-        </p>
-      </div>
+      <PageHeading title="Recent tests" icon={<ClipboardList />} description="Review your answers, revisit mistakes, and see how your practice is progressing." actions={<Button asChild><Link href="/test/select">Start a test<ArrowRight /></Link></Button>} />
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -140,14 +182,14 @@ export default async function RecentTestsPage() {
               <BarChart3 className="h-5 w-5 text-blue-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Questions</p>
+              <p className="text-xs text-muted-foreground">Graded Questions</p>
               <p className="text-xl font-bold">{totalQuestions}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <p className="text-xs text-muted-foreground">Correct rate = correct answers ÷ all questions, including skipped questions. Open a result for marks and deductions.</p>
+      <p className="text-xs text-muted-foreground">Correct rate = correct answers ÷ graded questions, including skipped questions; marks-to-all questions are excluded from the rate but their marks count. Averages are weighted by question count, not by test. This is a practice figure, not an official {exam.name} score.</p>
 
       {/* Test list */}
       <Card>

@@ -39,11 +39,11 @@ export default async function UserDetailPage(props: { params: Promise<{ userId: 
 
   const [answeredRes, subjectAccRes, dqRes] = await Promise.all([
     supabase.from("test_answers")
-      .select("is_correct, session_id, question_id, selected_option")
+      .select("is_correct, session_id, question_id, selected_option, selected_options, numeric_answer, questions(marks_to_all)")
       .in("session_id", sessionIds),
     sessionIds.length > 0
       ? supabase.from("test_answers")
-          .select("is_correct, questions(subject_id, subjects(name))")
+          .select("is_correct, questions(subject_id, marks_to_all, subjects(name))")
           .in("session_id", sessionIds)
       : { data: [] },
     supabase.from("daily_question_answers")
@@ -57,8 +57,17 @@ export default async function UserDetailPage(props: { params: Promise<{ userId: 
   const subjectAnswers = subjectAccRes.data || [];
   const dailyAnswers = dqRes.data || [];
 
-  const totalAttempted = answers.length;
-  const correctCount = answers.filter((a: any) => a.is_correct).length;
+  // Same rules as lib/test-metrics.ts: marks-to-all questions are excluded
+  // from accuracy denominators; a skip means no response in any field.
+  const isMta = (a: any) => a.questions?.marks_to_all === true;
+  const isAnswered = (a: any) =>
+    a.selected_option != null ||
+    a.numeric_answer != null ||
+    (Array.isArray(a.selected_options) && a.selected_options.length > 0);
+
+  const gradedAnswers = answers.filter((a: any) => !isMta(a));
+  const totalAttempted = gradedAnswers.length;
+  const correctCount = gradedAnswers.filter((a: any) => a.is_correct).length;
   const accuracy = totalAttempted > 0 ? Math.round((correctCount / totalAttempted) * 100) : 0;
   const scores = sessions.filter((s: any) => s.status === "completed");
   const avgScore = scores.length > 0
@@ -67,19 +76,20 @@ export default async function UserDetailPage(props: { params: Promise<{ userId: 
 
   // Per-session stats
   const sessionStatsMap: Record<string, { correct: number; wrong: number; skipped: number; total: number }> = {};
-  answers.forEach((a: any) => {
+  gradedAnswers.forEach((a: any) => {
     if (!sessionStatsMap[a.session_id]) {
       sessionStatsMap[a.session_id] = { correct: 0, wrong: 0, skipped: 0, total: 0 };
     }
     sessionStatsMap[a.session_id].total++;
     if (a.is_correct) sessionStatsMap[a.session_id].correct++;
-    else if (a.selected_option == null) sessionStatsMap[a.session_id].skipped++;
+    else if (!isAnswered(a)) sessionStatsMap[a.session_id].skipped++;
     else sessionStatsMap[a.session_id].wrong++;
   });
 
   // Subject-wise accuracy
   const subjectAccMap: Record<string, { correct: number; total: number }> = {};
   subjectAnswers.forEach((a: any) => {
+    if (isMta(a)) return;
     const subj = a.questions?.subjects?.name || "Unknown";
     if (!subjectAccMap[subj]) subjectAccMap[subj] = { correct: 0, total: 0 };
     subjectAccMap[subj].total++;

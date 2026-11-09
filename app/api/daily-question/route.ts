@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const isHistory = url.searchParams.get("history") === "true";
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = new Date(Date.now() + 330 * 60000).toISOString().split("T")[0];
 
   // Fetch history
   if (isHistory) {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { motion } from "framer-motion";
-import { format } from "date-fns";
+import { motion, useReducedMotion } from "framer-motion";
+import { PageHeading } from '@/components/workspace/PageHeading';
+import { format, parseISO } from "date-fns";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -51,12 +52,18 @@ export default function DailyQuestionPage() {
   } | null>(null);
   const [xpAwarded, setXpAwarded] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [loadVersion, setLoadVersion] = useState(0);
+  const [bookmarkSaving, setBookmarkSaving] = useState(false);
+  const reduceMotion = useReducedMotion();
 
 
   useEffect(() => {
     async function load() {
+      setLoading(true); setLoadError('');
       try {
         const res = await fetch("/api/daily-question");
+        if (!res.ok) throw new Error('Daily question unavailable');
         if (res.ok) {
           const json = await res.json();
           setData(json);
@@ -69,12 +76,12 @@ export default function DailyQuestionPage() {
             setSelected(json.userAnswer.selectedOption);
           }
         }
-      } finally {
+      } catch { setLoadError('Unable to load your daily question. Check your connection and try again.'); } finally {
         setLoading(false);
       }
     }
     load();
-  }, []);
+  }, [loadVersion]);
 
   const handleSubmit = useCallback(async () => {
     if (!data || selected === null || submitting) return;
@@ -137,10 +144,12 @@ export default function DailyQuestionPage() {
       toast("Network error. Please try again.", "error");
     }
     setSubmitting(false);
-  }, [data, selected, submitting]);
+  }, [data, selected, submitting, toast]);
 
   const handleBookmark = async () => {
-    if (!data?.question?.id) return;
+    if (!data?.question?.id || bookmarkSaving) return;
+    setBookmarkSaving(true);
+    try {
     const supabase = createClient();
     const {
       data: { user },
@@ -148,18 +157,22 @@ export default function DailyQuestionPage() {
     if (!user) return;
 
     if (bookmarked) {
-      await supabase
+      const { error } = await supabase
         .from("bookmarks")
         .delete()
         .eq("user_id", user.id)
         .eq("question_id", data.question.id);
+      if (error) throw error;
       setBookmarked(false);
     } else {
-      await supabase
+      const { error } = await supabase
         .from("bookmarks")
         .insert({ user_id: user.id, question_id: data.question.id });
+      if (error) throw error;
       setBookmarked(true);
     }
+    } catch { toast('Unable to update this bookmark. Please retry.', 'error'); }
+    finally { setBookmarkSaving(false); }
   };
 
   useEffect(() => {
@@ -217,14 +230,14 @@ export default function DailyQuestionPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-tight">
-                No Question Yet
+                {loadError ? 'Daily question unavailable' : 'No question assigned yet'}
               </h1>
               <p className="text-sm text-muted-foreground mt-1.5 max-w-sm">
-                Today&apos;s daily question hasn&apos;t been assigned yet.
-                Check back later or practice with a test.
+                {loadError || 'Your next daily question will appear here. Keep practising with a test in the meantime.'}
               </p>
             </div>
-            <Button asChild className="mt-2">
+            {loadError && <Button onClick={() => setLoadVersion(value => value + 1)}>Retry loading</Button>}
+            <Button asChild className="mt-2" variant={loadError ? 'outline' : 'default'}>
               <Link href="/test/select">
                 Take a test
                 <ChevronRight className="h-4 w-4 ml-1" />
@@ -241,16 +254,7 @@ export default function DailyQuestionPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Sun className="h-6 w-6 text-primary" />
-            Daily Question
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {format(new Date(data.assignedDate), "EEEE, MMMM d, yyyy")}
-          </p>
-        </div>
+      <PageHeading title="Daily question" icon={<Sun />} description={format(parseISO(data.assignedDate), "EEEE, MMMM d, yyyy")} actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
             <Link href="/daily/history">
@@ -263,11 +267,11 @@ export default function DailyQuestionPage() {
             +{isAnswered ? (result.isCorrect ? 25 : 10) : 25} XP
           </Badge>
         </div>
-      </div>
+      } />
 
       {/* Question Card */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
+        initial={reduceMotion ? false : { opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
@@ -379,6 +383,9 @@ export default function DailyQuestionPage() {
                   variant="outline"
                   size="icon"
                   onClick={handleBookmark}
+                  disabled={bookmarkSaving}
+                  aria-label={bookmarked ? 'Remove bookmark' : 'Save bookmark'}
+                  aria-pressed={bookmarked}
                   className={
                     bookmarked
                       ? "text-yellow-600 border-yellow-500/50"
@@ -396,6 +403,9 @@ export default function DailyQuestionPage() {
                   variant="outline"
                   size="icon"
                   onClick={handleBookmark}
+                  disabled={bookmarkSaving}
+                  aria-label={bookmarked ? 'Remove bookmark' : 'Save bookmark'}
+                  aria-pressed={bookmarked}
                   className={
                     bookmarked
                       ? "text-yellow-600 border-yellow-500/50"
@@ -408,7 +418,7 @@ export default function DailyQuestionPage() {
                 </Button>
                 <span className="text-sm text-muted-foreground flex items-center gap-1.5">
                   <Sparkles className="h-4 w-4 text-emerald-500" />
-                  +{xpAwarded} XP earned
+                  {xpAwarded > 0 ? `+${xpAwarded} XP earned` : 'Daily answer saved'}
                 </span>
               </div>
             )}
@@ -416,7 +426,7 @@ export default function DailyQuestionPage() {
             {/* Explanation */}
             {isAnswered && result.explanation && (
               <motion.div
-                initial={{ opacity: 0, height: 0 }}
+                initial={reduceMotion ? false : { opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: "auto" }}
                 className="bg-muted/50 rounded-lg border p-4 text-sm text-muted-foreground leading-relaxed"
               >

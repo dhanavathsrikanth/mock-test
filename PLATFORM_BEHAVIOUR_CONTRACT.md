@@ -60,6 +60,7 @@ This is the intended behaviour for the free-platform enhancement work. It resolv
 - Aggregate correct rate/accuracy should use the corresponding total counts. A mean of per-test percentages can still be shown, but must be labelled “average test correct rate” rather than substituted for question-weighted accuracy.
 - NAT and MSQ attempts count through their actual response fields, not only the MCQ option field.
 - Session elapsed time and foreground per-question active time are different metrics. Missing historical time data is labelled unavailable; it is not fabricated or represented as measured zero.
+- Per-question pace splits at the paper's even time budget (duration ÷ loaded questions) when a duration exists, otherwise at the recorded median; the benchmark kind is always disclosed. Pace quadrants and topic pace include only questions with recorded time, and responses without a trusted grading result are never labelled correct or wrong in them. Pacing drift compares the first and final thirds of a single paper and is not claimed for concatenated histories.
 - “Weak subjects” uses subjects. “Weak topics” requires actual topic-level aggregation. Recommendations disclose limited evidence when the sample is small.
 - Dates are sorted using actual time values rather than formatted labels.
 

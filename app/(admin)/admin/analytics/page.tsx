@@ -32,7 +32,7 @@ export default async function AnalyticsPage() {
     supabase.from("profiles").select("id, created_at"),
     supabase.from("streaks").select("user_id, current_streak, last_activity_date"),
     supabase.from("test_sessions").select("user_id, total_questions, subject_id, year, mode, started_at, completed_at, status, duration_minutes, subjects!inner(name)").gte("started_at", thirtyDaysAgo).limit(5000),
-    supabase.from("test_answers").select("question_id, is_correct, selected_option, questions(question_text, subject_id, subjects(name))").limit(10000),
+    supabase.from("test_answers").select("question_id, is_correct, selected_option, selected_options, numeric_answer, questions(question_text, subject_id, marks_to_all, subjects(name))").limit(10000),
     supabase.from("bookmarks").select("question_id, questions(question_text, subjects(name))"),
     supabase.from("xp_transactions").select("amount, created_at").gte("created_at", thirtyDaysAgo).limit(5000),
     supabase.from("user_levels").select("user_id, total_xp, profiles(full_name)").order("total_xp", { ascending: false }).limit(10),
@@ -263,11 +263,19 @@ export default async function AnalyticsPage() {
   const weekTimeline = Object.entries(testsByWeek).map(([name, count]) => ({ name, count }));
 
   // ─── Section 3: Question Analytics ───
+  // Same definitions as student-facing metrics (lib/test-metrics.ts):
+  // marks-to-all questions earn full marks but are excluded from accuracy
+  // denominators; a "skip" means no response in any response field.
+  const isMarksToAll = (a: any) => a.questions?.marks_to_all === true;
+  const answered = (a: any) =>
+    a.selected_option != null || a.numeric_answer != null || (Array.isArray(a.selected_options) && a.selected_options.length > 0);
+
   const accuracyByQ: Record<string, { correct: number; total: number; text: string; subject: string }> = {};
   const skippedByQ: Record<string, number> = {};
   const bookmarkedSet = new Set(bookmarks.map((b: any) => b.question_id));
 
   answers.forEach((a: any) => {
+    if (isMarksToAll(a)) return;
     const qId = a.question_id;
     if (!accuracyByQ[qId]) {
       const qData = a.questions || {};
@@ -275,7 +283,7 @@ export default async function AnalyticsPage() {
     }
     accuracyByQ[qId].total++;
     if (a.is_correct === true) accuracyByQ[qId].correct++;
-    if (a.selected_option === null || a.selected_option === undefined) {
+    if (!answered(a)) {
       skippedByQ[qId] = (skippedByQ[qId] || 0) + 1;
     }
   });
@@ -327,9 +335,10 @@ export default async function AnalyticsPage() {
   srsRecords.forEach((a: any) => a.question_id && answeredIds.add(a.question_id));
   const deadContent = questions.filter((q: any) => !answeredIds.has(q.id)).length;
 
-  // Subject-wise accuracy (from test answers)
+  // Subject-wise accuracy (from test answers; marks-to-all excluded, same as student metrics)
   const subjectAccuracy: Record<string, { correct: number; total: number }> = {};
   answers.forEach((a: any) => {
+    if (isMarksToAll(a)) return;
     const subj = a.questions?.subjects?.name || "Unknown";
     if (!subjectAccuracy[subj]) subjectAccuracy[subj] = { correct: 0, total: 0 };
     subjectAccuracy[subj].total++;
@@ -350,11 +359,14 @@ export default async function AnalyticsPage() {
   })).sort((a, b) => b.attempts - a.attempts);
 
   // Expanded question analytics metrics (include daily question answers)
+  // Marks-to-all answers are excluded from accuracy denominators, matching
+  // the student-facing correct-rate definition in lib/test-metrics.ts.
+  const gradedAnswers = answers.filter((a: any) => !isMarksToAll(a));
   const totalDailyCount = dailyAnswers.filter((a: any) => a.daily_questions?.question_id).length;
   const totalDailyCorrect = dailyAnswers.filter((a: any) => a.is_correct === true && a.daily_questions?.question_id).length;
-  const totalAnswers = answers.length + totalDailyCount;
+  const totalAnswers = gradedAnswers.length + totalDailyCount;
   const uniqueQuestionsAnswered = Object.keys(accuracyByQ).length;
-  const totalCorrectQ = answers.filter((a: any) => a.is_correct === true).length + totalDailyCorrect;
+  const totalCorrectQ = gradedAnswers.filter((a: any) => a.is_correct === true).length + totalDailyCorrect;
   const totalSkippedCount = Object.values(skippedByQ).reduce((s: number, c: number) => s + c, 0);
   const totalWrongQ = totalAnswers - totalCorrectQ - totalSkippedCount;
   const globalAccuracy = totalAnswers > 0 ? Math.round((totalCorrectQ / totalAnswers) * 100) : 0;

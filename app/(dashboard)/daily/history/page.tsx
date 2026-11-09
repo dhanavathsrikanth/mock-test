@@ -17,6 +17,7 @@ import {
   Sun,
 } from "lucide-react";
 import Link from "next/link";
+import { PageHeading } from '@/components/workspace/PageHeading';
 
 interface HistoryItem {
   id: string;
@@ -38,21 +39,25 @@ export default function DailyHistoryPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterValue>("all");
+  const [error, setError] = useState('');
+  const [loadVersion, setLoadVersion] = useState(0);
 
   useEffect(() => {
     async function load() {
+      setLoading(true); setError('');
       try {
         const res = await fetch("/api/daily-question?history=true");
+        if (!res.ok) throw new Error('History unavailable');
         if (res.ok) {
           const json = await res.json();
           setHistory(json.history || []);
         }
-      } finally {
+      } catch { setError('Unable to load your daily history. Please try again.'); } finally {
         setLoading(false);
       }
     }
     load();
-  }, []);
+  }, [loadVersion]);
 
   const filtered = history.filter((item) => {
     if (filter === "all") return true;
@@ -92,24 +97,8 @@ export default function DailyHistoryPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6 py-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/daily">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">
-              Past Daily Questions
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {history.length} question{history.length !== 1 ? "s" : ""} total
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageHeading title="Daily history" icon={<Sun />} description={`${history.length} past questions. Review your daily practice and revisit your answers.`} actions={<Button variant="outline" size="sm" asChild><Link href="/daily"><ArrowLeft className="h-4 w-4" />Daily question</Link></Button>} />
+      {error && <div role="alert" className="rounded-xl border bg-card p-5 space-y-3"><p className="text-sm text-muted-foreground">{error}</p><Button onClick={() => setLoadVersion(value => value + 1)}>Retry loading history</Button></div>}
 
       {/* Summary cards */}
       <div className="grid grid-cols-3 gap-2 sm:gap-3">

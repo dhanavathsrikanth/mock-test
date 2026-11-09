@@ -180,10 +180,18 @@ export function SprintClient({ userId, session, questions, initialAnswers }: Pro
         {isMatchingQuestion(q.question_text) ? <><MatchingQuestion text={q.question_text} />{q.image_url && <QuestionFigure image={{ url: q.image_url, width: q.image_width, height: q.image_height }} />}</> : <QuestionPrompt text={q.question_text} image={q.image_url ? { url:q.image_url, width:q.image_width, height:q.image_height } : undefined} />}
         <fieldset disabled={submitting || timeUp} className="space-y-3"><legend className="sr-only">Your answer</legend>{q.question_type === 'NAT' ? <NumericAnswerInput value={typeof draft.answers[q.id] === 'string' ? draft.answers[q.id] as string : ''} onChange={changeAnswer} decimalPlaces={q.answer_decimal_places} /> : <>
           {q.question_type === 'MSQ' && <p className="text-xs text-muted-foreground">Select every correct option.</p>}
-          {[q.option_1,q.option_2,q.option_3,q.option_4].map((option,i) => <div key={i} className={`rounded-xl border ${selection(draft.answers[q.id]).includes(i+1) ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}>
-            <button type="button" aria-pressed={selection(draft.answers[q.id]).includes(i+1)} onClick={() => changeAnswer(toggleResponse(current.current?.answers[q.id], i+1, q.question_type === 'MSQ'))} className="flex min-h-14 w-full items-start gap-3 rounded-xl p-4 text-left"><span className="font-semibold">{String.fromCharCode(65+i)}</span><span className="min-w-0 flex-1">{isMatchCodeOption(option || '') ? <MatchOption text={option || ''} /> : <MathText text={option || ''} />}</span></button>
-            {q.option_images?.[i] && <div className="px-4 pb-4"><QuestionFigure image={q.option_images[i]} inline /></div>}
-          </div>)}
+          {[q.option_1,q.option_2,q.option_3,q.option_4].map((option,i) => { const isSelected = selection(draft.answers[q.id]).includes(i+1); return (
+            <div key={i} className={`rounded-xl border ${isSelected ? 'border-primary bg-primary/5 ring-1 ring-primary' : ''}`}>
+              <label className="flex min-h-14 w-full cursor-pointer items-start gap-3 rounded-xl p-4">
+                <input data-option={i+1} type={q.question_type === 'MSQ' ? 'checkbox' : 'radio'} name={`question-${q.id}`} checked={isSelected}
+                  onChange={() => changeAnswer(toggleResponse(current.current?.answers[q.id], i+1, q.question_type === 'MSQ'))}
+                  onClick={(event) => { if (q.question_type !== 'MSQ' && isSelected) { event.preventDefault(); changeAnswer(toggleResponse(current.current?.answers[q.id], i+1, false)); } }}
+                  className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-primary" />
+                <span className="min-w-0 flex-1">{isMatchCodeOption(option || '') ? <MatchOption text={option || ''} /> : <MathText text={option || ''} />}</span>
+              </label>
+              {q.option_images?.[i] && <div className="px-4 pb-4"><QuestionFigure image={q.option_images[i]} inline /></div>}
+            </div>
+          ); })}
         </>}</fieldset>
       </section>
       <Button variant="outline" className="min-h-11 w-full" aria-expanded={calculator} aria-controls="sprint-calculator" onClick={() => setCalculator(value => !value)}><Calculator className="mr-2 h-4 w-4" />{calculator ? 'Hide calculator' : 'Open virtual calculator'}</Button>

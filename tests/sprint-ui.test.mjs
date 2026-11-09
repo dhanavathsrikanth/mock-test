@@ -15,6 +15,43 @@ function load(file,imports={},globals={}) {
     {exports,console,...globals,require:name=>imports[name]??require(name)});
   return exports;
 }
+
+test('launcher submits checkbox arrays, prunes topics when subjects change, and blocks empty years', async () => {
+  const scope=load('lib/stream-scope.ts');
+  const pools=load('lib/test-pool.ts',{'./stream-scope':scope});
+  const engine=load('lib/micro-practice.ts',{'./test-pool':pools});
+  let submitted;
+  const {SprintLauncher}=load('components/practice/SprintLauncher.tsx',{
+    'next/navigation':{useRouter:()=>({push(){}})},'next/link':{default:p=>React.createElement('a',p,p.children)},
+    '@/components/ui/button':{Button:p=>React.createElement('button',p,p.children)},
+    './FilterDropdown':{FilterDropdown:p=>React.createElement('filter-dropdown',p)},
+    '@/lib/micro-practice':engine,
+    '@/app/(dashboard)/practice/actions':{createSprint:async selection=>{submitted=selection;return {sessionId:'new'};}},
+  },{crypto:{randomUUID:()=> 'request'}});
+  const catalog={examId:'gate',streamId:'cs',mixed:true,resumeId:null,subjects:[{id:'a',name:'Algorithms'},{id:'b',name:'Databases'}],
+    topics:[{id:'ta',subject_id:'a',parent_id:null,name:'Sorting'},{id:'tb',subject_id:'b',parent_id:null,name:'SQL'}],
+    pool:['MCQ','MCQ','MCQ','MSQ','NAT'].flatMap((question_type,i)=>['a','b'].map(subject_id=>({id:`${subject_id}${i}`,subject_id,topic_id:subject_id==='a'?'ta':'tb',year:i%2?2024:2021,question_type})))};
+  let renderer; await act(async()=>{renderer=create(React.createElement(SprintLauncher,{catalog}));});
+  const field=label=>renderer.root.findAllByType('filter-dropdown').find(node=>node.props.label===label);
+  const start=()=>renderer.root.findAllByType('button').find(node=>node.props.onClick);
+  try {
+    await act(async()=>field('Subjects').props.onChange(['a','b']));
+    await act(async()=>field('Topics').props.onChange(['ta','tb']));
+    await act(async()=>field('Subjects').props.onChange(['b']));
+    assert.deepEqual(Array.from(field('Topics').props.selected),['tb']);
+    await act(async()=>field('Years').props.onChange([]));
+    assert.equal(start().props.disabled,true);
+    await act(async()=>field('Subjects').props.onChange(['a','b']));
+    await act(async()=>field('Topics').props.onChange(['ta','tb']));
+    await act(async()=>field('Years').props.onChange(['2021','2024']));
+    await act(async()=>field('Focus timer').props.onChange(['12']));
+    await act(async()=>start().props.onClick());
+    assert.deepEqual(Array.from(submitted.subjectIds),['a','b']);
+    assert.deepEqual(Array.from(submitted.topicIds),['ta','tb']);
+    assert.deepEqual(Array.from(submitted.years),[2021,2024]);
+    assert.equal(submitted.minutes,12);
+  } finally { await act(async()=>renderer.unmount()); }
+});
 function text(node){return typeof node==='string'?node:(node?.children||[]).map(text).join('');}
 
 test('sprint taps save synchronously, reload restores the same second, and background/offline time is paused',async()=>{
@@ -57,7 +94,7 @@ test('sprint taps save synchronously, reload restores the same second, and backg
     });
     await tick(3); assert.equal(saved().remainingSeconds,897);
     await act(async()=>{renderer.root.findByProps({'aria-label':'Question 2'}).props.onClick();});
-    await act(async()=>{renderer.root.findAllByType('button').find(node=>text(node)==='AAlpha').props.onClick();assert.equal(saved().answers.q1,1);});
+    await act(async()=>{renderer.root.findAllByType('input').find(node=>node.props['data-option']===1).props.onChange();assert.equal(saved().answers.q1,1);});
     await act(async()=>{documentMock.visibilityState='hidden';events.get('visibilitychange')();});
     await tick(120);assert.equal(saved().remainingSeconds,897);
     await act(async()=>{documentMock.visibilityState='visible';events.get('visibilitychange')();});

@@ -2,7 +2,7 @@
 import { requireExamContext } from '@/lib/exam-context';
 import { createClient } from '@/lib/supabase/server';
 import { getTestPool } from '@/lib/test-catalog';
-import { filterTestPool, validateTestSelection, type TestSelection, type TestTopic } from '@/lib/test-pool';
+import { filterTestPool, testFilterValues, validateTestSelection, type TestSelection, type TestTopic } from '@/lib/test-pool';
 export async function createBookmarkTest(): Promise<{
     error: string;
 } | {
@@ -33,17 +33,21 @@ export async function createTest(selection: TestSelection): Promise<{
         return { error: invalid };
     const supabase = await createClient();
     const pool = await getTestPool(exam.id, stream);
+    const filters = testFilterValues(selection);
+    if (filters.years.some(year => !pool.some(q => q.year === year)) ||
+        filters.papers.some(paper => !pool.some(q => q.paper === paper && (!filters.years.length || (q.year != null && filters.years.includes(q.year))))))
+        return { error: 'Choose source years and papers available in your stream.' };
     const subjectIds = [...new Set(pool.map(q => q.subject_id))];
-    if (selection.subjectId && !subjectIds.includes(selection.subjectId))
+    if (filters.subjects.some(id => !subjectIds.includes(id)))
         return { error: 'Choose a subject available in your stream.' };
     const { data: topics, error: topicError } = subjectIds.length ? await supabase.from('topics').select('id,subject_id,parent_id,name').in('subject_id', subjectIds) : { data: [], error: null };
     if (topicError)
         return { error: 'Unable to load topics. Please try again.' };
     const nodes = (topics || []) as TestTopic[];
-    if (selection.topicId && !nodes.some(t => t.id === selection.topicId && t.subject_id === selection.subjectId))
+    if (filters.topics.some(id => !nodes.some(t => t.id === id && subjectIds.includes(t.subject_id) && (!filters.subjects.length || filters.subjects.includes(t.subject_id)))))
         return { error: 'Choose a topic belonging to the selected subject.' };
     const full = selection.mode === 'full_paper' || selection.mode === 'full_mock';
-    const matching = filterTestPool(pool, { ...selection, subjectId: full ? null : selection.subjectId, topicId: full ? null : selection.topicId }, nodes);
+    const matching = filterTestPool(pool, full ? { ...selection, subjectId: null, topicId: null, subjectIds: [], topicIds: [] } : selection, nodes);
     if (!matching.length)
         return { error: 'No questions match this stream, year, paper and topic.' };
     if (selection.mode === 'full_paper')
@@ -56,8 +60,10 @@ export async function createTest(selection: TestSelection): Promise<{
     const chosen = selection.mode === 'full_paper' ? matching : matching.slice(0, selection.count);
     const { data: session, error } = await supabase.from('test_sessions').insert({
         user_id: user.id, exam_id: exam.id, stream_id: stream?.id || null,
-        subject_id: full ? null : selection.subjectId, topic_id: full ? null : selection.topicId,
-        year: selection.year, paper: selection.paper, mode: selection.mode,
+        subject_id: !full && filters.subjects.length === 1 ? filters.subjects[0] : null,
+        topic_id: !full && filters.topics.length === 1 ? filters.topics[0] : null,
+        year: filters.years.length === 1 ? filters.years[0] : null,
+        paper: filters.papers.length === 1 ? filters.papers[0] : null, mode: selection.mode,
         question_ids: chosen.map(q => q.id), total_questions: chosen.length,
         duration_minutes: selection.timed ? selection.mode === 'full_paper' ? 180 : chosen.length : 0, status: 'in_progress',
     }).select('id').single();

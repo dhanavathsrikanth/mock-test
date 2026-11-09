@@ -58,10 +58,19 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         if (filterPriority) params.set("priority", filterPriority);
         if (filterGroupKey) params.set("group_key", filterGroupKey);
 
-        const res = await fetch(`/api/notifications?${params.toString()}`);
-        if (!res.ok) throw new Error("Failed to fetch");
+        const res = await fetch(`/api/notifications?${params.toString()}`).catch(() => null);
+        if (!res || !res.ok) {
+          setLoading(false);
+          setLoadingMore(false);
+          return;
+        }
 
-        const data: NotificationListResponse = await res.json();
+        const data: NotificationListResponse | null = await res.json().catch(() => null);
+        if (!data) {
+          setLoading(false);
+          setLoadingMore(false);
+          return;
+        }
 
         if (append) {
           setNotifications((prev) => [...prev, ...data.notifications]);
@@ -73,7 +82,7 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
         setUnreadCount(data.unread_count);
         setHasMore(data.has_more);
       } catch (err) {
-        console.error("Failed to fetch notifications:", err);
+        console.warn("Failed to fetch notifications:", err);
       } finally {
         setLoading(false);
         setLoadingMore(false);
@@ -84,11 +93,13 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications/unread-count");
-      if (res.ok) {
-        const data: NotificationCounts = await res.json();
-        setCounts(data);
-        setUnreadCount(data.unread);
+      const res = await fetch("/api/notifications/unread-count").catch(() => null);
+      if (res && res.ok) {
+        const data: NotificationCounts | null = await res.json().catch(() => null);
+        if (data) {
+          setCounts(data);
+          setUnreadCount(data.unread);
+        }
       }
     } catch {
       // ignore
@@ -104,8 +115,8 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
 
   const refresh = useCallback(() => {
     setPage(1);
-    fetchNotifications(1, false);
-    fetchCounts();
+    fetchNotifications(1, false).catch(() => {});
+    fetchCounts().catch(() => {});
   }, [fetchNotifications, fetchCounts]);
 
   const markAsRead = useCallback(
@@ -191,15 +202,18 @@ export function useNotifications(options: UseNotificationsOptions = {}) {
   );
 
   useEffect(() => {
-    fetchNotifications(1, false);
-    fetchCounts();
+    fetchNotifications(1, false).catch(() => {});
+    fetchCounts().catch(() => {});
   }, [fetchNotifications, fetchCounts]);
 
   useEffect(() => {
     if (!autoRefresh) return;
 
     intervalRef.current = setInterval(() => {
-      fetchCounts();
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      fetchCounts().catch(() => {});
     }, pollInterval);
 
     return () => {

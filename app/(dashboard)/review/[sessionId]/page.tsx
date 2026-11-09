@@ -75,5 +75,3 @@ export default function ReviewPage({
 }) {
   return <ReviewPageContent params={params} searchParams={searchParams} />;
 }
-
-export { ReviewContent };

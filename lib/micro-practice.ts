@@ -3,6 +3,7 @@ import { filterTestPool, type PoolQuestion, type TestTopic } from './test-pool';
 export type SprintSelection = {
   examId: string; streamId: string | null; subjectId: string | null; topicId: string | null;
   yearFrom: number; yearTo: number; minutes: 12 | 15;
+  subjectIds?: string[]; topicIds?: string[]; years?: number[];
 };
 export type SprintCatalog = {
   examId: string; streamId: string | null; label: string; mixed: boolean;
@@ -18,9 +19,17 @@ export function sprintCreationMessage(error: { code?: string; message?: string }
   if (error.code === '23503') return 'Question availability changed. Refresh the page and try again.';
   return 'Unable to start your sprint. Please retry.';
 }
-export function sprintPool(pool: PoolQuestion[], selection: Pick<SprintSelection, 'subjectId' | 'topicId' | 'yearFrom' | 'yearTo'>, topics: TestTopic[]) {
-  return filterTestPool(pool, { subjectId: selection.subjectId, topicId: selection.topicId, year: null, paper: null }, topics)
-    .filter(q => !q.marks_to_all && q.year != null && q.year >= selection.yearFrom && q.year <= selection.yearTo);
+export function sprintFilterValues(selection: Pick<SprintSelection, 'subjectId' | 'topicId' | 'yearFrom' | 'yearTo' | 'subjectIds' | 'topicIds' | 'years'>) {
+  return { subjects: selection.subjectIds ?? (selection.subjectId ? [selection.subjectId] : []),
+    topics: selection.topicIds ?? (selection.topicId ? [selection.topicId] : []), years: selection.years };
+}
+export function sprintPool(pool: PoolQuestion[], selection: Pick<SprintSelection, 'subjectId' | 'topicId' | 'yearFrom' | 'yearTo' | 'subjectIds' | 'topicIds' | 'years'>, topics: TestTopic[]) {
+  const filters = sprintFilterValues(selection);
+  const topicQuestions = filters.topics.length ? new Set(filters.topics.flatMap(topicId =>
+    filterTestPool(pool, { subjectId: null, topicId, year: null, paper: null }, topics).map(q => q.id))) : null;
+  return pool.filter(q => !q.marks_to_all && q.year != null &&
+    (filters.years ? filters.years.includes(q.year) : q.year >= selection.yearFrom && q.year <= selection.yearTo) &&
+    (!filters.subjects.length || filters.subjects.includes(q.subject_id)) && (!topicQuestions || topicQuestions.has(q.id)));
 }
 export function sprintAvailability(pool: PoolQuestion[], mixed: boolean) {
   const counts = { MCQ: 0, MSQ: 0, NAT: 0 };
@@ -41,7 +50,12 @@ export function chooseSprint(pool: PoolQuestion[], mixed: boolean, random = Math
 export function validateSprint(selection: SprintSelection, topics: TestTopic[], subjects: { id: string }[]) {
   if (![12, 15].includes(selection.minutes) || !Number.isInteger(selection.yearFrom) || !Number.isInteger(selection.yearTo) ||
     selection.yearFrom < 1900 || selection.yearTo > 2200 || selection.yearFrom > selection.yearTo) return 'Choose valid years and a 12- or 15-minute timer.';
-  if (selection.subjectId && !subjects.some(s => s.id === selection.subjectId)) return 'Choose a subject available in this stream.';
-  if (selection.topicId && (!selection.subjectId || !topics.some(t => t.id === selection.topicId && t.subject_id === selection.subjectId))) return 'Choose a topic belonging to your subject.';
+  for (const values of [selection.subjectIds, selection.topicIds]) {
+    if (values !== undefined && (!Array.isArray(values) || values.length > 500 || values.some(id => typeof id !== 'string') || new Set(values).size !== values.length)) return 'Choose valid subjects and topics.';
+  }
+  if (selection.years !== undefined && (!Array.isArray(selection.years) || !selection.years.length || selection.years.length > 301 || selection.years.some(year => !Number.isInteger(year) || year < 1900 || year > 2200) || new Set(selection.years).size !== selection.years.length)) return 'Choose at least one valid year.';
+  const filters = sprintFilterValues(selection);
+  if (filters.subjects.some(id => !subjects.some(s => s.id === id))) return 'Choose a subject available in this stream.';
+  if (filters.topics.some(id => !topics.some(t => t.id === id && subjects.some(s => s.id === t.subject_id) && (!filters.subjects.length || filters.subjects.includes(t.subject_id))))) return 'Choose topics belonging to your selected subjects.';
   return null;
 }

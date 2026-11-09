@@ -9,12 +9,24 @@ const helpers=load('lib/test-pool.ts',{'./stream-scope':scope});
 const topics=[{id:'root',parent_id:null,subject_id:'soil',name:'Foundation'},{id:'pile',parent_id:'root',subject_id:'soil',name:'Piles'},{id:'bearing',parent_id:'root',subject_id:'soil',name:'Bearing'},{id:'other',parent_id:null,subject_id:'water',name:'Hydrology'}];
 const pool=['CE1','CE2'].flatMap(paper=>Array.from({length:65},(_,i)=>({id:`${paper}-${i+1}`,subject_id:i<30?'soil':'water',topic_id:i<15?'pile':i<30?'bearing':'other',year:2026,paper,source_question_number:i+1,marks:i<30?1:2}))).reverse();
 const request={examId:'gate',streamId:'civil',mode:'full_paper',year:2026,paper:'CE1',subjectId:null,topicId:null,count:10,timed:true};
-function grader({stream='civil'}={}){
+function grader({stream='civil',questionPool=pool}={}){
   let inserted;
   const client={from(table){const builder={select(){return this},in(){return this},insert(row){inserted=row;return this},single:async()=>({data:{id:'session'},error:null}),upsert:async()=>({error:null}),then(resolve){resolve({data:table==='topics'?topics:[],error:null})}};return builder;}};
-  const actions=load('app/(dashboard)/test/select/actions.ts',{'@/lib/exam-context':{requireExamContext:async()=>({user:{id:'student'},exam:{id:'gate',requires_stream:true},stream:{id:stream}})},'@/lib/supabase/server':{createClient:async()=>client},'@/lib/test-catalog':{getTestPool:async(_exam,s)=>s.id==='civil'?pool:[]},'@/lib/test-pool':helpers});
+  const actions=load('app/(dashboard)/test/select/actions.ts',{'@/lib/exam-context':{requireExamContext:async()=>({user:{id:'student'},exam:{id:'gate',requires_stream:true},stream:{id:stream}})},'@/lib/supabase/server':{createClient:async()=>client},'@/lib/test-catalog':{getTestPool:async(_exam,s)=>s.id==='civil'?questionPool:[]},'@/lib/test-pool':helpers});
   return {create:actions.createTest,inserted:()=>inserted};
 }
+
+test('practice checkbox arrays combine sources and topics without including unselected years',async()=>{
+ const questionPool=[...pool,...pool.map(q=>({...q,id:`old-${q.id}`,year:2024})),...pool.map(q=>({...q,id:`gap-${q.id}`,year:2025}))];
+ const selection={...request,mode:'custom',year:null,paper:null,subjectId:null,topicId:null,years:[2024,2026],papers:['CE1','CE2'],subjectIds:['soil','water'],topicIds:['root','other'],count:150};
+ const action=grader({questionPool});assert.equal((await action.create(selection)).sessionId,'session');
+ const row=action.inserted();assert.equal(row.total_questions,150);assert.equal(row.year,null);assert.equal(row.paper,null);assert.equal(row.subject_id,null);assert.equal(row.topic_id,null);
+ assert.ok(row.question_ids.every(id=>!id.startsWith('gap-')));
+ assert.equal(helpers.filterTestPool(questionPool,selection,topics).length,260);
+ for(const invalid of [{mode:'full_paper'},{years:[]},{papers:[]},{years:[2024,2024]},{papers:['foreign']},{subjectIds:['foreign']},{subjectIds:['water'],topicIds:['pile']},{topicIds:'root'}]){
+   const rejected=grader({questionPool});assert.ok((await rejected.create({...selection,...invalid})).error);assert.equal(rejected.inserted(),undefined);
+ }
+});
 test('full paper snapshots exactly one shift in source order and keeps the 180-minute timer',async()=>{
  const action=grader();assert.equal((await action.create(request)).sessionId,'session');
  const row=action.inserted();assert.equal(row.stream_id,'civil');assert.equal(row.paper,'CE1');assert.equal(row.year,2026);assert.equal(row.total_questions,65);assert.equal(row.duration_minutes,180);

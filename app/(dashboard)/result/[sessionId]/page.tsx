@@ -2,8 +2,13 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { calculateMarks } from "@/lib/marking";
-import { ResultContent } from "./result-content";
+import {
+  recordsForQuestions,
+  summarizeAttempts,
+  type MetricsAnswer,
+  type MetricsQuestion,
+} from "@/lib/test-metrics";
+import { ResultContent, type QuestionTypeStats, type MarksTierStats, type SubjectBreakdown } from "./result-content";
 import { SessionConcepts } from "@/components/smart-tags/SessionConcepts";
 import { Suspense } from "react";
 
@@ -29,7 +34,7 @@ async function ResultPageContent({
 
   const userId = user.id;
 
-  const { data: session } = await supabase
+  const { data: session, error: sessionError } = await supabase
     .from("test_sessions")
     .select("*")
     .eq("exam_id", exam.id)
@@ -38,16 +43,20 @@ async function ResultPageContent({
     .eq("user_id", userId)
     .single();
 
-  if (!session) {
+  if (sessionError || !session) {
     notFound();
   }
   if (session.status === "in_progress")
     redirect(`/test/${sessionId}`);
 
-  const { data: answers } = await supabase
+  const { data: answers, error: answersError } = await supabase
     .from("test_answers")
     .select("*, questions(*)")
     .eq("session_id", sessionId);
+
+  if (answersError) {
+    throw new Error("Unable to load the saved answers for this session. Please retry.");
+  }
 
   const { data: subjects } = await supabase
     .from("subjects")
@@ -56,89 +65,187 @@ async function ResultPageContent({
     .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null");
 
   const subjectNameMap = new Map(
-    (subjects || []).map((s) => [s.id, s.name])
+    (subjects || []).map((subject) => [subject.id, subject.name])
   );
 
-  const answerList = answers || [];
-  const correctCount = answerList.filter((a) => a.is_correct === true).length;
-  const wrongCount = answerList.filter((a) => a.is_correct === false).length;
-  const skippedCount = Math.max(0, (session.question_ids?.length || session.total_questions) - correctCount - wrongCount);
-  const totalQuestions = session.question_ids?.length || session.total_questions;
-  const questionIds: string[] = session.question_ids || answerList.map(answer => answer.question_id);
-  const { data: markedQuestions } = await supabase.from("questions").select("id, marks, negative_marks, marks_to_all")
-    .eq("exam_id", session.exam_id).in("id", questionIds);
-  const marks = calculateMarks(markedQuestions || [], answerList);
-  const accuracy =
-    correctCount + wrongCount > 0
-      ? Math.round((correctCount / (correctCount + wrongCount)) * 100)
-      : 0;
+  const subjectIds = [...new Set((subjects || []).map((subject) => subject.id).filter(Boolean))] as string[];
+  const { data: topicRows } = subjectIds.length > 0
+    ? await supabase
+        .from("topics")
+        .select("id, name, subject_id")
+        .in("subject_id", subjectIds)
+    : { data: [] };
+  const topicNameMap = new Map(
+    (topicRows || []).map((topic) => [topic.id, topic.name])
+  );
 
-  const subjectMap = new Map<
-    string,
-    { id: string; name: string; total: number; correct: number; wrong: number }
-  >();
-  answerList.forEach((a: { questions?: { subject_id: string }; is_correct: boolean | null }) => {
-    const subjectId = a.questions?.subject_id || "unknown";
-    const subjectName = subjectNameMap.get(subjectId) || "Unknown";
-    const entry = subjectMap.get(subjectId) || {
-      id: subjectId,
-      name: subjectName,
-      total: 0,
-      correct: 0,
-      wrong: 0,
-    };
-    entry.total++;
-    if (a.is_correct === true) entry.correct++;
-    else if (a.is_correct === false) entry.wrong++;
-    subjectMap.set(subjectId, entry);
+  const answerList = (answers || []) as (MetricsAnswer & {
+    questions?: MetricsQuestion | MetricsQuestion[] | null;
+  })[];
+  const declaredQuestionIds = Array.isArray(session.question_ids) && session.question_ids.length > 0
+    ? session.question_ids
+    : [];
+  const answerQuestionIds = answerList.map((answer) => answer.question_id);
+  const questionIds = declaredQuestionIds.length > 0 ? declaredQuestionIds : answerQuestionIds;
+  const recordedQuestionCount = Math.max(questionIds.length, Number(session.total_questions ?? 0));
+
+  let markedQuestions: MetricsQuestion[] = [];
+  if (questionIds.length > 0) {
+    const { data, error } = await supabase
+      .from("questions")
+      .select("id, marks, negative_marks, marks_to_all, question_type, subject_id, topic_id")
+      .eq("exam_id", session.exam_id)
+      .in("id", questionIds);
+    if (error) {
+      throw new Error("Unable to load the question set for this session. Please retry.");
+    }
+    markedQuestions = (data || []) as MetricsQuestion[];
+  }
+
+  // Keep the persisted question order and use the joined row as a fallback for
+  // older sessions whose question record could not be fetched directly.
+  const questionMap = new Map<string, MetricsQuestion>();
+  for (const question of markedQuestions) questionMap.set(question.id, question);
+  for (const answer of answerList) {
+    const joined = Array.isArray(answer.questions) ? answer.questions[0] : answer.questions;
+    if (joined?.id && !questionMap.has(joined.id)) {
+      questionMap.set(joined.id, joined);
+    }
+  }
+
+  const answerMap = new Map(answerList.map((answer) => [answer.question_id, answer]));
+  const built = recordsForQuestions(questionIds, questionMap, answerMap);
+  const summary = summarizeAttempts(built.records, {
+    session,
+    subjectNames: subjectNameMap,
+    topicNames: topicNameMap,
   });
-  const subjectBreakdown = Array.from(subjectMap.values());
 
-  const startedAt = new Date(session.started_at).getTime();
-  const completedAt = session.completed_at
-    ? new Date(session.completed_at).getTime()
-    : Date.now();
-  const timeTakenSeconds = session.mode === "sprint" && session.sprint_active_seconds != null ? session.sprint_active_seconds : Math.floor(
-    (completedAt - startedAt) / 1000
+  const missingQuestionCount = Math.max(
+    0,
+    recordedQuestionCount - summary.stats.total,
+    built.missingQuestionCount,
   );
+  const dataCaveats: string[] = [];
+  if (missingQuestionCount > 0) {
+    dataCaveats.push(
+      `${missingQuestionCount} question${missingQuestionCount === 1 ? "" : "s"} in this session could not be loaded. The figures below cover the ${summary.stats.total} loaded question${summary.stats.total === 1 ? "" : "s"}.`
+    );
+  }
+  if (summary.stats.ungraded > 0) {
+    dataCaveats.push(
+      `${summary.stats.ungraded} saved response${summary.stats.ungraded === 1 ? "" : "s"} did not have a trusted grading result and are not counted as correct or incorrect.`
+    );
+  }
+
+  const questionTypeBreakdown: QuestionTypeStats[] = (["MCQ", "MSQ", "NAT"] as const).map((type) => ({
+    type,
+    ...summary.byType[type],
+  }));
+
+  const marksTierBreakdown: MarksTierStats[] = ([1, 2] as const).map((tier) => ({
+    tier,
+    ...summary.byTier[String(tier) as "1" | "2"],
+  }));
+
+  const subjectBreakdown: SubjectBreakdown[] = summary.bySubject.map((subject) => ({
+    id: subject.id,
+    name: subject.name,
+    total: subject.total,
+    graded: subject.graded,
+    attempted: subject.attempted,
+    gradedAttempts: subject.gradedAttempts,
+    correct: subject.correct,
+    wrong: subject.wrong,
+    skipped: subject.skipped,
+    ungraded: subject.ungraded,
+    marksToAll: subject.marksToAll,
+    earnedMarks: subject.earnedMarks,
+    deductedMarks: subject.deductedMarks,
+    netMarks: subject.netMarks,
+    maximumMarks: subject.maximumMarks,
+    skippedMarks: subject.skippedMarks,
+    correctRate: subject.correctRate,
+    attemptAccuracy: subject.attemptAccuracy,
+    netMarkRate: subject.netMarkRate,
+  }));
 
   let message: { title: string; subtitle: string; icon: string };
-  const correctRate = totalQuestions > 0 ? correctCount / totalQuestions * 100 : 0;
-  if (correctRate >= 80)
+  if (summary.stats.graded === 0) {
     message = {
-      title: "Excellent!",
-      subtitle: "You're exam ready",
+      title: "Marks awarded",
+      subtitle: "No ordinarily graded questions in this session",
+      icon: "🧾",
+    };
+  } else if (summary.stats.gradedAttempts === 0) {
+    message = {
+      title: "No graded attempts",
+      subtitle: "Review the paper before trying the next one",
+      icon: "📋",
+    };
+  } else if (summary.stats.graded < 10) {
+    message = {
+      title: "Session complete",
+      subtitle: "Short practice — use the breakdown to choose the next step",
+      icon: "✅",
+    };
+  } else if ((summary.stats.correctRate ?? 0) >= 70) {
+    message = {
+      title: "Strong session",
+      subtitle: "Good coverage and accuracy in this test",
       icon: "🏆",
     };
-  else if (correctRate >= 60)
+  } else if ((summary.stats.correctRate ?? 0) >= 45) {
     message = {
-      title: "Good effort!",
-      subtitle: "Keep practicing",
-      icon: "💪",
+      title: "Solid base",
+      subtitle: "Review the misses and skipped questions next",
+      icon: "📊",
     };
-  else
+  } else {
     message = {
-      title: "Keep going!",
-      subtitle: "Review weak topics",
+      title: "Review next",
+      subtitle: "Use the breakdown below to choose what to revisit",
       icon: "📚",
     };
+  }
 
   return (
     <ResultContent
-      diagnosticPanel={<Suspense fallback={<section role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">Analysing your answers…</section>}><SessionConcepts userId={userId} examId={exam.id} streamId={stream?.id ?? null} sessionId={sessionId} /></Suspense>}
-      marks={marks}
-      correctCount={correctCount}
-      wrongCount={wrongCount}
-      skippedCount={skippedCount}
-      accuracy={accuracy}
-      totalQuestions={totalQuestions}
-      timeTakenSeconds={timeTakenSeconds}
+      diagnosticPanel={
+        <Suspense fallback={<section role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">Analysing your answers…</section>}>
+          <SessionConcepts userId={userId} examId={exam.id} streamId={stream?.id ?? null} sessionId={sessionId} />
+        </Suspense>
+      }
+      marks={{
+        earned: summary.stats.earnedMarks,
+        deducted: summary.stats.deductedMarks,
+        maximum: summary.stats.maximumMarks,
+        net: summary.stats.netMarks,
+      }}
+      correctCount={summary.stats.correct}
+      wrongCount={summary.stats.wrong}
+      skippedCount={summary.stats.skipped}
+      marksToAllCount={summary.stats.marksToAll}
+      gradedQuestionCount={summary.stats.graded}
+      attemptedCount={summary.stats.gradedAttempts}
+      accuracy={summary.stats.attemptAccuracy}
+      correctRate={summary.stats.correctRate}
+      skippedMarks={summary.stats.skippedMarks}
+      totalQuestions={Math.max(summary.stats.total, recordedQuestionCount)}
+      timing={summary.timing}
+      hasQuestionTiming={summary.hasQuestionTiming}
+      pacing={summary.pacing}
       subjectBreakdown={subjectBreakdown}
       message={message}
       sessionId={sessionId}
       isSprint={session.mode === "sprint"}
       sourceYear={session.year}
       sourcePaper={session.paper}
+      examName={exam.name}
+      streamName={stream?.name ?? null}
+      questionTypeBreakdown={questionTypeBreakdown}
+      marksTierBreakdown={marksTierBreakdown}
+      dataCaveats={dataCaveats}
     />
   );
 }
@@ -150,5 +257,3 @@ export default function ResultPage({
 }) {
   return <ResultPageContent params={params} />;
 }
-
-export { ResultContent };
