@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { DAILY_REVISION_CAP, REVISION_INTERVALS, type RevisionQueue, type RevisionQuestion } from "@/lib/revision";
@@ -39,31 +40,6 @@ export async function getRevisionQueue(): Promise<RevisionQueue> {
       const qData = data as RevisionQueue;
       if (qData.questions.length > 0) {
         return qData;
-      }
-      // If RPC returned 0 due questions, check if student has fresh unmastered mistakes from tests or bookmarks
-      const deck = await getRevisionDeck();
-      if (deck.questions.length > 0 && !qData.summary.queueComplete && qData.summary.completedCount === 0) {
-        const unmastered = deck.questions.filter(q => q.stage < 6);
-        if (unmastered.length > 0) {
-          const queueQuestions: RevisionQuestion[] = unmastered.slice(0, DAILY_REVISION_CAP).map(q => ({
-            id: q.id,
-            stage: q.stage || 1,
-            question: q.question,
-          }));
-          return {
-            reviewDate: qData.reviewDate || new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()),
-            questions: queueQuestions,
-            summary: {
-              dueCount: queueQuestions.length,
-              deferredCount: Math.max(0, unmastered.length - queueQuestions.length),
-              completedCount: 0,
-              dailyCap: DAILY_REVISION_CAP,
-              totalCount: queueQuestions.length,
-              xpEarned: 0,
-              queueComplete: false,
-            },
-          };
-        }
       }
       return qData;
     }
@@ -232,7 +208,7 @@ export async function updateSRSAfterAnswer(questionId: string, result: "correct"
   };
 }
 
-export async function getRevisionDeck(): Promise<DeckInfo> {
+export const getRevisionDeck = cache(async (): Promise<DeckInfo> => {
   const { user, exam, stream } = await getExamContext();
   if (!user || !exam) throw new Error("Choose an exam first");
   const supabase = await createClient();
@@ -243,10 +219,26 @@ export async function getRevisionDeck(): Promise<DeckInfo> {
   //    instead, and the deck shows bookmarks + whatever the RPC returns.
   let srsData: any[] | null = null;
   let srsSelectFailed = false;
-  const fullQuery = await supabase
+  const [fullQuery, { data: sessions }, { data: bookmarks }] = await Promise.all([
+    supabase
     .from("spaced_repetition")
     .select("id, question_id, stage, interval_days, next_review_date, repetition_count, mastered_at, questions(id, question_text, question_type, option_1, option_2, option_3, option_4, correct_option, correct_options, correct_option_sets, answer_min, answer_max, answer_ranges, answer_decimal_places, explanation, year, image_url, image_width, image_height, option_images, exam_id, stream_id, marks_to_all)")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id),
+    supabase
+    .from("test_sessions")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "completed")
+    .eq("exam_id", exam.id)
+    .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null")
+    .order("completed_at", { ascending: false })
+    .limit(30),
+    supabase
+    .from("bookmarks")
+    .select("question_id, questions(id, question_text, question_type, option_1, option_2, option_3, option_4, correct_option, correct_options, correct_option_sets, answer_min, answer_max, answer_ranges, answer_decimal_places, explanation, year, image_url, image_width, image_height, option_images, exam_id, stream_id, marks_to_all)")
+    .eq("user_id", user.id)
+    .limit(50),
+  ]);
 
   if (!fullQuery.error && fullQuery.data) {
     srsData = fullQuery.data;
@@ -263,17 +255,6 @@ export async function getRevisionDeck(): Promise<DeckInfo> {
     }
   }
 
-  // 2. Query completed test answers with is_correct = false (wrong answers).
-  const { data: sessions } = await supabase
-    .from("test_sessions")
-    .select("id")
-    .eq("user_id", user.id)
-    .eq("status", "completed")
-    .eq("exam_id", exam.id)
-    .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null")
-    .order("completed_at", { ascending: false })
-    .limit(30);
-
   const sessionIds = (sessions || []).map(s => s.id);
   const { data: wrongAnswers } = sessionIds.length > 0 ? await supabase
     .from("test_answers")
@@ -281,13 +262,6 @@ export async function getRevisionDeck(): Promise<DeckInfo> {
     .in("session_id", sessionIds)
     .eq("is_correct", false)
     .limit(100) : { data: [] };
-
-  // 3. Query bookmarks
-  const { data: bookmarks } = await supabase
-    .from("bookmarks")
-    .select("question_id, questions(id, question_text, question_type, option_1, option_2, option_3, option_4, correct_option, correct_options, correct_option_sets, answer_min, answer_max, answer_ranges, answer_decimal_places, explanation, year, image_url, image_width, image_height, option_images, exam_id, stream_id, marks_to_all)")
-    .eq("user_id", user.id)
-    .limit(50);
 
   const questionsMap = new Map<string, DeckQuestion>();
   const stageCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
@@ -367,4 +341,4 @@ export async function getRevisionDeck(): Promise<DeckInfo> {
     questions: allQuestions,
     srsSelectFailed,
   };
-}
+});

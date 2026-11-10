@@ -34,7 +34,7 @@ test('flashcards hide solutions, retain the card on failure, prevent double subm
   const queue = { reviewDate:'2026-11-04', questions, summary: {
     dueCount:3, totalCount:3, completedCount:0, deferredCount:0, dailyCap:20, xpEarned:0, queueComplete:false,
   }};
-  const { default: Page } = load('app/(dashboard)/revision/page.tsx', {
+  const { default: Page } = load('app/(dashboard)/revision/revision-content.tsx', {
     './revision.module.css': { default: new Proxy({}, { get: (_, key) => String(key) }) },
     'next/link': { default: props => React.createElement('a', props, props.children) },
     '@/components/ui/button': { Button: props => React.createElement('button',props,props.children) },

@@ -1,3 +1,4 @@
+import { getDailyQuestion } from "@/lib/daily-question";
 import { getExamContext } from "@/lib/exam-context";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
@@ -7,18 +8,15 @@ import { checkAndAwardBadges } from "@/lib/badges";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, exam, stream } = await getExamContext();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { exam, stream } = await getExamContext();
   if (!exam || (exam.requires_stream && !stream)) return NextResponse.json({ error: "Choose an exam first" }, { status: 409 });
 
   const url = new URL(req.url);
   const isHistory = url.searchParams.get("history") === "true";
-
-  const today = new Date(Date.now() + 330 * 60000).toISOString().split("T")[0];
 
   // Fetch history
   if (isHistory) {
@@ -62,76 +60,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ history });
   }
 
-  // Fetch today's question
-  const { data: daily } = await supabase
-    .from("daily_questions")
-    .select(`
-      id,
-      assigned_date,
-      question_id,
-      questions!inner (
-        id,
-        question_text,
-        option_1,
-        option_2,
-        option_3,
-        option_4,
-        correct_option,
-        explanation,
-        year,
-        subject_id,
-        subjects ( name )
-      )
-    `)
-    .eq("questions.exam_id", exam.id)
-    .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
-    .eq("assigned_date", today)
-    .maybeSingle();
-
-  if (!daily) {
-    return NextResponse.json({ question: null, message: "No question assigned for today yet" });
-  }
-
-  // Fetch all answers for this daily question, then find the user's answer in JS
-  // This avoids RLS issues with user_id text/uuid type mismatch
-  const { data: allAnswers } = await supabase
-    .from("daily_question_answers")
-    .select("*")
-    .eq("daily_question_id", daily.id);
-
-  const finalAnswer = (allAnswers || []).find((a: any) => a.user_id === user.id) || null;
-
-  const question = (daily as any).questions;
-
-  return NextResponse.json({
-    id: daily.id,
-    assignedDate: daily.assigned_date,
-    question: {
-      id: question.id,
-      text: question.question_text,
-      options: [question.option_1, question.option_2, question.option_3, question.option_4],
-      correctOption: finalAnswer ? question.correct_option : null,
-      explanation: finalAnswer ? question.explanation : null,
-      year: question.year,
-      subject: question.subjects?.name || null,
-    },
-    userAnswer: finalAnswer
-      ? {
-          selectedOption: finalAnswer.selected_option,
-          isCorrect: finalAnswer.is_correct,
-        }
-      : null,
-  });
+  return NextResponse.json(await getDailyQuestion() ?? { question: null, message: "No question assigned for today yet" });
 }
 
 export async function POST(req: Request) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, exam, stream } = await getExamContext();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { exam, stream } = await getExamContext();
   if (!exam || (exam.requires_stream && !stream)) return NextResponse.json({ error: "Choose an exam first" }, { status: 409 });
 
   const body = await req.json();

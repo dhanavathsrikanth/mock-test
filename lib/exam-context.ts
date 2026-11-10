@@ -12,16 +12,20 @@ export const getExamContext = cache(async () => {
     .select("target_exam_id, target_stream_id, full_name, email, role, avatar_url").eq("id", user.id).maybeSingle();
   if (error) throw error;
   if (!profile?.target_exam_id) return { user, exam: null, profile, stream: null as ExamStream | null };
-  const { data: exam, error: examError } = await supabase.from("exams")
-    .select("id, name, full_name, category, requires_stream").eq("id", profile.target_exam_id)
-    .eq("is_active", true).maybeSingle();
+  const [{ data: exam, error: examError }, streamResult] = await Promise.all([
+    supabase.from("exams")
+      .select("id, name, full_name, category, requires_stream").eq("id", profile.target_exam_id)
+      .eq("is_active", true).maybeSingle(),
+    profile.target_stream_id
+      ? supabase.from("exam_streams").select("id, exam_id, code, name")
+          .eq("id", profile.target_stream_id).eq("exam_id", profile.target_exam_id).eq("is_active", true).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
   if (examError) throw examError;
   let stream: ExamStream | null = null;
   if (exam?.requires_stream && profile.target_stream_id) {
-    const result = await supabase.from("exam_streams").select("id, exam_id, code, name")
-      .eq("id", profile.target_stream_id).eq("exam_id", exam.id).eq("is_active", true).maybeSingle();
-    if (result.error) throw result.error;
-    stream = result.data;
+    if (streamResult.error) throw streamResult.error;
+    stream = streamResult.data;
   }
   return { user, exam, profile, stream };
 });

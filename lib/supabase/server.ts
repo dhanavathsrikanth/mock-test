@@ -1,7 +1,10 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
-export async function createClient() {
+// Share auth refreshes and fetch memoization within a single server render only.
+// React resets this cache between requests; no session is shared between users.
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -24,4 +27,4 @@ export async function createClient() {
       },
     },
   );
-}
+});

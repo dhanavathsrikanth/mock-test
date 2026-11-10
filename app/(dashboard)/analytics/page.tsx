@@ -177,18 +177,15 @@ async function fetchQuestions(
   questionIds: string[],
 ): Promise<MetricsQuestion[]> {
   const questions: MetricsQuestion[] = [];
-  for (let offset = 0; offset < questionIds.length; offset += QUESTION_CHUNK) {
-    const chunk = questionIds.slice(offset, offset + QUESTION_CHUNK);
-    const { data, error } = await supabase
-      .from("questions")
+  for (let offset = 0; offset < questionIds.length; offset += QUESTION_CHUNK * 4) {
+    const chunks = Array.from({ length: 4 }, (_, index) => questionIds.slice(offset + index * QUESTION_CHUNK, offset + (index + 1) * QUESTION_CHUNK)).filter(chunk => chunk.length);
+    const results = await Promise.all(chunks.map(chunk => supabase.from("questions")
       .select("id, marks, negative_marks, marks_to_all, question_type, subject_id, topic_id")
-      .eq("exam_id", examId)
-      .in("id", chunk);
-
-    if (error) {
-      throw new Error("Unable to load question metadata for your tests. Please retry.");
+      .eq("exam_id", examId).in("id", chunk)));
+    for (const { data, error } of results) {
+      if (error) throw new Error("Unable to load question metadata for your tests. Please retry.");
+      questions.push(...((data || []) as MetricsQuestion[]));
     }
-    questions.push(...((data || []) as MetricsQuestion[]));
   }
   return questions;
 }
@@ -217,15 +214,14 @@ export default async function AnalyticsPage() {
     for (const answer of answersBySession.get(session.id) || []) questionIdSet.add(answer.question_id);
   }
   const questionIds = [...questionIdSet];
-  const questions = await fetchQuestions(supabase, exam.id, questionIds);
+  const [questions, { data: subjectRows, error: subjectError }, { data: streakRow, error: streakError }] = await Promise.all([
+    fetchQuestions(supabase, exam.id, questionIds),
+    supabase.from("subjects").select("id, name").eq("exam_id", exam.id)
+      .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null"),
+    supabase.from("streaks").select("current_streak, longest_streak, last_activity_date").eq("user_id", userId).maybeSingle(),
+  ]);
   const questionMap = new Map(questions.map((question) => [question.id, question]));
-
   const subjectIdSet = new Set(questions.map((question) => question.subject_id).filter(Boolean) as string[]);
-  const { data: subjectRows, error: subjectError } = await supabase
-    .from("subjects")
-    .select("id, name")
-    .eq("exam_id", exam.id)
-    .or(stream ? `stream_id.eq.${stream.id},stream_id.is.null` : "stream_id.is.null");
   if (subjectError) {
     throw new Error("Unable to load subject names for your tests. Please retry.");
   }
@@ -412,12 +408,6 @@ export default async function AnalyticsPage() {
     // is not claimed.
     pacing: overall.pacing,
   };
-
-  const { data: streakRow, error: streakError } = await supabase
-    .from("streaks")
-    .select("current_streak, longest_streak, last_activity_date")
-    .eq("user_id", userId)
-    .maybeSingle();
 
   const streakAvailable = !streakError;
   const studyStreak = streakAvailable ? Number(streakRow?.current_streak ?? 0) : 0;

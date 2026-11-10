@@ -13,24 +13,8 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     return [
-      {
-        source: "/_next/static/:path*",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
-      {
-        source: "/(.*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "no-cache, no-store, must-revalidate",
-          },
-        ],
-      },
+      // Next.js manages immutable build assets and private dynamic responses.
+      // A catch-all no-store header also disabled caching for images and fonts.
       {
         source: "/sw.js",
         headers: [

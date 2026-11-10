@@ -65,7 +65,7 @@ export default async function DashboardPage() {
 
   const userId = user.id;
 
-  const sessionsResult = await supabase
+  const sessionsPromise = supabase
     .from("test_sessions")
     .select(
       `
@@ -83,11 +83,11 @@ export default async function DashboardPage() {
     .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("status", "completed")
     .order("completed_at", { ascending: false });
-  const sessions = sessionsResult.data;
   const userName = profile?.full_name || "User";
   const studyDay = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
   const dayStart = new Date(`${studyDay}T00:00:00+05:30`).toISOString();
-  const [{ data: streak }, dailyProgress] = await Promise.all([
+  const [sessionsResult, { data: streak }, dailyProgress] = await Promise.all([
+    sessionsPromise,
     supabase.from("streaks").select("current_streak,last_activity_date").eq("user_id", userId).maybeSingle(),
     supabase.from("test_answers").select("id,test_sessions!inner(user_id,exam_id,stream_id,completed_at,status)", { count: "exact", head: true })
       .eq("test_sessions.user_id", userId).eq("test_sessions.exam_id", exam.id)
@@ -96,6 +96,7 @@ export default async function DashboardPage() {
       .or("selected_option.not.is.null,selected_options.not.is.null,numeric_answer.not.is.null"),
   ]);
 
+  const sessions = sessionsResult.data;
   const sessionIds = sessions?.map((s) => s.id) || [];
 
   const { data: allAnswers } =

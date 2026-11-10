@@ -10,7 +10,8 @@ export default async function BookmarksPage() {
 
   const userId = user.id;
 
-  const { data: bookmarks } = await supabase
+  const [bookmarksResult, reportsResult] = await Promise.all([
+    supabase
     .from("bookmarks")
     .select(
       `
@@ -43,7 +44,10 @@ export default async function BookmarksPage() {
     .eq("user_id", userId)
     .eq("questions.exam_id", exam.id)
     .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null", { referencedTable: "questions" })
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false }),
+    supabase.from("question_reports").select("question_id").eq("reported_by", userId),
+  ]);
+  const bookmarks = bookmarksResult.data;
 
   const list = (bookmarks || []) as unknown as BookmarkItem[];
 
@@ -55,10 +59,7 @@ export default async function BookmarksPage() {
     ),
   ] as string[];
 
-  const { data: reports } = await supabase
-    .from("question_reports")
-    .select("question_id")
-    .eq("reported_by", userId);
+  const reports = reportsResult.data;
 
   const reportedQuestionIds = (reports || []).map((r) => r.question_id);
 

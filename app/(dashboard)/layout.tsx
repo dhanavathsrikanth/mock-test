@@ -18,9 +18,11 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { exam, profile, stream } = await requireExamContext();
   const supabase = await createClient();
-  const configRes = await supabase.from("app_config").select("*").eq("key", "general").maybeSingle();
+  const [{ exam, profile, stream }, configRes] = await Promise.all([
+    requireExamContext(),
+    supabase.from("app_config").select("value").eq("key", "general").maybeSingle(),
+  ]);
   const generalConfig = configRes.data?.value as Record<string, unknown> | undefined;
   const maintenanceMode = generalConfig?.maintenanceMode === true;
   const userRole = profile?.role || "user";
