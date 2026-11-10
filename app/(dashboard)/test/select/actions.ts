@@ -2,8 +2,9 @@
 import { requireExamContext } from '@/lib/exam-context';
 import { createClient } from '@/lib/supabase/server';
 import { getTestPool } from '@/lib/test-catalog';
+import { getAnsweredBookmarkIds } from '@/lib/bookmark-progress';
 import { filterTestPool, testFilterValues, validateTestSelection, type TestSelection, type TestTopic } from '@/lib/test-pool';
-export async function createBookmarkTest(): Promise<{
+export async function createBookmarkTest(options: { unansweredOnly?: boolean } = {}): Promise<{
     error: string;
 } | {
     sessionId: string;
@@ -13,7 +14,18 @@ export async function createBookmarkTest(): Promise<{
     const { data: bookmarks, error } = await supabase.from('bookmarks').select('question_id').eq('user_id', user.id);
     if (error)
         return { error: 'Unable to load bookmarks.' };
-    const ids = new Set((bookmarks || []).map(b => b.question_id));
+    const bookmarkIds = (bookmarks || []).map(b => b.question_id);
+    const ids = new Set(bookmarkIds);
+    if (options.unansweredOnly) {
+        let answeredIds: Set<string>;
+        try {
+            answeredIds = await getAnsweredBookmarkIds(supabase, user.id, bookmarkIds);
+        } catch {
+            return { error: 'Unable to check answer history. Please try again.' };
+        }
+        for (const answeredId of answeredIds) ids.delete(answeredId);
+        if (ids.size === 0) return { error: 'No unanswered bookmarked questions remain.' };
+    }
     const questions = (await getTestPool(exam.id, stream)).filter(q => ids.has(q.id));
     if (!questions.length)
         return { error: 'No bookmarked questions are available for this stream.' };

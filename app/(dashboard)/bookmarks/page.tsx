@@ -1,6 +1,7 @@
 import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { BookmarksContent, type BookmarkItem } from "./bookmarks-content";
+import { getAnsweredBookmarkIds } from "@/lib/bookmark-progress";
 
 export const metadata = { title: "Bookmarks | Exam Prep" };
 
@@ -17,9 +18,14 @@ export default async function BookmarksPage() {
       `
       question_id,
       created_at,
+      mastered_at,
       questions!inner (
         id,
         question_text,
+        image_url,
+        image_width,
+        image_height,
+        option_images,
         option_1,
         option_2,
         option_3,
@@ -48,8 +54,15 @@ export default async function BookmarksPage() {
     supabase.from("question_reports").select("question_id").eq("reported_by", userId),
   ]);
   const bookmarks = bookmarksResult.data;
-
-  const list = (bookmarks || []) as unknown as BookmarkItem[];
+  const baseList = (bookmarks || []) as unknown as BookmarkItem[];
+  let answerHistoryAvailable = true;
+  let answeredIds = new Set<string>();
+  try {
+    answeredIds = await getAnsweredBookmarkIds(supabase, userId, baseList.map(b => b.question_id));
+  } catch {
+    answerHistoryAvailable = false;
+  }
+  const list = baseList.map(bookmark => ({ ...bookmark, answered: answeredIds.has(bookmark.question_id) }));
 
   const subjects = [
     ...new Set(
@@ -69,6 +82,7 @@ export default async function BookmarksPage() {
       subjects={subjects}
       userId={userId}
       reportedQuestionIds={reportedQuestionIds}
+      answerHistoryAvailable={answerHistoryAvailable}
     />
   );
 }

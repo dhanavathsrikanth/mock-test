@@ -65,7 +65,9 @@ function convertPlainToLatex(text: string): string {
   result = result.replace(/\^\{([^}]+)\}/g, "^{$1}");
   result = result.replace(/_\{([^}]+)\}/g, "_{$1}");
 
-  result = result.replace(/(\d)\/(\d)/g, "\\frac{$1}{$2}");
+  // A fraction-like substring inside a word (for example "1/3rd") is prose,
+  // not math. Converting it makes KaTeX try to parse the whole sentence.
+  result = result.replace(/(\d)\/(\d)(?![a-zA-Z])/g, "\\frac{$1}{$2}");
 
   result = result.replace(/sqrt\(([^)]+)\)/g, "\\sqrt{$1}");
   result = result.replace(/√\(([^)]+)\)/g, "\\sqrt{$1}");
@@ -226,17 +228,27 @@ export function renderMathToHtml(text: string): string {
             parts.push(escapeHtml(plainText.slice(lastIdx, cmdMatch.index)));
           }
           const mathStart = cmdMatch.index;
-          let mathEnd = mathStart;
-          let depth = 0;
-          for (let i = mathStart; i < plainText.length; i++) {
-            if (plainText[i] === "{") depth++;
-            if (plainText[i] === "}") depth--;
-            if (depth === 0 && i > mathStart) {
-              const after = plainText[i + 1] || "";
-              if (!/[a-zA-Z]/.test(after)) {
-                mathEnd = i + 1;
-                break;
-              }
+          const commandMatch = /^\\([a-zA-Z]+)/.exec(plainText.slice(mathStart));
+          const command = commandMatch?.[1] ?? "";
+          let mathEnd = mathStart + (commandMatch?.[0].length ?? 0);
+
+          const consumeGroup = (start: number): number => {
+            if (plainText[start] !== "{") return start;
+            let depth = 0;
+            for (let i = start; i < plainText.length; i++) {
+              if (plainText[i] === "{") depth++;
+              if (plainText[i] === "}") depth--;
+              if (depth === 0) return i + 1;
+            }
+            return start;
+          };
+
+          if (plainText[mathEnd] === "{") {
+            mathEnd = consumeGroup(mathEnd);
+            // Fractions need both numerator and denominator groups. Rendering
+            // only the first one produced a red KaTeX error for \frac{1}{3}.
+            if (command === "frac" && plainText[mathEnd] === "{") {
+              mathEnd = consumeGroup(mathEnd);
             }
           }
           if (mathEnd <= mathStart) mathEnd = Math.min(mathStart + 50, plainText.length);

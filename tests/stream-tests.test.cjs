@@ -12,7 +12,7 @@ const request={examId:'gate',streamId:'civil',mode:'full_paper',year:2026,paper:
 function grader({stream='civil',questionPool=pool}={}){
   let inserted;
   const client={from(table){const builder={select(){return this},in(){return this},insert(row){inserted=row;return this},single:async()=>({data:{id:'session'},error:null}),upsert:async()=>({error:null}),then(resolve){resolve({data:table==='topics'?topics:[],error:null})}};return builder;}};
-  const actions=load('app/(dashboard)/test/select/actions.ts',{'@/lib/exam-context':{requireExamContext:async()=>({user:{id:'student'},exam:{id:'gate',requires_stream:true},stream:{id:stream}})},'@/lib/supabase/server':{createClient:async()=>client},'@/lib/test-catalog':{getTestPool:async(_exam,s)=>s.id==='civil'?questionPool:[]},'@/lib/test-pool':helpers});
+  const actions=load('app/(dashboard)/test/select/actions.ts',{'@/lib/exam-context':{requireExamContext:async()=>({user:{id:'student'},exam:{id:'gate',requires_stream:true},stream:{id:stream}})},'@/lib/supabase/server':{createClient:async()=>client},'@/lib/test-catalog':{getTestPool:async(_exam,s)=>s.id==='civil'?questionPool:[]},'@/lib/test-pool':helpers,'@/lib/bookmark-progress':{getAnsweredBookmarkIds:async()=>new Set()}});
   return {create:actions.createTest,inserted:()=>inserted};
 }
 
