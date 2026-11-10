@@ -3,41 +3,30 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { PageHeading } from '@/components/workspace/PageHeading';
-import { useSignOut } from "@/hooks/use-sign-out";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { BadgeGrid } from "@/components/badges/BadgeGrid";
-import { NotificationPreferencesPanel } from "@/components/notifications/NotificationPreferences";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   User,
   Mail,
   Save,
   Trash2,
-  AlertTriangle,
-  LogOut,
   Shield,
   Target,
   Camera,
   X,
   Upload,
-  Zap,
   Trophy,
-  Star,
-  Flame,
   BookOpen,
   TrendingUp,
-  Clock,
   Award,
 } from "lucide-react";
 
@@ -108,29 +97,29 @@ function UserAvatar({ userName, avatarUrl, className }: { userName: string; avat
 
 export function ProfileContent({ profile: serverProfile, exams, levelData, xpTransactions, badges, totalTests, totalBookmarks }: ProfileContentProps) {
   const router = useRouter();
-  const { signOut: handleLogout, signingOut, signOutError } = useSignOut();
   const getSupabase = () => createClient();
   const [profile, setProfile] = useState(serverProfile);
   const [fullName, setFullName] = useState(serverProfile?.full_name || "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [clearing, setClearing] = useState(false);
+  const [profileError, setProfileError] = useState("");
 
   // Avatar states
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
   const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
-  const [cropSize, setCropSize] = useState(200);
+  const cropSize = 200;
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const cropContainerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const userId = profile?.id;
+  const currentLevelIndex = Math.min(Math.max(levelData?.current_level ?? 0, 0), XP_LEVELS.length - 1);
+  const currentLevel = XP_LEVELS[currentLevelIndex];
+  const nextLevel = XP_LEVELS[currentLevelIndex + 1];
 
   useEffect(() => {
     if (!profile) {
@@ -149,51 +138,31 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
   }, []);
 
   const saveProfile = async () => {
+    const name = fullName.trim();
+    if (!name) {
+      setProfileError("Enter your name before saving.");
+      return;
+    }
     setSaving(true);
+    setProfileError("");
     const supabase = getSupabase();
     const { error } = await supabase
       .from("profiles")
       .update({
-        full_name: fullName,
+        full_name: name,
       })
       .eq("id", userId);
 
     if (!error) {
+      setFullName(name);
+      setProfile((current) => current ? { ...current, full_name: name } : current);
       router.refresh();
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    }
+    } else setProfileError("Your profile could not be saved. Please try again.");
     setSaving(false);
   };
 
-
-  const handleClearHistory = async () => {
-    if (!userId || !profile?.target_exam_id) return;
-    setClearing(true);
-    const supabase = getSupabase();
-    const examId = profile.target_exam_id;
-    const { data: sessions, error: sessionsError } = await supabase.from("test_sessions")
-      .select("id").eq("user_id", userId).eq("exam_id", examId).or(profile.target_stream_id ? `stream_id.eq.${profile.target_stream_id}` : "stream_id.is.null");
-    const { data: bookmarks, error: bookmarksError } = await supabase.from("bookmarks")
-      .select("question_id, questions!inner(exam_id)").eq("user_id", userId).eq("questions.exam_id", examId).or(profile.target_stream_id ? `stream_id.eq.${profile.target_stream_id}` : "stream_id.is.null", {referencedTable:"questions"});
-    if (sessionsError || bookmarksError) { setClearing(false); return; }
-    const sessionIds = (sessions || []).map(session => session.id);
-    if (sessionIds.length) {
-      const { error } = await supabase.from("test_answers").delete().in("session_id", sessionIds);
-      if (error) { setClearing(false); return; }
-      const { error: deleteError } = await supabase.from("test_sessions").delete()
-        .eq("user_id", userId).eq("exam_id", examId).in("id",sessionIds);
-      if (deleteError) { setClearing(false); return; }
-    }
-    const questionIds = (bookmarks || []).map(bookmark => bookmark.question_id);
-    if (questionIds.length) {
-      const { error } = await supabase.from("bookmarks").delete().eq("user_id", userId).in("question_id", questionIds);
-      if (error) { setClearing(false); return; }
-    }
-    setClearing(false);
-    setShowConfirm(false);
-    router.refresh();
-  };
 
   // ---- Avatar upload with crop ----
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -326,13 +295,12 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
 
   return (
     <div className="w-full max-w-3xl mx-auto space-y-6 py-6">
-      <PageHeading title="Your profile" icon={<User />} description="Your learning identity, achievements, and account preferences." actions={saved && <span role="status" className="text-sm text-emerald-600 font-medium">Changes saved</span>} />
+      <PageHeading title="Your profile" icon={<User />} description="Your learning identity, progress, and achievements." actions={saved && <span role="status" className="text-sm text-emerald-600 font-medium">Changes saved</span>} />
 
       {/* Avatar Card */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col sm:flex-row items-center gap-4">
-            <div className="relative group">
+      <Card className="overflow-hidden border-primary/20">
+        <CardContent className="flex flex-col gap-5 bg-gradient-to-br from-primary/10 via-background to-background p-5 sm:flex-row sm:items-center sm:p-7">
+          <div className="relative group shrink-0">
               <UserAvatar
                 userName={profile.full_name || "U"}
                 avatarUrl={profile.avatar_url}
@@ -354,13 +322,13 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
                 className="hidden"
                 onChange={handleFileSelect}
               />
-            </div>
-            <div className="flex-1 text-center sm:text-left">
-              <p className="text-sm text-muted-foreground">Profile Photo</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Click the photo to change. JPG, PNG or WebP. Max 5MB.
-              </p>
-              <div className="flex gap-2 mt-3 justify-center sm:justify-start">
+          </div>
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">Learning profile</p>
+            <h2 className="mt-1 truncate text-2xl font-semibold tracking-tight">{profile.full_name || "Student"}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{profile.email}</p>
+            <p className="mt-2 text-sm text-muted-foreground">{currentLevel.icon} {currentLevel.name} · {levelData?.total_xp ?? 0} XP</p>
+            <div className="mt-4 flex flex-wrap gap-2 justify-center sm:justify-start">
                 <Button
                   variant="outline"
                   size="sm"
@@ -381,8 +349,8 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
                     Remove
                   </Button>
                 )}
-              </div>
             </div>
+            <p className="mt-3 text-xs text-muted-foreground">Profile photo · JPG, PNG, or WebP · up to 5 MB</p>
           </div>
         </CardContent>
       </Card>
@@ -417,12 +385,13 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           </div>
           <Button
             onClick={saveProfile}
-            disabled={saving}
+            disabled={saving || !fullName.trim() || fullName.trim() === (profile.full_name || "")}
             className="w-full sm:w-auto"
           >
             <Save className="h-4 w-4" />
             {saving ? "Saving..." : "Save Changes"}
           </Button>
+          {profileError && <p role="alert" className="text-sm text-destructive">{profileError}</p>}
         </CardContent>
       </Card>
 
@@ -430,10 +399,10 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
       <Card className="overflow-hidden">
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent p-6">
           <div className="flex items-center gap-4">
-            <div className="text-5xl">{XP_LEVELS[levelData?.current_level || 0].icon}</div>
+            <div className="text-5xl">{currentLevel.icon}</div>
             <div className="flex-1">
               <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Current Level</p>
-              <h2 className="text-2xl font-bold">{XP_LEVELS.find(level => level.level === (levelData?.current_level || 0))?.name || "Trainee"}</h2>
+              <h2 className="text-2xl font-bold">{currentLevel.name}</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 {levelData?.total_xp || 0} XP earned
               </p>
@@ -445,19 +414,16 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           </div>
           {/* Level Progress Bar */}
           {(() => {
-            const currentLevel = levelData?.current_level || 0;
             const totalXp = levelData?.total_xp || 0;
-            const current = XP_LEVELS[currentLevel];
-            const next = XP_LEVELS[currentLevel + 1];
-            if (!next) return null;
-            const xpInLevel = totalXp - current.xp;
-            const xpRequired = next.xp - current.xp;
-            const progress = Math.min((xpInLevel / xpRequired) * 100, 100);
+            if (!nextLevel) return <p className="mt-4 text-sm font-medium text-primary">Highest level reached</p>;
+            const xpInLevel = Math.max(0, totalXp - currentLevel.xp);
+            const xpRequired = nextLevel.xp - currentLevel.xp;
+            const progress = Math.min(Math.max((xpInLevel / xpRequired) * 100, 0), 100);
             return (
               <div className="mt-4">
                 <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
-                  <span>{current.name}</span>
-                  <span>{next.name} ({next.xp - totalXp} XP to go)</span>
+                  <span>{currentLevel.name}</span>
+                  <span>{nextLevel.name} ({Math.max(0, nextLevel.xp - totalXp)} XP to go)</span>
                 </div>
                 <div className="h-3 bg-muted rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full transition-all duration-500" style={{ width: `${progress}%` }} />
@@ -469,21 +435,21 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
       </Card>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-4 text-center">
-          <Zap className="h-5 w-5 mx-auto text-yellow-500 mb-1" />
-          <p className="text-2xl font-bold">{levelData?.total_xp || 0}</p>
-          <p className="text-[10px] text-muted-foreground">Total XP</p>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Card className="p-4 text-center">
           <Trophy className="h-5 w-5 mx-auto text-purple-500 mb-1" />
           <p className="text-2xl font-bold">{totalTests}</p>
-          <p className="text-[10px] text-muted-foreground">Tests Done</p>
+          <p className="text-xs text-muted-foreground">Tests completed</p>
         </Card>
         <Card className="p-4 text-center">
           <BookOpen className="h-5 w-5 mx-auto text-blue-500 mb-1" />
           <p className="text-2xl font-bold">{totalBookmarks}</p>
           <p className="text-[10px] text-muted-foreground">Bookmarks</p>
+        </Card>
+        <Card className="col-span-2 p-4 text-center sm:col-span-1">
+          <Award className="h-5 w-5 mx-auto text-amber-500 mb-1" />
+          <p className="text-2xl font-bold">{badges.length}</p>
+          <p className="text-xs text-muted-foreground">Badges earned</p>
         </Card>
       </div>
 
@@ -556,8 +522,11 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
         </Card>
       )}
 
-        {/* Level Roadmap */}
-        <Card id="level-roadmap" className="scroll-mt-6">
+      <details id="level-roadmap" className="group scroll-mt-6 rounded-xl border bg-card">
+        <summary className="cursor-pointer list-none p-5 font-semibold marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span className="flex items-center justify-between gap-3"><span>Level roadmap</span><span className="text-xs font-normal text-muted-foreground group-open:hidden">View all levels</span><span className="hidden text-xs font-normal text-muted-foreground group-open:inline">Hide roadmap</span></span>
+        </summary>
+        <Card className="border-0 border-t shadow-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-muted-foreground" />
@@ -585,6 +554,7 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           </div>
         </CardContent>
       </Card>
+      </details>
 
       {/* Account Info */}
       <Card>
@@ -605,108 +575,6 @@ export function ProfileContent({ profile: serverProfile, exams, levelData, xpTra
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Preferences</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Theme</p>
-              <p className="text-xs text-muted-foreground">
-                Switch between light and dark mode
-              </p>
-            </div>
-            <ThemeSwitcher />
-          </div>
-        </CardContent>
-      </Card>
-
-      <NotificationPreferencesPanel />
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <LogOut className="h-5 w-5 text-muted-foreground" />
-            Account
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Signed in as {profile.email}
-          </p>
-          <Button
-            variant="outline"
-            onClick={handleLogout}
-            disabled={signingOut}
-            aria-busy={signingOut}
-            className="w-full sm:w-auto"
-          >
-            <LogOut className="h-4 w-4" />
-            {signingOut ? "Signing out…" : "Sign Out"}
-          </Button>
-          {signOutError && <p role="alert" className="text-sm text-destructive">{signOutError}</p>}
-        </CardContent>
-      </Card>
-
-      <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
-            Danger Zone
-          </CardTitle>
-          <CardDescription>
-            Irreversible actions. Proceed with caution.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium">Clear history for this exam</p>
-            </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowConfirm(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Clear
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <BadgeGrid />
-
-      {/* Clear History Confirm */}
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <Card className="w-full max-w-sm p-6 space-y-4">
-            <h3 className="text-lg font-semibold">Clear history for this exam?</h3>
-            <p className="text-sm text-muted-foreground">
-              This will permanently delete your test sessions, answers, and
-              bookmarks for the selected exam. This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirm(false)}
-                disabled={clearing}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleClearHistory}
-                disabled={clearing}
-              >
-                {clearing ? "Deleting..." : "Delete exam history"}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* Crop Modal */}
       {showCropModal && cropImageSrc && (
