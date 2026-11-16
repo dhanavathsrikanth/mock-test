@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { BookmarksContent, type BookmarkItem } from "./bookmarks-content";
 import { getAnsweredBookmarkIds } from "@/lib/bookmark-progress";
 
-export const metadata = { title: "Bookmarks | Exam Prep" };
+export const metadata = { title: "Bookmarks | StudentAce" };
 
 export default async function BookmarksPage() {
   const supabase = await createClient();

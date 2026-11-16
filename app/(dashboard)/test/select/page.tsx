@@ -2,7 +2,7 @@ import { requireExamContext } from '@/lib/exam-context';
 import { createClient } from '@/lib/supabase/server';
 import { getTestPool } from '@/lib/test-catalog';
 import { TestSelectForm } from './test-select-form';
-export const metadata = { title: 'New Test | Exam Prep' };
+export const metadata = { title: 'New Test | StudentAce' };
 export default async function TestSelectPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
     const query = await searchParams;
     const { exam, stream } = await requireExamContext();

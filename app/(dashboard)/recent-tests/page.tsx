@@ -16,7 +16,7 @@ import { ClipboardList, Check, X, Minus, ArrowRight, TrendingUp, Target, BarChar
 import Link from "next/link";
 import { PageHeading } from '@/components/workspace/PageHeading';
 
-export const metadata = { title: "Recent Tests | Exam Prep" };
+export const metadata = { title: "Recent Tests | StudentAce" };
 
 const modeLabels: Record<string, string> = {
   sprint: "5-Q Sprint",

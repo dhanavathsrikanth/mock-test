@@ -6,7 +6,7 @@ import { ArrowRight, GraduationCap, Settings2 } from "lucide-react";
 import { PageHeading } from "@/components/workspace/PageHeading";
 import { SettingsPreferences } from "./settings-preferences";
 
-export const metadata = { title: "Settings | Exam Prep" };
+export const metadata = { title: "Settings | StudentAce" };
 
 export default async function SettingsPage() {
   const { user, exam, stream } = await requireExamContext();

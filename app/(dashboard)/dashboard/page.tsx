@@ -47,7 +47,7 @@ const ExamCountdown = dynamic(
     )
 );
 
-export const metadata = { title: "Dashboard | Exam Prep" };
+export const metadata = { title: "Dashboard | StudentAce" };
 
 const modeLabels: Record<string, string> = {
   full_mock: "Full Mock",

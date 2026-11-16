@@ -28,7 +28,7 @@ export default async function Home() {
         <div className="max-w-6xl mx-auto flex h-16 items-center justify-between px-4">
           <Link href="/" className="flex items-center gap-2 font-bold text-lg">
             <GraduationCap className="h-6 w-6 text-primary" />
-            Exam Prep
+            StudentAce
           </Link>
           <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" asChild>
@@ -109,7 +109,7 @@ export default async function Home() {
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="max-w-6xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>Exam Prep — Built for your exam preparation</p>
+          <p>StudentAce — Built for your exam preparation</p>
         </div>
       </footer>
     </main>

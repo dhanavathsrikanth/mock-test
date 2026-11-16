@@ -3,7 +3,7 @@ import { requireExamContext } from '@/lib/exam-context';
 import { getConceptFixPool } from '@/lib/concept-fix-server';
 import { StartConceptFix } from '@/components/smart-tags/StartConceptFix';
 
-export const metadata = { title: 'Concept fix | Exam Prep' };
+export const metadata = { title: 'Concept fix | StudentAce' };
 export default async function ConceptFixPage({ searchParams }: { searchParams: Promise<{ subject?: string; concept?: string }> }) {
   const { exam, stream } = await requireExamContext();
   const { subject, concept } = await searchParams;

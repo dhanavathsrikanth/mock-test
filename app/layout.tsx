@@ -1,19 +1,14 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { Analytics } from "@vercel/analytics/next";
 import { ToastProvider } from "@/components/ui/toast-provider";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import "./globals.css";
 import "katex/dist/katex.min.css";
 
-const defaultUrl = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : "http://localhost:3000";
-
 export const metadata: Metadata = {
-  metadataBase: new URL(defaultUrl),
-  title: "Exam Prep - Mock Tests and Practice",
+  metadataBase: new URL("https://studentace.in"),
+  title: "StudentAce | Mock Tests and Practice",
   description: "Practice for your selected exam with previous year questions and track your performance.",
 };
 
@@ -40,7 +35,6 @@ export default function RootLayout({
           <ToastProvider>
           <ConfirmProvider>
           {children}
-          <Analytics />
           </ConfirmProvider>
           </ToastProvider>
         </ThemeProvider>

@@ -5,7 +5,7 @@ import { getExamContext } from "@/lib/exam-context";
 import { ExamPicker } from "./exam-picker";
 import { getContentAvailability } from "@/lib/test-catalog";
 
-export const metadata = { title: "Choose your exam | Exam Prep" };
+export const metadata = { title: "Choose your exam | StudentAce" };
 
 export default async function OnboardingPage() {
   const { user, exam, stream } = await getExamContext();
@@ -20,7 +20,7 @@ export default async function OnboardingPage() {
   const availability = await getContentAvailability((exams || []).map(item => item.id));
   return <main className="min-h-screen bg-background px-4 py-12">
     <div className="mx-auto max-w-lg space-y-6">
-      <div><p className="text-sm font-medium text-primary">Exam Prep</p><h1 className="mt-2 text-3xl font-bold">Choose your exam</h1><p className="mt-2 text-muted-foreground">Your practice, subjects, results and revision will follow this selection. You can switch exams anytime.</p></div>
+      <div><p className="text-sm font-medium text-primary">StudentAce</p><h1 className="mt-2 text-3xl font-bold">Choose your exam</h1><p className="mt-2 text-muted-foreground">Your practice, subjects, results and revision will follow this selection. You can switch exams anytime.</p></div>
       {exams?.length ? <ExamPicker exams={exams} streams={streams || []} availability={availability} selectedId={exam?.id} selectedStreamId={stream?.id} /> : <p className="rounded-lg border p-4">No exams are available yet. Please check back soon.</p>}
       {exam && (!exam.requires_stream || stream) && <Link href="/dashboard" className="block text-center text-sm underline">Keep preparing for {exam.name}{stream ? ` · ${stream.name}` : ''}</Link>}
     </div>

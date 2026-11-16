@@ -11,7 +11,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { sessionId } = await params;
   return {
-    title: `Review ${sessionId.slice(0, 8)}... | Exam Prep`,
+    title: `Review ${sessionId.slice(0, 8)}... | StudentAce`,
   };
 }
 

@@ -123,7 +123,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
             className="flex items-center gap-2 font-bold text-lg"
           >
             <span className={styles.brandIcon}><GraduationCap className="h-5 w-5" /></span>
-            Exam Prep
+            StudentAce
           </Link>
         </div>
 
@@ -224,7 +224,7 @@ export function Sidebar({ userName, userRole, avatarUrl }: SidebarProps) {
               onClick={() => setDrawerOpen(false)}
             >
               <span className={styles.brandIcon}><GraduationCap className="h-5 w-5" /></span>
-              Exam Prep
+              StudentAce
             </Link>
             <Button
               ref={closeRef}

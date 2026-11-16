@@ -19,7 +19,7 @@ import {
   type YearWiseItem,
 } from "./analytics-content";
 
-export const metadata = { title: "Analytics | Exam Prep" };
+export const metadata = { title: "Analytics | StudentAce" };
 
 const PAGE_SIZE = 500;
 const SESSION_CHUNK = 50;

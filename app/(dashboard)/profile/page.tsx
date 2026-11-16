@@ -2,7 +2,7 @@ import { requireExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
 import { ProfileContent } from "./profile-content";
 
-export const metadata = { title: "Profile | Exam Prep" };
+export const metadata = { title: "Profile | StudentAce" };
 
 export default async function ProfilePage() {
   const supabase = await createClient();

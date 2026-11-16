@@ -78,7 +78,7 @@ export async function processCampaignJob(db: SupabaseClient, job: CampaignJob, n
       const unsubscribe=`${origin}/unsubscribe?token=${encodeURIComponent(token)}`;
       const oneClick=`${origin}/api/engagement/unsubscribe?token=${encodeURIComponent(token)}`;
       const message=milestoneEmail(copy.title,copy.message,`${origin}${copy.path}`,unsubscribe,
-        process.env.CAMPAIGN_SENDER_NAME ?? 'Exam Prep',process.env.CAMPAIGN_POSTAL_ADDRESS!);
+        process.env.CAMPAIGN_SENDER_NAME ?? 'StudentAce',process.env.CAMPAIGN_POSTAL_ADDRESS!);
       const resend=new Resend(process.env.RESEND_API_KEY);
       const result=await deadline(resend.emails.send({from:process.env.CAMPAIGN_FROM_EMAIL!,to:email!,...message,
         headers:{'List-Unsubscribe':`<${oneClick}>`,'List-Unsubscribe-Post':'List-Unsubscribe=One-Click'},

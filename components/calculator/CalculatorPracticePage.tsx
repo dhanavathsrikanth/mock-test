@@ -9,7 +9,7 @@ export function CalculatorPracticePage({ dashboard = false }: { dashboard?: bool
   return (
     <Container className={`${styles.page} ${dashboard ? styles.dashboard : ""}`}>
       {!dashboard && <nav className={styles.navigation} aria-label="Calculator navigation">
-        <Link href="/dashboard" className={styles.brand}><GraduationCap size={23} />Exam Prep</Link>
+        <Link href="/dashboard" className={styles.brand}><GraduationCap size={23} />StudentAce</Link>
         <span className={styles.divider} aria-hidden="true" />
         <span className={styles.breadcrumb}>Practice tools <ChevronRight size={13} /><span>GATE Calculator</span></span>
         <div className={styles.navActions}><ThemeSwitcher /><Link href="/dashboard" className={styles.back}><ArrowLeft size={14} />Dashboard</Link></div>
