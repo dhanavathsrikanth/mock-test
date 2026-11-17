@@ -25,6 +25,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var n=function(t,v){return Object.defineProperty(t,"name",{value:v,configurable:true})};if(typeof window!=="undefined"){window.__name=n}if(typeof globalThis!=="undefined"){globalThis.__name=n}})();`,
+          }}
+        />
+      </head>
       <body className={`${geistSans.className} antialiased`}>
         <ThemeProvider
           attribute="class"

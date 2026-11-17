@@ -58,19 +58,24 @@ export function LoginForm({ initialError = null }: { initialError?: string | nul
   };
 
   const handleGoogleLogin = async () => {
-    const supabase = createClient();
     setIsGoogleLoading(true);
     setError(null);
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
 
-    if (error) {
-      setError(error.message);
+      if (error) {
+        setError(error.message);
+        setIsGoogleLoading(false);
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to sign in with Google");
       setIsGoogleLoading(false);
     }
   };
