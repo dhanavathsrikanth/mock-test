@@ -1,5 +1,5 @@
 {
-  "name": "studentace-in",
+  "name": "studentace",
   "private": true,
   "scripts": {
     "dev": "next dev",
