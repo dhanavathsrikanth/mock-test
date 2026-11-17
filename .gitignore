@@ -19,3 +19,6 @@ deepseek_csv_*.txt
 output/
 data/
 supabase/.temp/
+/dist/
+.vinext/
+.cloudflare/

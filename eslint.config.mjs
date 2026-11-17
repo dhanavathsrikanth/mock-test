@@ -10,6 +10,9 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
+  {
+    ignores: [".cloudflare/**", ".vinext/**", "dist/**", ".next/**"],
+  },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
