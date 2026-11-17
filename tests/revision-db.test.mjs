@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { PGlite } from '@electric-sql/pglite';
 
 const migration = fs.readFileSync('supabase/migrations/20261104161916_automated_revision_loop.sql', 'utf8');
+const batchMigration = fs.readFileSync('supabase/migrations/20261117082000_revision_add_batch.sql', 'utf8');
 const fixture = `
 create role anon; create role authenticated;
 create schema auth;
@@ -35,6 +36,7 @@ async function setup() {
   const db = new PGlite();
   await db.exec(fixture);
   await db.exec(migration);
+  await db.exec(batchMigration);
   return db;
 }
 async function question(db, type = 'MCQ', examId = exam) {
@@ -149,5 +151,23 @@ test('a reward write failure rolls back scheduling, completion, and streak chang
     assert.equal(record.stage,5); assert.equal(record.mastered_at,null);
     assert.equal((await queue(db)).summary.completedCount,0);
     assert.equal((await db.query('select count(*)::int as n from streaks')).rows[0].n,0);
+  } finally { await db.close(); }
+});
+
+test('batch revision enrollment enrolls multiple questions in one call and rejects unauthorized access', async () => {
+  const db = await setup();
+  try {
+    const ids = await Promise.all(['MCQ','MSQ','NAT'].map(type => question(db, type)));
+    // Anonymous execution must fail
+    await db.exec(`select set_config('request.jwt.claim.sub','',false); set role anon;`);
+    await assert.rejects(db.query('select revision_add_batch($1)', [ids]));
+    await db.exec('reset role');
+
+    // Authenticated execution must enroll all questions
+    await db.exec(`select set_config('request.jwt.claim.sub','${user}',false); set role authenticated;`);
+    await db.query('select revision_add_batch($1)', [ids]);
+    await db.exec('reset role');
+
+    assert.equal((await db.query('select count(*)::int as n from spaced_repetition')).rows[0].n, 3);
   } finally { await db.close(); }
 });

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { getExamContext } from "@/lib/exam-context";
 import { createClient } from "@/lib/supabase/server";
-import { DAILY_REVISION_CAP, REVISION_INTERVALS, type RevisionQueue, type RevisionQuestion } from "@/lib/revision";
+import { DAILY_REVISION_CAP, type RevisionQueue, type RevisionQuestion } from "@/lib/revision";
 
 export interface DeckQuestion {
   id: string;
@@ -75,137 +75,48 @@ export async function getRevisionQueue(): Promise<RevisionQueue> {
 
 export async function addToSRSQueue(questionId: string): Promise<void> {
   const supabase = await createClient();
-  try {
-    const { error } = await supabase.rpc("revision_add", { p_question: questionId });
-    if (!error) return;
-  } catch {}
+  const { error } = await supabase.rpc("revision_add", { p_question: questionId });
+  if (error) {
+    console.error("SRS enrollment failed via revision_add RPC:", error);
+    throw new Error("Unable to enroll question into revision. Please try again.");
+  }
+}
 
-  const { user } = await getExamContext();
-  if (!user) return;
-
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().slice(0, 10);
-
-  // Direct INSERT on spaced_repetition is permission-revoked (see migration
-  // 20261104161916 line 238). If the RPC also fails, surface the error so the
-  // caller knows enrollment did not happen instead of silently dropping it.
-  try {
-    const { error } = await supabase.from("spaced_repetition").upsert({
-      user_id: user.id,
-      question_id: questionId,
-      stage: 1,
-      interval_days: 1,
-      repetition_count: 0,
-      next_review_date: tomorrowStr,
-    }, { onConflict: "user_id,question_id" });
-    if (error) throw error;
-    return;
-  } catch {
-    try {
-      const { error } = await supabase.from("spaced_repetition").upsert({
-        user_id: user.id,
-        question_id: questionId,
-        interval_days: 1,
-        repetition_count: 0,
-        next_review_date: tomorrowStr,
-      }, { onConflict: "user_id,question_id" });
-      if (error) throw error;
-      return;
-    } catch (fallbackErr) {
-      console.error("SRS enrollment failed (RPC and direct insert both unavailable):", fallbackErr);
-      throw new Error("Unable to enroll question into revision. Please try again.");
+export async function addBatchToSRSQueue(questionIds: string[]): Promise<void> {
+  if (questionIds.length === 0) return;
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("revision_add_batch", { p_questions: questionIds });
+  if (error) {
+    // Fallback to parallel single adds if batch RPC is pending deployment
+    const results = await Promise.allSettled(
+      questionIds.map((qid) => supabase.rpc("revision_add", { p_question: qid }))
+    );
+    const hasSuccess = results.some(
+      (r) => r.status === "fulfilled" && !(r.value as any).error
+    );
+    if (!hasSuccess) {
+      console.error("SRS batch enrollment failed:", error);
+      throw new Error("Unable to enroll questions into revision. Please try again.");
     }
   }
 }
 
-export async function updateSRSAfterAnswer(questionId: string, result: "correct" | "wrong", reviewDate: string) {
+export async function updateSRSAfterAnswer(
+  questionId: string,
+  result: "correct" | "wrong",
+  reviewDate: string
+) {
   const supabase = await createClient();
-  try {
-    const { data, error } = await supabase.rpc("revision_answer", {
-      p_question: questionId, p_correct: result === "correct", p_day: reviewDate,
-    });
-    if (!error && data) return data;
-  } catch (rpcErr) {
-    console.warn("revision_answer RPC exception, using fallback answer handler:", rpcErr);
+  const { data, error } = await supabase.rpc("revision_answer", {
+    p_question: questionId,
+    p_correct: result === "correct",
+    p_day: reviewDate,
+  });
+  if (error || !data) {
+    console.error("revision_answer RPC failed:", error);
+    throw new Error("Unable to save revision progress. Please try again.");
   }
-
-  const { user } = await getExamContext();
-  if (!user) throw new Error("Unauthorized");
-
-  const isCorrect = result === "correct";
-  const reward = isCorrect ? 10 : 5;
-
-  const { data: existing } = await supabase
-    .from("spaced_repetition")
-    .select("id, repetition_count, interval_days")
-    .eq("user_id", user.id)
-    .eq("question_id", questionId)
-    .maybeSingle();
-
-  const currentStage = existing?.interval_days ? getStageFromInterval(existing.interval_days) : 1;
-  const nextStage = isCorrect ? Math.min(5, currentStage + 1) : 1;
-  const days = REVISION_INTERVALS[nextStage - 1] || 1;
-  const mastered = isCorrect && currentStage === 5;
-  const repCount = isCorrect ? (existing?.repetition_count ?? 0) + 1 : 0;
-
-  const nextDate = new Date();
-  nextDate.setDate(nextDate.getDate() + days);
-  const nextReviewDateStr = nextDate.toISOString().slice(0, 10);
-
-  try {
-    await supabase.from("spaced_repetition").upsert({
-      user_id: user.id,
-      question_id: questionId,
-      stage: nextStage,
-      interval_days: days,
-      repetition_count: repCount,
-      next_review_date: nextReviewDateStr,
-      last_reviewed_at: new Date().toISOString(),
-      ...(mastered ? { mastered_at: new Date().toISOString() } : {}),
-    }, { onConflict: "user_id,question_id" });
-  } catch {
-    try {
-      await supabase.from("spaced_repetition").upsert({
-        user_id: user.id,
-        question_id: questionId,
-        interval_days: days,
-        repetition_count: repCount,
-        next_review_date: nextReviewDateStr,
-        last_reviewed_at: new Date().toISOString(),
-      }, { onConflict: "user_id,question_id" });
-    } catch (fallbackErr) {
-      console.error("SRS answer update failed (RPC and direct update both unavailable):", fallbackErr);
-      throw new Error("Unable to save revision progress. Please try again.");
-    }
-  }
-
-  try {
-    await supabase.from("xp_transactions").insert({
-      user_id: user.id,
-      amount: reward,
-      reason: "Revision review",
-      metadata: { question_id: questionId, correct: isCorrect, review_day: reviewDate },
-    });
-    const { data: levelData } = await supabase.from("user_levels").select("total_xp").eq("user_id", user.id).maybeSingle();
-    const newTotal = (levelData?.total_xp ?? 0) + reward;
-    await supabase.from("user_levels").upsert({
-      user_id: user.id,
-      total_xp: newTotal,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" });
-  } catch (err) {
-    console.warn("Could not record XP transaction:", err);
-  }
-
-  return {
-    stage: nextStage,
-    mastered,
-    nextReviewDate: mastered ? null : nextReviewDateStr,
-    xpAwarded: reward,
-    xpEarned: reward,
-    queueComplete: false,
-  };
+  return data;
 }
 
 export const getRevisionDeck = cache(async (): Promise<DeckInfo> => {

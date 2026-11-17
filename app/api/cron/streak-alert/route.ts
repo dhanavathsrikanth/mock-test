@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { createCronClient } from "@/lib/supabase/cron";
 import { sendPushNotificationToUser } from "@/lib/push";
+import { authorizedCron } from "@/lib/engagement/security";
 
 export const maxDuration = 120;
 
 async function handleCron(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (!authorizedCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -55,9 +52,9 @@ async function handleCron(req: Request) {
     try {
       await sendPushNotificationToUser(
         streak.user_id,
-        "Your streak is at risk!",
-        `Your ${streak.current_streak} day streak ends at midnight. Practice now!`,
-        "/test/select"
+        "Your Streak is in Danger! 🔥",
+        `You have a ${streak.current_streak}-day streak! Answer 1 question before midnight to keep it alive.`,
+        "/dashboard"
       );
       sent++;
     } catch {

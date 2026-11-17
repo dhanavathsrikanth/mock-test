@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { hasNumericPrecision, numericKeypress, numericResponse } from "@/lib/question-response";
 
 export function NumericAnswerInput({ value, onChange, decimalPlaces }: {
@@ -10,6 +11,26 @@ export function NumericAnswerInput({ value, onChange, decimalPlaces }: {
   const invalidNumber = value.length > 0 && numericResponse(value) == null;
   const invalidPrecision = !hasNumericPrecision(value, decimalPlaces);
   const invalid = invalidNumber || invalidPrecision;
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      onChange(numericKeypress(value, e.key, decimalPlaces));
+    } else if (e.key === '.') {
+      e.preventDefault();
+      onChange(numericKeypress(value, '.', decimalPlaces));
+    } else if (e.key === '-' || e.key === '+') {
+      e.preventDefault();
+      onChange(numericKeypress(value, 'sign', decimalPlaces));
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      onChange(numericKeypress(value, 'backspace', decimalPlaces));
+    } else if (e.key === 'Delete' || e.key === 'Escape') {
+      e.preventDefault();
+      onChange('');
+    }
+  };
+
   return (
     <div className="max-w-sm space-y-3 rounded-xl border bg-card p-4">
       <label htmlFor="nat-answer" className="block text-sm font-semibold">Numerical answer</label>
@@ -18,13 +39,14 @@ export function NumericAnswerInput({ value, onChange, decimalPlaces }: {
         aria-describedby="nat-guidance"
         aria-invalid={invalid}
         value={value}
-        placeholder="Enter your answer"
+        placeholder="Type or click keypad"
         readOnly
         inputMode="none"
-        className="h-12 w-full rounded-lg border bg-background px-3 font-mono text-lg tabular-nums"
+        onKeyDown={handleKeyDown}
+        className="h-12 w-full cursor-text rounded-lg border bg-background px-3 font-mono text-lg tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       />
       <p id="nat-guidance" className="text-xs text-muted-foreground">
-        Use the on-screen keypad. {decimalPlaces === 0 ? 'Enter an integer.' : decimalPlaces != null ? `Enter up to ${decimalPlaces} decimal places.` : ''} Follow the rounding instruction in the question.
+        Use your keyboard or the on-screen keypad. {decimalPlaces === 0 ? 'Enter an integer.' : decimalPlaces != null ? `Enter up to ${decimalPlaces} decimal places.` : ''} Follow the rounding instruction in the question.
       </p>
       <div className="grid grid-cols-3 gap-2" role="group" aria-label="Numeric keypad">
         {['7','8','9','4','5','6','1','2','3','sign','0','.'].map(key => (

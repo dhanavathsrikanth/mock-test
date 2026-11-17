@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createCronClient } from "@/lib/supabase/cron";
+import { authorizedCron } from "@/lib/engagement/security";
 
 export const maxDuration = 60;
 
 async function handleCron(req: Request) {
-  if (process.env.CRON_SECRET && req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!authorizedCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const supabase = createCronClient();

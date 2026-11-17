@@ -76,13 +76,15 @@ export default async function DashboardPage() {
       question_ids,
       subject_id,
       subjects ( name )
-    `
+    `,
+      { count: "exact" }
     )
     .eq("user_id", userId)
     .eq("exam_id", exam.id)
     .or(stream ? `stream_id.eq.${stream.id}` : "stream_id.is.null")
     .eq("status", "completed")
-    .order("completed_at", { ascending: false });
+    .order("completed_at", { ascending: false })
+    .limit(15);
   const userName = profile?.full_name || "User";
   const studyDay = new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
   const dayStart = new Date(`${studyDay}T00:00:00+05:30`).toISOString();
@@ -124,6 +126,7 @@ export default async function DashboardPage() {
         `
           )
           .in("session_id", sessionIds)
+          .limit(1000)
       : { data: [] };
 
   type DashboardAnswer = MetricsAnswer & {
@@ -171,7 +174,7 @@ export default async function DashboardPage() {
   });
   const dailyAnswered = dailyProgress.error ? null : dailyProgress.count ?? 0;
 
-  const totalTests = sessions?.length || 0;
+  const totalTests = sessionsResult.count ?? (sessions?.length || 0);
   const avgScore = overall.stats.correctRate ?? 0;
   const bestScore =
     sessionScores.length > 0

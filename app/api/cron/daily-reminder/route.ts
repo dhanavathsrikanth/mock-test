@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { createCronClient } from "@/lib/supabase/cron";
 import { sendPushNotificationToUser } from "@/lib/push";
+import { authorizedCron } from "@/lib/engagement/security";
 
 export const maxDuration = 120;
 
 async function handleCron(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  if (!authorizedCron(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -50,18 +47,22 @@ async function handleCron(req: Request) {
     if (!prefUserIds.has(sub.user_id)) continue;
 
     const streak = streakMap.get(sub.user_id);
-    const practicedToday = streak?.last_activity_date === today;
+    const hasPracticedToday = streak?.last_activity_date === today;
 
-    if (practicedToday) continue;
+    if (hasPracticedToday) continue;
 
-    const streakCount = streak?.current_streak || 0;
+    const currentStreak = streak?.current_streak || 0;
+    const body =
+      currentStreak > 0
+        ? `Keep your ${currentStreak}-day streak alive! Practice today's question.`
+        : "Start your study streak today! Take a quick 5-minute practice.";
 
     try {
       await sendPushNotificationToUser(
         sub.user_id,
-        "Daily practice time!",
-        `Keep your ${streakCount} day streak alive. Take a test now!`,
-        "/test/select"
+        "Time for Daily Practice!",
+        body,
+        "/dashboard"
       );
       sent++;
     } catch {
@@ -69,7 +70,7 @@ async function handleCron(req: Request) {
     }
   }
 
-  return NextResponse.json({ message: "Daily reminders sent", sent, failed });
+  return NextResponse.json({ message: "Reminders processed", sent, failed });
 }
 
 export async function GET(req: Request) {

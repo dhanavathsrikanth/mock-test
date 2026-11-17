@@ -24,6 +24,10 @@ function loadRoute(file, exchangeError = null) {
           async getClaims() { throw new Error("Unexpected claims request"); },
         } }),
       };
+      if (name === "./env" || name.endsWith("/env")) return {
+        getSupabaseUrl: () => "https://example.supabase.co",
+        getSupabaseAnonKey: () => "test-anon-key",
+      };
       return require(name);
     },
   });

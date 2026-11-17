@@ -4,12 +4,27 @@ import { NextResponse } from "next/server";
 
 export async function proxy(request: NextRequest) {
   // Challenges are guest-first. Mutating handlers enforce their own ownership checks.
-  if (request.nextUrl.pathname.startsWith('/c/') || request.nextUrl.pathname === '/api/challenges' || request.nextUrl.pathname.startsWith('/api/challenges/')) return NextResponse.next();
+  if (
+    request.nextUrl.pathname.startsWith("/c/") ||
+    request.nextUrl.pathname === "/api/challenges" ||
+    request.nextUrl.pathname.startsWith("/api/challenges/")
+  ) {
+    return NextResponse.next();
+  }
   // The standalone practice calculator does not require an account.
   if (request.nextUrl.pathname === "/calculator") return NextResponse.next();
   // These handlers authenticate using signed links, provider signatures, or the
   // cron bearer secret. They must work without a student's browser session.
-  if (["/unsubscribe", "/api/engagement/unsubscribe", "/api/engagement/email-webhook", "/api/cron/streak-campaigns"].includes(request.nextUrl.pathname)) return NextResponse.next();
+  if (
+    [
+      "/unsubscribe",
+      "/api/engagement/unsubscribe",
+      "/api/engagement/email-webhook",
+      "/api/cron/streak-campaigns",
+    ].includes(request.nextUrl.pathname)
+  ) {
+    return NextResponse.next();
+  }
   return await updateSession(request);
 }
 

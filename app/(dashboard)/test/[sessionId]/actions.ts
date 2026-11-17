@@ -57,12 +57,24 @@ export async function submitTest(sessionId: string, userId: string, responses?: 
     .filter((g) => g.is_correct === false)
     .map((g) => g.question_id);
   if (wrongQuestionIds.length > 0) {
-    for (const qid of wrongQuestionIds) {
-      try {
-        await supabase.rpc("revision_add", { p_question: qid });
-      } catch (err) {
-        console.error(`Failed to enroll question ${qid} into revision:`, err);
+    try {
+      const { error: batchErr } = await supabase.rpc("revision_add_batch", {
+        p_questions: wrongQuestionIds,
+      });
+      if (batchErr) {
+        // Fallback to concurrent single adds if batch RPC is pending deployment
+        await Promise.allSettled(
+          wrongQuestionIds.map((qid) =>
+            supabase.rpc("revision_add", { p_question: qid })
+          )
+        );
       }
+    } catch {
+      await Promise.allSettled(
+        wrongQuestionIds.map((qid) =>
+          supabase.rpc("revision_add", { p_question: qid })
+        )
+      );
     }
   }
 

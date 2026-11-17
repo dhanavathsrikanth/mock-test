@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-import { Minus, Plus, X } from "lucide-react";
+import { Minus, Plus, X, ZoomIn } from "lucide-react";
 
 export interface QuestionImage {
   url: string;
@@ -15,7 +15,7 @@ export function QuestionFigure({ image, inline = false }: { image: QuestionImage
   const dialog = useRef<HTMLDialogElement>(null);
   const [open, setOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const alt = image.alt || "Original question diagram";
+  const alt = image.alt || (inline ? "Option diagram" : "Original question diagram");
 
   useEffect(() => {
     if (!open) return;
@@ -36,21 +36,28 @@ export function QuestionFigure({ image, inline = false }: { image: QuestionImage
     />
   );
 
-  // Inline figures belong to answer options and remain part of answer selection.
-  if (inline) {
-    return <div className="max-w-full overflow-x-auto rounded-lg bg-white p-2">{figure}</div>;
-  }
-
   return (
-    <div className="my-4 max-w-full overflow-x-auto rounded-lg bg-white p-2">
+    <div className={`relative group/fig rounded-lg bg-white p-2 ${inline ? "inline-block max-w-full overflow-x-auto" : "my-4 max-w-full overflow-x-auto"}`}>
       <button
         type="button"
         aria-label={`Expand image: ${alt}`}
         aria-haspopup="dialog"
-        onClick={() => { dialog.current?.showModal(); setOpen(true); }}
-        className="block max-w-full cursor-zoom-in rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        onClick={(e) => {
+          if (inline) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+          dialog.current?.showModal();
+          setOpen(true);
+        }}
+        className="relative block max-w-full cursor-zoom-in rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
         {figure}
+        {inline && (
+          <span className="pointer-events-none absolute bottom-1.5 right-1.5 flex items-center gap-1 rounded bg-slate-900/80 px-2 py-0.5 text-xs text-white opacity-0 transition-opacity group-hover/fig:opacity-100 group-focus-within/fig:opacity-100">
+            <ZoomIn className="h-3 w-3" /> Zoom
+          </span>
+        )}
       </button>
       <dialog
         ref={dialog}
@@ -60,12 +67,42 @@ export function QuestionFigure({ image, inline = false }: { image: QuestionImage
       >
         <div className="flex h-full flex-col">
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-white/20 p-3">
-            <span className="text-sm">Question image</span>
+            <span className="text-sm">{inline ? "Option diagram" : "Question image"}</span>
             <div className="flex items-center gap-2">
-              <button type="button" aria-label="Zoom out" disabled={zoom === 1} onClick={() => setZoom(z => Math.max(1, z - 0.5))} className="rounded p-2 hover:bg-white/20 disabled:opacity-40"><Minus className="h-5 w-5" /></button>
-              <button type="button" onClick={() => setZoom(1)} className="rounded px-3 py-2 text-sm hover:bg-white/20">Fit to screen</button>
-              <button type="button" aria-label="Zoom in" disabled={zoom === 4} onClick={() => setZoom(z => Math.min(4, z + 0.5))} className="rounded p-2 hover:bg-white/20 disabled:opacity-40"><Plus className="h-5 w-5" /></button>
-              <button type="button" autoFocus aria-label="Close image" onClick={() => dialog.current?.close()} className="rounded p-2 hover:bg-white/20"><X className="h-5 w-5" /></button>
+              <button
+                type="button"
+                aria-label="Zoom out"
+                disabled={zoom === 1}
+                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.max(1, z - 0.5)); }}
+                className="rounded p-2 hover:bg-white/20 disabled:opacity-40"
+              >
+                <Minus className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setZoom(1); }}
+                className="rounded px-3 py-2 text-sm hover:bg-white/20"
+              >
+                Fit to screen
+              </button>
+              <button
+                type="button"
+                aria-label="Zoom in"
+                disabled={zoom === 4}
+                onClick={(e) => { e.stopPropagation(); setZoom(z => Math.min(4, z + 0.5)); }}
+                className="rounded p-2 hover:bg-white/20 disabled:opacity-40"
+              >
+                <Plus className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                autoFocus
+                aria-label="Close image"
+                onClick={(e) => { e.stopPropagation(); dialog.current?.close(); }}
+                className="rounded p-2 hover:bg-white/20"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-auto overscroll-contain p-3" aria-label="Image details; scroll to explore when zoomed">
